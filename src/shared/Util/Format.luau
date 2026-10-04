@@ -1,5 +1,5 @@
 --!strict
--- Number formatting shared by the HUD and in-world price tags.
+-- Number formatting for the HUD and in-world labels.
 
 local SUFFIXES = { "", "K", "M", "B", "T", "Qa", "Qi" }
 

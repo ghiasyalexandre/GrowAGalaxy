@@ -1,15 +1,33 @@
 {
-  "name": "grow-a-galaxy-2",
+  "name": "grow-a-galaxy",
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
       "Shared": {
         "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "GetInitialState": {
+          "$className": "RemoteFunction"
+        },
+        "ProfileChanged": {
+          "$className": "RemoteEvent"
+        },
+        "RegionsChanged": {
+          "$className": "RemoteEvent"
+        }
       }
     },
     "ServerScriptService": {
       "Server": {
         "$path": "src/server"
+      },
+      "Vendor": {
+        "$className": "Folder",
+        "ProfileStore": {
+          "$path": "vendor/ProfileStore.luau"
+        }
       }
     },
     "StarterPlayer": {

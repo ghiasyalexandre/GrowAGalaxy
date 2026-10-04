@@ -1,14 +1,16 @@
 --!strict
--- Grow a Galaxy 2 client entry point.
+-- Client entry point. Same two-phase bootstrap as the server: init() every
+-- controller (build UI, connect events), load the starting state from the
+-- server, then start() every controller.
 
-local Controllers = script:FindFirstChild("Controllers")
+local ClientState = require(script.ClientState)
+
+local Controllers = script.Controllers
 
 local loaded: { [string]: any } = {}
-if Controllers then
-	for _, child in Controllers:GetChildren() do
-		if child:IsA("ModuleScript") then
-			loaded[child.Name] = require(child) :: any
-		end
+for _, child in Controllers:GetChildren() do
+	if child:IsA("ModuleScript") then
+		loaded[child.Name] = require(child) :: any
 	end
 end
 
@@ -18,10 +20,12 @@ for _, controller in loaded do
 	end
 end
 
+ClientState.load()
+
 for _, controller in loaded do
 	if typeof(controller.start) == "function" then
-		task.spawn(controller.start)
+		controller.start()
 	end
 end
 
-print("[Grow a Galaxy 2] client started")
+print("[Grow a Galaxy] client started")
