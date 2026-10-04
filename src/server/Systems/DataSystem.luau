@@ -11,10 +11,12 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
+local StarMath = require(ReplicatedStorage.Shared.Logic.StarMath)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 type Profile = Types.Profile
@@ -124,6 +126,76 @@ function DataSystem.spendStardust(player: Player, amount: number): boolean
 	profile.stardust -= whole
 	push(player, "stardust", profile.stardust)
 	return true
+end
+
+local function pushIncome(player: Player, profile: Profile)
+	push(player, "incomeRate", StarMath.totalIncome(profile.galaxy.stars))
+end
+
+-- Adds a star to the player's galaxy and returns its new id. The caller has
+-- already validated and paid for it.
+function DataSystem.addStar(player: Player, star: Types.StarRecord): string?
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil
+	end
+	local galaxy = profile.galaxy
+	local id = `s{galaxy.nextId}`
+	galaxy.nextId += 1
+	galaxy.stars[id] = star
+	pushIncome(player, profile)
+	return id
+end
+
+-- Changes a star's level or position (already validated by the caller).
+function DataSystem.updateStar(player: Player, id: string, level: number?, pos: Types.Vec3?)
+	local profile = DataSystem.getProfile(player)
+	local star = profile and profile.galaxy.stars[id]
+	if profile == nil or star == nil then
+		return
+	end
+	if level then
+		star.level = level
+	end
+	if pos then
+		star.pos = pos
+	end
+	pushIncome(player, profile)
+end
+
+-- Adds `dt` seconds of star income to "uncollected", up to the cap.
+function DataSystem.accrueIncome(player: Player, dt: number)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return
+	end
+	local rate = StarMath.totalIncome(profile.galaxy.stars)
+	if rate <= 0 then
+		return
+	end
+	local cap = rate * Config.Economy.UNCOLLECTED_CAP_SECONDS
+	local before = profile.uncollected
+	profile.uncollected = StarMath.accrue(before, rate, dt, cap)
+	if math.floor(profile.uncollected) ~= math.floor(before) then
+		push(player, "uncollected", math.floor(profile.uncollected))
+	end
+end
+
+-- Moves the whole Stardust part of "uncollected" into the balance. Returns
+-- how much was collected (0 if less than one).
+function DataSystem.collectIncome(player: Player): number
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return 0
+	end
+	local whole = math.floor(profile.uncollected)
+	if whole < 1 then
+		return 0
+	end
+	profile.uncollected -= whole
+	push(player, "uncollected", math.floor(profile.uncollected))
+	DataSystem.addStardust(player, whole)
+	return whole
 end
 
 -- Adds to a lifetime stat (profile.stats), e.g. asteroids mined. Stats feed

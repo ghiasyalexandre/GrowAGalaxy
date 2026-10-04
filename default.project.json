@@ -31,6 +31,9 @@
         },
         "Notify": {
           "$className": "RemoteEvent"
+        },
+        "StarRequest": {
+          "$className": "RemoteFunction"
         }
       }
     },

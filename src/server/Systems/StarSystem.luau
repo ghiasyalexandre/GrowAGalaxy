@@ -1,0 +1,258 @@
+--!strict
+-- The star tycoon on the server: builds each player's saved stars in their
+-- region, handles buying, moving and upgrading stars (StarRequest), adds star
+-- income to "uncollected" once per INCOME_TICK, and pays it out at the
+-- station's Collect console.
+--
+-- StarRequest (RemoteFunction, client -> server), returns (ok, message):
+--   "place", typeId: string, pos: Vector3     buy a star at pos (region space)
+--   "move", starId: string, pos: Vector3      move a star and its planets
+--   "upgrade", starId: string                 next level: more production,
+--                                             and the planet that level adds
+-- Every request is validated here: ownership, Config.Stars, the region's
+-- bounds and star spacing (Logic/PlacementRules), capacity and cost. The
+-- client's ghost preview runs the same rules but is never trusted.
+
+local CollectionService = game:GetService("CollectionService")
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+
+local Build = require(script.Parent.Parent.World.Build)
+local Config = require(ReplicatedStorage.Shared.Config)
+local DataSystem = require(script.Parent.DataSystem)
+local Net = require(ReplicatedStorage.Shared.Net)
+local Notify = require(script.Parent.Parent.Util.Notify)
+local PlacementRules = require(ReplicatedStorage.Shared.Logic.PlacementRules)
+local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
+local RegionSystem = require(script.Parent.RegionSystem)
+local StarBuilder = require(script.Parent.Parent.World.StarBuilder)
+local StarMath = require(ReplicatedStorage.Shared.Logic.StarMath)
+local Types = require(ReplicatedStorage.Shared.Types)
+
+local S = Config.Stars
+local CURRENCY = Config.Economy.CURRENCY_NAME
+
+local REJECTIONS: { [string]: string } = {
+	Invalid = "That isn't a valid spot.",
+	OutOfBounds = "Stars must sit inside your galaxy, away from its edges.",
+	TooClose = "Too close to another star: its planets need room.",
+	AtCapacity = "Your galaxy can't hold more stars yet.",
+}
+
+local StarSystem = {}
+
+local models: { [Player]: { [string]: Model } } = {}
+local requestLimit = RateLimiter.new(6, 2)
+local elapsed = 0
+
+local function starsFolder(region: RegionSystem.Region): Instance
+	local existing = region.model:FindFirstChild("Stars")
+	if existing then
+		return existing
+	end
+	local folder = Instance.new("Folder")
+	folder.Name = "Stars"
+	folder.Parent = region.model
+	return folder
+end
+
+local function spawnStar(
+	player: Player,
+	region: RegionSystem.Region,
+	id: string,
+	star: Types.StarRecord
+)
+	local cframe = CFrame.new(RegionSystem.toWorld(region, star.pos))
+	local model = StarBuilder.build(id, star, cframe, player.UserId)
+	model.Parent = starsFolder(region)
+	models[player] = models[player] or {}
+	models[player][id] = model
+end
+
+local function positions(stars: { [string]: Types.StarRecord }, except: string?): { Types.Vec3 }
+	local list: { Types.Vec3 } = {}
+	for id, star in stars do
+		if id ~= except then
+			table.insert(list, star.pos)
+		end
+	end
+	return list
+end
+
+local function count(stars: { [string]: any }): number
+	local n = 0
+	for _ in stars do
+		n += 1
+	end
+	return n
+end
+
+local function toVec3(value: unknown): Types.Vec3?
+	if typeof(value) ~= "Vector3" then
+		return nil
+	end
+	local v = value :: Vector3
+	local pos = { x = v.X, y = v.Y, z = v.Z }
+	return if PlacementRules.isValidVec3(pos) then pos else nil
+end
+
+local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local region = RegionSystem.getRegion(player)
+	local def = if type(typeId) == "string" then S.BY_ID[typeId] else nil
+	local pos = toVec3(rawPos)
+	if profile == nil or region == nil or def == nil or not def.enabled or pos == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local galaxy = profile.galaxy
+	local owned = count(galaxy.stars)
+	if not PlacementRules.hasCapacity(owned, galaxy.expansion) then
+		return false, REJECTIONS.AtCapacity
+	end
+	local ok, rejection = PlacementRules.checkStar(pos, galaxy.expansion, positions(galaxy.stars))
+	if not ok then
+		return false, REJECTIONS[rejection or "Invalid"]
+	end
+	local cost = StarMath.placeCost(def.id, owned) :: number
+	if not DataSystem.spendStardust(player, cost) then
+		return false, `You need {cost} {CURRENCY} for this star.`
+	end
+	local star: Types.StarRecord = { typeId = def.id, level = 1, pos = pos }
+	local id = DataSystem.addStar(player, star)
+	if id == nil then
+		DataSystem.addStardust(player, cost)
+		return false, REJECTIONS.Invalid
+	end
+	spawnStar(player, region, id, star)
+	DataSystem.addStat(player, "starsPlaced", 1)
+	return true, `{def.displayName} placed! It makes {StarMath.income(def.id, 1)} {CURRENCY}/s.`
+end
+
+local function move(player: Player, starId: unknown, rawPos: unknown): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local region = RegionSystem.getRegion(player)
+	local star = if profile and type(starId) == "string" then profile.galaxy.stars[starId] else nil
+	local pos = toVec3(rawPos)
+	local model = if type(starId) == "string" and models[player]
+		then models[player][starId]
+		else nil
+	if profile == nil or region == nil or star == nil or pos == nil or model == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local id = starId :: string
+	local galaxy = profile.galaxy
+	local ok, rejection =
+		PlacementRules.checkStar(pos, galaxy.expansion, positions(galaxy.stars, id))
+	if not ok then
+		return false, REJECTIONS[rejection or "Invalid"]
+	end
+	DataSystem.updateStar(player, id, nil, pos)
+	model:PivotTo(CFrame.new(RegionSystem.toWorld(region, pos)))
+	return true, "Star moved, planets and all."
+end
+
+local function upgrade(player: Player, starId: unknown): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local star = if profile and type(starId) == "string" then profile.galaxy.stars[starId] else nil
+	local model = if type(starId) == "string" and models[player]
+		then models[player][starId]
+		else nil
+	if star == nil or model == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local cost = StarMath.upgradeCost(star.typeId, star.level)
+	if cost == nil then
+		return false, "This star is fully upgraded."
+	end
+	if not DataSystem.spendStardust(player, cost) then
+		return false, `You need {cost} {CURRENCY} for this upgrade.`
+	end
+	local level = star.level + 1
+	DataSystem.updateStar(player, starId :: string, level, nil)
+	StarBuilder.apply(model, star)
+	local levelDef = StarMath.levelDef(star.typeId, level)
+	local planet = if levelDef and levelDef.planet then S.PLANETS[levelDef.planet] else nil
+	local income = StarMath.income(star.typeId, level)
+	return true,
+		if planet
+			then `{planet.name} joins your star's orbit! Now {income} {CURRENCY}/s.`
+			else `Star upgraded! Now {income} {CURRENCY}/s.`
+end
+
+local function onRequest(player: Player, action: unknown, a: unknown, b: unknown): (boolean, string)
+	if not requestLimit.allow(player) then
+		return false, "Slow down a little."
+	end
+	if action == "place" then
+		return place(player, a, b)
+	elseif action == "move" then
+		return move(player, a, b)
+	elseif action == "upgrade" then
+		return upgrade(player, a)
+	end
+	return false, REJECTIONS.Invalid
+end
+
+-- The Collect console: only the station's owner may collect there.
+local function onPrompt(prompt: ProximityPrompt, player: Player)
+	if not CollectionService:HasTag(prompt, Build.TYCOON_TAG) then
+		return
+	end
+	if prompt:GetAttribute("TycoonAction") ~= "Collect" then
+		return
+	end
+	local region = RegionSystem.getRegion(player)
+	if region == nil or not prompt:IsDescendantOf(region.model) then
+		Notify.send(player, "You can only collect at your own station.")
+		return
+	end
+	local amount = DataSystem.collectIncome(player)
+	if amount > 0 then
+		Notify.send(player, `Collected {amount} {CURRENCY}.`)
+	else
+		local profile = DataSystem.getProfile(player)
+		local hasStars = profile ~= nil and next(profile.galaxy.stars) ~= nil
+		Notify.send(
+			player,
+			if hasStars
+				then "Nothing to collect yet. Your stars are working on it."
+				else "Buy a star at the Star Shop to start earning here."
+		)
+	end
+end
+
+function StarSystem.start()
+	Net.StarRequest.OnServerInvoke = onRequest
+	ProximityPromptService.PromptTriggered:Connect(onPrompt)
+
+	RegionSystem.regionAdded:Connect(function(region)
+		local profile = DataSystem.getProfile(region.owner)
+		if profile == nil then
+			return
+		end
+		for id, star in profile.galaxy.stars do
+			if S.BY_ID[star.typeId] then
+				spawnStar(region.owner, region, id, star)
+			end
+		end
+	end)
+
+	RunService.Heartbeat:Connect(function(dt)
+		elapsed += dt
+		if elapsed < S.INCOME_TICK then
+			return
+		end
+		for _, player in Players:GetPlayers() do
+			DataSystem.accrueIncome(player, elapsed)
+		end
+		elapsed = 0
+	end)
+
+	Players.PlayerRemoving:Connect(function(player)
+		models[player] = nil
+	end)
+end
+
+return StarSystem

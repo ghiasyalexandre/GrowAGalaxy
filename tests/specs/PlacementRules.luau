@@ -54,9 +54,10 @@ return function(T, Loader)
 		end)
 
 		T.test("capacity follows the expansion level", function()
+			local first = Config.Galaxy.EXPANSIONS[1].maxSystems
 			T.truthy(PlacementRules.hasCapacity(0, 1))
-			T.falsy(PlacementRules.hasCapacity(1, 1))
-			T.truthy(PlacementRules.hasCapacity(1, 2))
+			T.falsy(PlacementRules.hasCapacity(first, 1))
+			T.truthy(PlacementRules.hasCapacity(first, 2))
 			T.falsy(PlacementRules.hasCapacity(Config.Galaxy.EXPANSIONS[2].maxSystems, 2))
 		end)
 

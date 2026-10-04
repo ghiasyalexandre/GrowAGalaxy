@@ -6,16 +6,16 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 
 | Stage | Code | CI | Studio playtest |
 |---|---|---|---|
-| 1. Foundation: config, save data, ISS hub, regions | Done, merged (PR #1) | Passing | Unknown (no record) |
-| 2. Movement and ships | Done | Passing | **Not yet** |
-| 3. Stardust and asteroid mining | Done | Passing locally | Loads without errors; mining **not yet** |
-| 4. Star tycoon (place stars, collect, planet upgrades) | Not started | | |
-| 5+. Progression, ship shop, achievements, polish, monetization | Not started | | |
-
-"Passing" means format, lint, strict type check, 85 unit tests, Rojo build and the world smoke
-test, run locally on 2026-10-04.
+| 1. Foundation | Merged | Passing | Loads without errors |
+| 2. Movement and ships | Merged | Passing | Loads without errors; feel **not yet** |
+| 3. Stardust and asteroid mining | Merged | Passing | Loads without errors; mining **not yet** |
+| 4. Star tycoon | Branch `stage-4-star-tycoon` | Passing locally (91 tests) | **Not yet** |
+| 5+. Galaxy expansion, ship shop, achievements, tutorial, polish, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
+
+- Star tycoon: buy and place stars with a ghost preview, upgrade them to add orbiting planets,
+  move whole systems, collect star income at the station ([stage 4](docs/stage-4-star-tycoon.md)).
 
 - Zero-gravity suit, Starter Shuttle launch/board/fly/exit, assisted docking, Return to Station,
   flight guard, mining laser with heat ([stage 2](docs/stage-2-movement-ships.md)).
@@ -42,15 +42,10 @@ test, run locally on 2026-10-04.
 
 ## Next up
 
-**Stage 4: star tycoon.** Replace `Config.Celestials` / `Config.SolarSystems` with the
-star-upgrade model: star types bought with Stardust; levels that add orbiting planets (radius,
-inclination, look) and raise production; footprint = largest orbit so future upgrades never
-overlap. Server: buy/place/move/upgrade with validation (region bounds, spacing, ownership,
-cost). Central income tick into `uncollected`, collect at the station console. Client: ghost
-placement with elevation, snapping, valid/invalid colours, confirm/cancel; planet orbits
-animated on clients; upgrade preview (cost, current to next rate, planet added). Save schema:
-replace systems/bodies with stars `{ id, pos, typeId, level, appearance }` (no saved stars exist
-yet, so this needs no data migration beyond the version bump).
+**Stage 5: progression.** Buy galaxy expansions (Stardust-only costs), the hangar ship shop
+(Prospector, earnable; compare, unlock, select) and beam/equipment upgrades, the achievement
+system (stats already counted: asteroidsMined, coolExtractions, starsPlaced) with one award
+wired up, and a short tutorial. Then drop the deferred material costs from configs.
 
 ## Open issues and debts
 

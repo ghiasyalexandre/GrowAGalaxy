@@ -7,19 +7,19 @@
 -- Pure module: no Roblox services, so the Lune unit tests run it directly.
 
 local Config = require(script.Parent.Parent.Config)
+local StarMath = require(script.Parent.StarMath)
 local Types = require(script.Parent.Parent.Types)
 
 type Profile = Types.Profile
 type Vec3 = Types.Vec3
-type Orbit = Types.Orbit
 
 local MAX_RECEIPTS = 50
-local BODY_KINDS = { star = true, planet = true, moon = true }
 
 local ProfileSchema = {}
 
 -- 1: first release. 2: "credits" renamed to "stardust" (the one currency).
-ProfileSchema.VERSION = 2
+-- 3: galaxy saves stars (level-based upgrades) instead of systems and bodies.
+ProfileSchema.VERSION = 3
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -45,7 +45,7 @@ function ProfileSchema.default(): Profile
 		ownedEquipment = {},
 		ownedCosmetics = {},
 		inventory = {},
-		galaxy = { expansion = 1, nextId = 1, systems = {}, bodies = {} },
+		galaxy = { expansion = 1, nextId = 1, stars = {} },
 		unlockedZones = { [Config.Zones.STARTER_ZONE] = true },
 		research = {},
 		achievements = {},
@@ -128,25 +128,8 @@ local function vec3(raw: any): Vec3?
 	return nil
 end
 
-local function orbit(raw: any): Orbit?
-	if type(raw) ~= "table" then
-		return nil
-	end
-	local slot = count(raw.slot)
-	if
-		not slot
-		or slot < 1
-		or not isFinite(raw.tilt)
-		or not isFinite(raw.node)
-		or not isFinite(raw.phase)
-	then
-		return nil
-	end
-	return { slot = slot, tilt = raw.tilt, node = raw.node, phase = raw.phase }
-end
-
--- Highest numeric suffix among ids like "s12" / "b40". Scans the raw saved
--- tables, so nextId never reuses an id, even one that was dropped as corrupt.
+-- Highest numeric suffix among ids like "s12". Scans the raw saved table, so
+-- nextId never reuses an id, even one that was dropped as corrupt.
 local function highestId(ids: any): number
 	local highest = 0
 	if type(ids) ~= "table" then
@@ -164,63 +147,57 @@ end
 
 local function galaxy(raw: any): Types.GalaxyRecord
 	local source = if type(raw) == "table" then raw else {}
-	local systems: { [string]: Types.SystemRecord } = {}
-	local bodies: { [string]: Types.BodyRecord } = {}
-
-	if type(source.systems) == "table" then
-		for id, system in source.systems do
-			local pos = if type(system) == "table" then vec3(system.pos) else nil
-			local tier = if type(system) == "table" then count(system.tier) else nil
-			if type(id) == "string" and pos and tier and type(system.starId) == "string" then
-				systems[id] = {
-					starId = system.starId,
-					tier = math.clamp(tier, 1, #Config.SolarSystems.TIERS),
-					pos = pos,
-				}
-			end
-		end
-	end
-
-	if type(source.bodies) == "table" then
-		for id, body in source.bodies do
-			if type(id) ~= "string" or type(body) ~= "table" then
+	local stars: { [string]: Types.StarRecord } = {}
+	if type(source.stars) == "table" then
+		for id, star in source.stars do
+			if type(id) ~= "string" or type(star) ~= "table" then
 				continue
 			end
-			local level = count(body.level)
-			local parentOk = body.parentId == nil or type(body.parentId) == "string"
-			local appearanceOk = body.appearance == nil or type(body.appearance) == "string"
-			local bodyOrbit = orbit(body.orbit)
-			local orbitOk = (body.kind == "star") == (bodyOrbit == nil)
-			if
-				BODY_KINDS[body.kind]
-				and type(body.typeId) == "string"
-				and type(body.systemId) == "string"
-				and level
-				and level >= 1
-				and parentOk
-				and appearanceOk
-				and orbitOk
-			then
-				bodies[id] = {
-					kind = body.kind,
-					typeId = body.typeId,
-					systemId = body.systemId,
-					parentId = body.parentId,
+			local pos = vec3(star.pos)
+			local level = count(star.level)
+			local appearanceOk = star.appearance == nil or type(star.appearance) == "string"
+			-- Unknown types are kept (a config mistake must not wipe a save);
+			-- gameplay code checks config before using them.
+			if pos and level and level >= 1 and type(star.typeId) == "string" and appearanceOk then
+				stars[id] = {
+					typeId = star.typeId,
 					level = level,
-					appearance = body.appearance,
-					orbit = bodyOrbit,
+					pos = pos,
+					appearance = star.appearance,
 				}
 			end
 		end
 	end
-
-	local floorId = math.max(highestId(source.systems), highestId(source.bodies)) + 1
 	return {
 		expansion = math.clamp(count(source.expansion) or 1, 1, #Config.Galaxy.EXPANSIONS),
-		nextId = math.max(count(source.nextId) or 1, floorId),
-		systems = systems,
-		bodies = bodies,
+		nextId = math.max(count(source.nextId) or 1, highestId(source.stars) + 1),
+		stars = stars,
 	}
+end
+
+-- Version 2 saved solar systems and bodies (never used in a release). Each
+-- system's star becomes a star at its position; planets and moons are now
+-- part of a star's level, so they are dropped.
+local function migrateGalaxyV2(raw: any)
+	if type(raw) ~= "table" or raw.stars ~= nil then
+		return
+	end
+	local stars = {}
+	local systems = if type(raw.systems) == "table" then raw.systems else {}
+	local bodies = if type(raw.bodies) == "table" then raw.bodies else {}
+	for id, system in systems do
+		local body = if type(system) == "table" then bodies[system.starId] else nil
+		if type(body) == "table" then
+			stars[id] = {
+				typeId = Config.Stars.DEFAULT_TYPE,
+				level = body.level,
+				pos = system.pos,
+			}
+		end
+	end
+	raw.stars = stars
+	raw.systems = nil
+	raw.bodies = nil
 end
 
 -- Repairs a loaded profile in place. Returns false (and changes nothing) when
@@ -243,6 +220,9 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 			data.stardust = data.credits
 		end
 		data.credits = nil
+	end
+	if version ~= nil and version < 3 then
+		migrateGalaxyV2(data.galaxy)
 	end
 
 	local defaults = ProfileSchema.default()
@@ -358,6 +338,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		cargo = table.clone(profile.cargo),
 		activeShip = profile.activeShip,
 		expansion = profile.galaxy.expansion,
+		incomeRate = StarMath.totalIncome(profile.galaxy.stars),
 	}
 end
 

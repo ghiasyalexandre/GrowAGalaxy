@@ -32,17 +32,17 @@ local Galaxy = {
 	EXPANSIONS = {
 		{
 			size = { x = 1024, y = 640, z = 1024 },
-			maxSystems = 1,
+			maxSystems = 3,
 			cost = nil,
 		},
 		{
 			size = { x = 1536, y = 896, z = 1536 },
-			maxSystems = 3,
+			maxSystems = 6,
 			cost = { stardust = 6000, materials = { Iron = 300, Silicate = 300 } },
 		},
 		{
 			size = { x = 2048, y = 1152, z = 2048 },
-			maxSystems = 6,
+			maxSystems = 10,
 			cost = { stardust = 40000, materials = { Iron = 800, Silicate = 800, Ice = 300 } },
 		},
 	} :: { ExpansionDef },

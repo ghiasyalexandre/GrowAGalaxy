@@ -13,6 +13,7 @@ return {
 	Ships = require(script.Ships),
 	Equipment = require(script.Equipment),
 	Recipes = require(script.Recipes),
+	Stars = require(script.Stars),
 	Celestials = require(script.Celestials),
 	SolarSystems = require(script.SolarSystems),
 	Galaxy = require(script.Galaxy),

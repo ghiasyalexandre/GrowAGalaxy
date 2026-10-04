@@ -3,7 +3,7 @@
 -- face. Station space: -Z faces into the region, +Z faces back towards the ISS.
 -- It has the deck, hub, beacon, name sign, a navigation console, a hangar
 -- console, and a ship berth with its docking zone off the -Z edge of the deck.
--- The deposit and collect consoles are placeholders for later stages.
+-- The Star Shop and Collect consoles drive the star tycoon (StarSystem).
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -141,8 +141,16 @@ function StationBuilder.build(
 	local hangar =
 		Build.console("HangarConsole", "Hangar\nLaunch your ship", at(-4, FLOOR_Y, 4), station)
 	Build.prompt(hangar, { action = "Launch ship", object = "Station hangar", launch = "Station" })
-	Build.console("DepositConsole", "Cargo deposit\n(Stage 4)", at(4, FLOOR_Y, 4), station)
-	Build.console("CollectConsole", "Collect Stardust\n(Stage 4)", at(12, FLOOR_Y, 4), station)
+	local shop =
+		Build.console("StarConsole", "Star Shop\nBuy and place stars", at(4, FLOOR_Y, 4), station)
+	Build.prompt(shop, { action = "Buy a star", object = "Star Shop", tycoon = "Shop" })
+	local collect = Build.console(
+		"CollectConsole",
+		"Collect\nStardust from your stars",
+		at(12, FLOOR_Y, 4),
+		station
+	)
+	Build.prompt(collect, { action = "Collect Stardust", object = "Collector", tycoon = "Collect" })
 
 	-- Berth pad off the -Z edge of the deck, joined by a short gangway. The
 	-- ship parks above it facing into the region. The docking zone covers the
