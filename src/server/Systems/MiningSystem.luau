@@ -27,10 +27,10 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local MiningMath = require(ReplicatedStorage.Shared.Logic.MiningMath)
 local Notify = require(script.Parent.Parent.Util.Notify)
+local Reward = require(script.Parent.Parent.Util.Reward)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local A = Config.Asteroids
-local CURRENCY = Config.Economy.CURRENCY_NAME
 
 local MiningSystem = {}
 
@@ -99,11 +99,14 @@ local function payOut(player: Player, asteroid: AsteroidSystem.Asteroid)
 		DataSystem.addStat(player, "coolExtractions", 1)
 	end
 	local bonus = reward - asteroid.size.reward
-	Notify.send(
+	Reward.send(
 		player,
+		"mine",
+		reward,
+		asteroid.position,
 		if bonus > 0
-			then `+{reward} {CURRENCY} ({asteroid.size.displayName}, +{bonus} precision bonus)`
-			else `+{reward} {CURRENCY} ({asteroid.size.displayName})`
+			then `{asteroid.size.displayName}  ·  +{bonus} precision`
+			else asteroid.size.displayName
 	)
 end
 

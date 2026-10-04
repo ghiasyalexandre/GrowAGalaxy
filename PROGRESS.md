@@ -13,7 +13,7 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 | 5. Progression (click laser, Shipyard, expansions, achievements, tutorial) | Merged | Passing | **Not yet** |
 | 6. Atmosphere and polish (sparkles, saved settings, ship paint, Golden Beam) | Merged | Passing | **Not yet** |
 | 7. Star and planet tiers | Merged | Passing (101 tests) | **Not yet** |
-| 8. UI juice and collect effects | In progress | | |
+| 8. UI juice and reward effects | Merged | Passing (101 tests) | **Not yet** |
 | 9+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
@@ -46,10 +46,11 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 
 ## Next up
 
-**Stage 7: playtest pass and save hardening.** Needs the user's playtest notes on stages 2-6
-(laser feel, mining pace, star prices, placement). Then: verify saving on a published place
-(rejoin, session lock, shutdown), tune economy numbers, and decide on further content (more star
-types, moons, the next ship, more achievements). Monetization only after that.
+**Playtest pass (needs the user).** Stages 2-8 are untested in Studio beyond loading without
+errors. Priorities: laser feel, mining pace, star/planet prices (Config/Stars, Config/Planets),
+placement controls, and whether the reward effects read well. Then save hardening on a published
+place, and the next content (more achievements for the new tiers, sounds once audio assets
+exist, monetization only after saves are proven).
 
 ## Open issues and debts
 

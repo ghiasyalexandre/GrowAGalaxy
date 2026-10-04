@@ -20,6 +20,9 @@
 --                                                       -> (ok: boolean, message: string)
 --   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects",
 --                                                       value: boolean)
+--   Reward           RemoteEvent     server -> client  (kind: "collect" | "mine" | "achievement",
+--                                                       amount: number, position: Vector3?,
+--                                                       label: string?) celebrate earned Stardust
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -37,6 +40,7 @@ local Net = {
 	StarRequest = folder:WaitForChild("StarRequest") :: RemoteFunction,
 	ShopRequest = folder:WaitForChild("ShopRequest") :: RemoteFunction,
 	SettingChanged = folder:WaitForChild("SettingChanged") :: RemoteEvent,
+	Reward = folder:WaitForChild("Reward") :: RemoteEvent,
 }
 
 return Net
