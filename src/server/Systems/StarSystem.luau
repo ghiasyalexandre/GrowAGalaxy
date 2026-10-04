@@ -171,6 +171,7 @@ local function upgrade(player: Player, starId: unknown): (boolean, string)
 	end
 	local level = star.level + 1
 	DataSystem.updateStar(player, starId :: string, level, nil)
+	DataSystem.addStat(player, "starUpgrades", 1)
 	StarBuilder.apply(model, star)
 	local levelDef = StarMath.levelDef(star.typeId, level)
 	local planet = if levelDef and levelDef.planet then S.PLANETS[levelDef.planet] else nil
@@ -210,6 +211,7 @@ local function onPrompt(prompt: ProximityPrompt, player: Player)
 	end
 	local amount = DataSystem.collectIncome(player)
 	if amount > 0 then
+		DataSystem.addStat(player, "collections", 1)
 		Notify.send(player, `Collected {amount} {CURRENCY}.`)
 	else
 		local profile = DataSystem.getProfile(player)

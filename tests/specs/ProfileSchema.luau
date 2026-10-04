@@ -27,7 +27,7 @@ return function(T, Loader)
 			local data = {}
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.schemaVersion, ProfileSchema.VERSION)
-			T.equal(data.stardust, 0)
+			T.equal(data.stardust, Config.Economy.STARTING_STARDUST)
 			T.truthy(data.ownedShips[starter])
 			T.equal(type(data.galaxy.stars), "table")
 			T.equal(data.settings.stabilization, true)
@@ -49,7 +49,7 @@ return function(T, Loader)
 				materials = { Iron = 12.7, Silicate = -3, Ice = "lots", [5] = 3 },
 			}
 			T.truthy(ProfileSchema.normalize(data))
-			T.equal(data.stardust, 0)
+			T.equal(data.stardust, Config.Economy.STARTING_STARDUST, "falls back to the default")
 			T.equal(data.uncollected, 0)
 			T.equal(data.materials.Iron, 12)
 			T.equal(data.materials.Silicate, nil)

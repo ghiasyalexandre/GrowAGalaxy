@@ -9,8 +9,9 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 | 1. Foundation | Merged | Passing | Loads without errors |
 | 2. Movement and ships | Merged | Passing | Loads without errors; feel **not yet** |
 | 3. Stardust and asteroid mining | Merged | Passing | Loads without errors; mining **not yet** |
-| 4. Star tycoon | Branch `stage-4-star-tycoon` | Passing locally (91 tests) | **Not yet** |
-| 5+. Galaxy expansion, ship shop, achievements, tutorial, polish, monetization | Not started | | |
+| 4. Star tycoon | Merged | Passing | **Not yet** |
+| 5. Progression (click laser, Shipyard, expansions, achievements, tutorial) | Branch `stage-5-progression` | Passing locally (96 tests) | **Not yet** |
+| 6+. Persistence hardening, polish, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -42,17 +43,15 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 
 ## Next up
 
-**Stage 5: progression.** Buy galaxy expansions (Stardust-only costs), the hangar ship shop
-(Prospector, earnable; compare, unlock, select) and beam/equipment upgrades, the achievement
-system (stats already counted: asteroidsMined, coolExtractions, starsPlaced) with one award
-wired up, and a short tutorial. Then drop the deferred material costs from configs.
+**Stage 6: persistence and polish.** Playtest-driven tuning of stages 2-5; a save-safety pass
+(publish with API access, rejoin tests, session-lock behaviour); settings (stabilizer, look
+sensitivity) saved; per-ship visual differences for the Prospector; showing cosmetic rewards.
 
 ## Open issues and debts
 
-- Configs for later stages still list material costs next to Stardust (ships, equipment,
-  expansions, zones). Make them Stardust-only when those features are built; `Config.Materials`,
-  `Config.Recipes`, `Config.Zones` and the profile's `materials`/`cargo` are deferred.
+- `Config.Materials`, `Config.Recipes`, `Config.Zones`, `Config.Celestials`, `Config.SolarSystems`
+  and the profile's `materials`/`cargo` are unused leftovers of the original design (still
+  config-checked); remove them once the revised design settles.
 - Only the asteroid break has a sound (a built-in Roblox sound); others need audio assets.
-- Achievements are counted (`stats.asteroidsMined`, `stats.coolExtractions`) but not awarded.
 - `rokit.toml` has an uncommitted bump of Rojo from 7.4.4 to 7.7.1 (made before this session); the
   CI uses the same file.

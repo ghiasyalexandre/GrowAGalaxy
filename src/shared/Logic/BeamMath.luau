@@ -32,6 +32,14 @@ function BeamMath.heatStep(
 	return heat, overheated
 end
 
+-- One shot: adds `perShot` heat, up to `capacity`. Returns the new heat and
+-- whether the laser is now overheated. The caller refuses shots while
+-- overheated; heatStep (not firing) cools it.
+function BeamMath.shotHeat(heat: number, capacity: number, perShot: number): (number, boolean)
+	heat = math.min(capacity, heat + perShot)
+	return heat, heat >= capacity
+end
+
 -- `direction` (a unit vector) turned towards `forward` (a unit vector) until
 -- it is at most `maxAngle` radians away from it.
 function BeamMath.clampToCone(forward: Vector3, direction: Vector3, maxAngle: number): Vector3

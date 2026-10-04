@@ -69,6 +69,9 @@ export type ProfileView = {
 	activeShip: string,
 	expansion: number,
 	incomeRate: number, -- Stardust per second from all stars
+	ownedShips: { [string]: boolean },
+	ownedEquipment: { [string]: boolean },
+	tutorialStep: number, -- Config.Tutorial step to show, 0 when done
 }
 
 export type RegionInfo = {

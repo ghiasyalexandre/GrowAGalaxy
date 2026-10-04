@@ -9,7 +9,7 @@
 
 local Economy = {
 	CURRENCY_NAME = "Stardust",
-	STARTING_STARDUST = 0,
+	STARTING_STARDUST = 100, -- enough for the first star (Logic/ConfigCheck makes sure)
 	INCOME_TICK_SECONDS = 1,
 	UNCOLLECTED_CAP_SECONDS = 7200, -- uncollected Stardust stops growing after this much income
 }

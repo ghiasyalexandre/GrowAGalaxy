@@ -174,12 +174,12 @@ function ConfigCheck.run(config: any): { string }
 
 	-- Mining beam: every ship fires for a while before it overheats.
 	local beam = config.Beam
-	if type(beam.HEAT_PER_SECOND) ~= "number" or beam.HEAT_PER_SECOND <= 0 then
-		fail("Beam: HEAT_PER_SECOND must be a positive number")
+	if type(beam.HEAT_PER_SHOT) ~= "number" or beam.HEAT_PER_SHOT <= 0 then
+		fail("Beam: HEAT_PER_SHOT must be a positive number")
 	else
 		for shipId, ship in config.Ships.BY_ID do
-			if ship.stats.heatCapacity / beam.HEAT_PER_SECOND < 2 then
-				fail(`Beam: ship {shipId} overheats in under 2 seconds`)
+			if ship.stats.heatCapacity / beam.HEAT_PER_SHOT < 4 then
+				fail(`Beam: ship {shipId} overheats in under 4 shots`)
 			end
 		end
 	end
@@ -256,6 +256,10 @@ function ConfigCheck.run(config: any): { string }
 	end
 	if stars.PRICE_GROWTH < 1 then
 		fail("Stars: PRICE_GROWTH must be at least 1")
+	end
+	local firstStar = stars.BY_ID[stars.DEFAULT_TYPE]
+	if firstStar and config.Economy.STARTING_STARDUST < firstStar.cost then
+		fail("Economy: STARTING_STARDUST doesn't cover the first star")
 	end
 	local largestStar = 0
 	for typeId, def in stars.BY_ID do

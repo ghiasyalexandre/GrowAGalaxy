@@ -13,8 +13,8 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 1. Foundation: config, save data, ISS hub, galaxy regions | [Merged](docs/stage-1-foundation.md) |
 | 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking, mining laser | [Merged](docs/stage-2-movement-ships.md) |
 | 3. Stardust and asteroid mining: scattered asteroids, weak points, Stardust rewards | [Merged](docs/stage-3-stardust-mining.md) |
-| 4. Star tycoon: place stars in 3D, collect their Stardust, upgrade them with planets | [In review](docs/stage-4-star-tycoon.md) |
-| 5. Progression | Not started |
+| 4. Star tycoon: place stars in 3D, collect their Stardust, upgrade them with planets | [Merged](docs/stage-4-star-tycoon.md) |
+| 5. Progression: click-to-shoot laser, Shipyard, expansions, achievements, tutorial | [In review](docs/stage-5-progression.md) |
 | 6. Persistence | Not started |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |

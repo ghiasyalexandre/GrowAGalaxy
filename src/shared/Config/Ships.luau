@@ -77,7 +77,7 @@ local BY_ID: { [string]: ShipDef } = {
 			coolingRate = 30,
 			cargoCapacity = 150,
 		},
-		earn = { stardust = 2500, materials = { Iron = 120, Silicate = 80 } },
+		earn = { stardust = 2500, materials = {} },
 		productKey = nil,
 	},
 	CrystalExplorer = {
@@ -97,7 +97,7 @@ local BY_ID: { [string]: ShipDef } = {
 			coolingRate = 45,
 			cargoCapacity = 140,
 		},
-		earn = { stardust = 15000, materials = { Iron = 200, Ice = 150 } },
+		earn = { stardust = 15000, materials = {} },
 		productKey = "CrystalExplorerUnlock",
 	},
 	HeavyExcavator = {
@@ -117,7 +117,7 @@ local BY_ID: { [string]: ShipDef } = {
 			coolingRate = 30,
 			cargoCapacity = 400,
 		},
-		earn = { stardust = 40000, materials = { Iron = 600, Crystal = 150 } },
+		earn = { stardust = 40000, materials = {} },
 		productKey = nil,
 	},
 	NebulaCruiser = {
@@ -137,7 +137,7 @@ local BY_ID: { [string]: ShipDef } = {
 			coolingRate = 50,
 			cargoCapacity = 300,
 		},
-		earn = { stardust = 120000, materials = { Crystal = 400, Ice = 300, StellarGas = 100 } },
+		earn = { stardust = 120000, materials = {} },
 		productKey = nil,
 	},
 }

@@ -79,8 +79,8 @@ return function(T, Loader)
 
 		T.test("catches a beam that overheats almost at once", function()
 			local broken = T.deepCopy(Config)
-			broken.Beam.HEAT_PER_SECOND = 1000
-			T.truthy(hasProblem(ConfigCheck.run(broken), "overheats in under 2 seconds"))
+			broken.Beam.HEAT_PER_SHOT = 1000
+			T.truthy(hasProblem(ConfigCheck.run(broken), "overheats in under 4 shots"))
 		end)
 
 		T.test("catches a camera field of view over the limit", function()

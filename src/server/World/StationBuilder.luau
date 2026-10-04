@@ -151,6 +151,13 @@ function StationBuilder.build(
 		station
 	)
 	Build.prompt(collect, { action = "Collect Stardust", object = "Collector", tycoon = "Collect" })
+	local shipyard = Build.console(
+		"ShipyardConsole",
+		"Shipyard\nShips, upgrades, expansion",
+		at(20, FLOOR_Y, 4),
+		station
+	)
+	Build.prompt(shipyard, { action = "Open Shipyard", object = "Shipyard", tycoon = "Shipyard" })
 
 	-- Berth pad off the -Z edge of the deck, joined by a short gangway. The
 	-- ship parks above it facing into the region. The docking zone covers the

@@ -20,5 +20,6 @@ return {
 	Economy = require(script.Economy),
 	Cosmetics = require(script.Cosmetics),
 	Achievements = require(script.Achievements),
+	Tutorial = require(script.Tutorial),
 	Products = require(script.Products),
 }

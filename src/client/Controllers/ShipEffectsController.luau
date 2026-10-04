@@ -1,11 +1,11 @@
 --!strict
 -- Effects this client draws for every ship in Workspace.Ships: engine glow
 -- and exhaust that follow the throttle, wing-tip trails, and mining laser
--- beams with sparks where they hit. Purely local and visual.
+-- laser bolts with sparks where they hit. Purely local and visual.
 --
 -- Your own ship follows your input straight away (ClientState.flight and
 -- ClientState.beam). Other ships follow their replicated velocity and the
--- attributes the server sets: Piloted, MaxSpeed, BeamRange, BeamOn, BeamAim.
+-- attributes the server sets: Piloted, MaxSpeed, BeamRange, Shot, BeamAim.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -33,8 +33,7 @@ local TRAIL_MIN_SPEED = 25
 local JUMP_DISTANCE = 60
 local DEFAULT_MAX_SPEED = 120
 local DEFAULT_BEAM_RANGE = 120
-local SPARK_RATE = 60
-local PULSE_SPEED = 40 -- radians per second of the beam's flicker
+local SPARK_BURST = 14 -- sparks where a bolt hits
 
 type BeamFx = {
 	target: Attachment,
@@ -58,6 +57,9 @@ type Visual = {
 	parked: boolean, -- effects already set to the parked look; nothing to update
 	rayParams: RaycastParams,
 	rayCharacter: Model?, -- the pilot character rayParams currently excludes
+	shotSeen: any, -- the ship's last seen Shot attribute
+	shotAt: number, -- os.clock() when that shot was seen
+	shotDrawn: number, -- shotAt of the bolt whose sparks were already emitted
 	connections: { RBXScriptConnection },
 }
 
@@ -166,17 +168,26 @@ local function numberAttribute(model: Model, name: string, default: number): num
 	return if type(value) == "number" and value > 0 then value else default
 end
 
-local function updateBeam(v: Visual, hull: BasePart, mine: boolean, now: number)
-	local firing: boolean
+local function updateBeam(v: Visual, hull: BasePart, mine: boolean)
+	-- A bolt shows for BOLT_TIME after each shot: your own at once, other
+	-- ships' when their Shot attribute changes.
 	local aim: Vector3
+	local shotAt: number
 	if mine then
-		firing = ClientState.beam.firing
 		aim = ClientState.beam.direction
+		shotAt = ClientState.beam.lastShot
 	else
-		firing = v.model:GetAttribute("BeamOn") == true
+		local shot = v.model:GetAttribute("Shot")
+		if shot ~= v.shotSeen then
+			v.shotSeen = shot
+			v.shotAt = os.clock()
+		end
 		local value = v.model:GetAttribute("BeamAim")
 		aim = if typeof(value) == "Vector3" then value else FORWARD
+		shotAt = v.shotAt
 	end
+	local age = os.clock() - shotAt
+	local firing = age < B.BOLT_TIME
 	local muzzle = v.muzzle
 	if not firing or muzzle == nil then
 		hideBeam(v)
@@ -202,18 +213,23 @@ local function updateBeam(v: Visual, hull: BasePart, mine: boolean, now: number)
 	local hit = Workspace:Raycast(origin, reach, v.rayParams)
 	fx.target.WorldPosition = if hit then hit.Position else origin + reach
 
-	local pulse = 1 + 0.15 * math.sin(now * PULSE_SPEED)
+	-- The bolt starts wide and thins out as it fades.
+	local pulse = 1.3 * (1 - age / B.BOLT_TIME) + 0.2
 	fx.outer.Width0 = B.WIDTH * pulse
 	fx.outer.Width1 = B.WIDTH * 0.8 * pulse
 	fx.core.Width0 = B.WIDTH * 0.35 * pulse
 	fx.core.Width1 = B.WIDTH * 0.25 * pulse
 	fx.outer.Enabled = true
 	fx.core.Enabled = true
-	fx.sparks.Rate = if hit then SPARK_RATE else 0
+	fx.sparks.Rate = 0
+	if hit and v.shotDrawn ~= shotAt then
+		v.shotDrawn = shotAt
+		fx.sparks:Emit(SPARK_BURST)
+	end
 	fx.light.Enabled = hit ~= nil
 end
 
-local function updateVisual(v: Visual, dt: number, now: number)
+local function updateVisual(v: Visual, dt: number)
 	if v.dirty then
 		collect(v)
 	end
@@ -280,7 +296,7 @@ local function updateVisual(v: Visual, dt: number, now: number)
 	end
 
 	if piloted then
-		updateBeam(v, hull, mine, now)
+		updateBeam(v, hull, mine)
 	else
 		hideBeam(v)
 	end
@@ -307,6 +323,9 @@ local function track(model: Instance)
 		parked = false,
 		rayParams = rayParams,
 		rayCharacter = nil,
+		shotSeen = model:GetAttribute("Shot"),
+		shotAt = 0,
+		shotDrawn = 0,
 		connections = {},
 	}
 	local function markDirty()
@@ -335,9 +354,8 @@ local function untrack(model: Instance)
 end
 
 local function update(dt: number)
-	local now = os.clock()
 	for _, v in visuals do
-		updateVisual(v, dt, now)
+		updateVisual(v, dt)
 	end
 end
 

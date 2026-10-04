@@ -10,9 +10,9 @@
 -- the bank. Thrust is relative to the ship: throttle, strafe and up/down.
 -- Letting go glides to a stop; Brake stops quickly.
 --
--- The laser (hold click, RT or the Laser button) fires where the reticle
--- points, within a cone around the nose. This client draws its own beam at
--- once; the server decides heat and overheating (BeamSystem).
+-- The laser fires one shot per click (RT, or the Laser button) where the
+-- reticle points, within a cone around the nose. This client draws its own
+-- bolt at once; the server decides heat and overheating (BeamSystem).
 --
 -- Also owns the suit/ship mode switch, hides Board prompts that aren't
 -- yours, and works out whether you can dock right now.
@@ -49,11 +49,6 @@ local COLLISION_SLACK = 15
 local MAX_BANK = math.rad(M.SHIP_MAX_BANK_DEGREES)
 local STRAFE_BANK = math.rad(M.SHIP_STRAFE_BANK_DEGREES)
 local BEAM_CONE = math.rad(B.AIM_CONE_DEGREES)
--- While firing, the aim is sent again once it has moved this much, and at
--- least this often anyway (which also restarts a beam whose "start" the
--- server dropped).
-local AIM_RESEND_COS = math.cos(math.rad(1))
-local AIM_KEEPALIVE = 0.5
 
 type Handling = {
 	maxSpeed: number,
@@ -78,9 +73,8 @@ type Flight = {
 	cameraPosition: Vector3,
 	muzzle: Attachment?,
 	rayParams: RaycastParams,
-	beamSent: boolean, -- the server was told the beam is on
-	aimSent: Vector3,
-	aimTimer: number,
+	wasHeld: boolean, -- the fire button was down last frame
+	lastShot: number, -- os.clock() of the last shot
 }
 
 local ShipController = {}
@@ -136,10 +130,6 @@ local function leave()
 	flight = nil
 	RunService:UnbindFromRenderStep(RENDER_STEP)
 	setOwnPrompt(f.ship, true)
-	if f.beamSent then
-		Net.BeamInput:FireServer("stop")
-	end
-	ClientState.beam.firing = false
 
 	local camera = Workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Custom
@@ -179,35 +169,25 @@ local function beamAim(f: Flight, muzzle: Attachment): Vector3
 	return BeamMath.clampToCone(BeamMath.FORWARD, direction, BEAM_CONE)
 end
 
-local function updateBeam(f: Flight, dt: number)
-	local beam = ClientState.beam
+-- One shot per press of the fire button, no faster than FIRE_INTERVAL. The
+-- bolt is drawn at once; the server decides heat and what the shot hits.
+local function updateBeam(f: Flight)
+	local held = Input.isHeld("Beam")
+	local pressed = held and not f.wasHeld
+	f.wasHeld = held
 	local muzzle = f.muzzle
-	local overheated = f.ship:GetAttribute("Overheated") == true
-	if muzzle == nil or overheated or not Input.isHeld("Beam") then
-		if f.beamSent then
-			Net.BeamInput:FireServer("stop")
-			f.beamSent = false
-		end
-		beam.firing = false
+	if not pressed or muzzle == nil or f.ship:GetAttribute("Overheated") == true then
 		return
 	end
-	local direction = beamAim(f, muzzle)
-	beam.firing = true
-	beam.direction = direction
-	f.aimTimer += dt
-	if not f.beamSent then
-		Net.BeamInput:FireServer("start", direction)
-		f.beamSent = true
-		f.aimSent = direction
-		f.aimTimer = 0
-	elseif
-		f.aimTimer >= B.AIM_SEND_INTERVAL
-		and (direction:Dot(f.aimSent) < AIM_RESEND_COS or f.aimTimer >= AIM_KEEPALIVE)
-	then
-		Net.BeamInput:FireServer("aim", direction)
-		f.aimSent = direction
-		f.aimTimer = 0
+	local now = os.clock()
+	if now - f.lastShot < B.FIRE_INTERVAL then
+		return
 	end
+	f.lastShot = now
+	local direction = beamAim(f, muzzle)
+	ClientState.beam.direction = direction
+	ClientState.beam.lastShot = now
+	Net.BeamInput:FireServer("shot", direction)
 end
 
 local function update(dt: number)
@@ -288,7 +268,7 @@ local function update(dt: number)
 	camera.CFrame = CFrame.lookAt(f.cameraPosition, position + aim.LookVector * LOOK_AHEAD, up)
 	camera.FieldOfView = M.CAMERA_FOV + M.CAMERA_FOV_BOOST * forward
 
-	updateBeam(f, dt)
+	updateBeam(f)
 
 	local speed = actual.Magnitude
 	ClientState.flight.speed = speed
@@ -344,9 +324,8 @@ local function enter(ship: Model)
 		cameraPosition = camera.CFrame.Position,
 		muzzle = if muzzle and muzzle:IsA("Attachment") then muzzle else nil,
 		rayParams = rayParams,
-		beamSent = false,
-		aimSent = BeamMath.FORWARD,
-		aimTimer = 0,
+		wasHeld = true, -- a click that boarded the ship doesn't fire
+		lastShot = 0,
 	}
 	flight = f
 	setOwnPrompt(ship, false)

@@ -29,6 +29,8 @@ local DataSystem = {}
 
 -- Fires once per join, after the profile is loaded and cleaned up.
 DataSystem.profileLoaded = Signal.new() :: Signal.Signal<Player, Profile>
+-- Fires after addStat changes a stat (achievements and the tutorial listen).
+DataSystem.statChanged = Signal.new() :: Signal.Signal<Player, string>
 
 local store: any = nil
 local sessions: { [Player]: any } = {}
@@ -204,7 +206,94 @@ function DataSystem.addStat(player: Player, stat: string, amount: number)
 	local profile = DataSystem.getProfile(player)
 	if profile and type(amount) == "number" and amount == amount and amount > 0 then
 		profile.stats[stat] = (profile.stats[stat] or 0) + amount
+		DataSystem.statChanged:Fire(player, stat)
 	end
+end
+
+-- Gives the player a ship, fitted with all the equipment they own.
+function DataSystem.grantShip(player: Player, shipId: string)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or profile.ownedShips[shipId] then
+		return
+	end
+	profile.ownedShips[shipId] = true
+	local equipment: { [string]: string } = {}
+	local starter = profile.loadouts[profile.activeShip]
+	if starter then
+		equipment = table.clone(starter.equipment)
+	end
+	profile.loadouts[shipId] = { equipment = equipment }
+	push(player, "ownedShips", table.clone(profile.ownedShips))
+end
+
+-- Makes an owned ship the one the hangars launch.
+function DataSystem.setActiveShip(player: Player, shipId: string): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or not profile.ownedShips[shipId] then
+		return false
+	end
+	profile.activeShip = shipId
+	push(player, "activeShip", shipId)
+	return true
+end
+
+-- Gives the player an equipment item and fits it to every ship they own.
+function DataSystem.grantEquipment(player: Player, itemId: string, slot: string)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return
+	end
+	profile.ownedEquipment[itemId] = true
+	for shipId in profile.ownedShips do
+		local loadout = profile.loadouts[shipId]
+		if loadout == nil then
+			loadout = { equipment = {} }
+			profile.loadouts[shipId] = loadout
+		end
+		loadout.equipment[slot] = itemId
+	end
+	push(player, "ownedEquipment", table.clone(profile.ownedEquipment))
+end
+
+function DataSystem.setExpansion(player: Player, level: number)
+	local profile = DataSystem.getProfile(player)
+	if profile then
+		profile.galaxy.expansion = level
+		push(player, "expansion", level)
+	end
+end
+
+-- Marks an achievement claimed. False if it already was (so its reward is
+-- only ever granted once).
+function DataSystem.claimAchievement(player: Player, id: string): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return false
+	end
+	local record = profile.achievements[id]
+	if record and record.claimed then
+		return false
+	end
+	profile.achievements[id] = { progress = (record and record.progress) or 0, claimed = true }
+	return true
+end
+
+function DataSystem.grantCosmetic(player: Player, cosmeticId: string)
+	local profile = DataSystem.getProfile(player)
+	if profile then
+		profile.ownedCosmetics[cosmeticId] = true
+	end
+end
+
+-- Records the tutorial step to show (0 = finished) and tells the client.
+function DataSystem.setTutorialStep(player: Player, step: number)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return
+	end
+	profile.tutorial.step = math.max(step, 1)
+	profile.tutorial.done = step == 0
+	push(player, "tutorialStep", step)
 end
 
 function DataSystem.init()
