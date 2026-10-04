@@ -26,6 +26,7 @@ export type ShipDef = {
 	role: string,
 	description: string,
 	enabled: boolean, -- false = defined for later stages, not offered yet
+	paint: string, -- hull colour
 	stats: ShipStats,
 	earn: Cost?, -- nil = free starter ship
 	productKey: string?, -- optional Robux unlock with identical stats
@@ -42,6 +43,7 @@ local ORDER: { string } = {
 local BY_ID: { [string]: ShipDef } = {
 	StarterShuttle = {
 		id = "StarterShuttle",
+		paint = "#E8EAED",
 		displayName = "Starter Shuttle",
 		role = "Beginner mining",
 		description = "Simple controls and a basic mining beam.",
@@ -62,6 +64,7 @@ local BY_ID: { [string]: ShipDef } = {
 	},
 	Prospector = {
 		id = "Prospector",
+		paint = "#F2B544",
 		displayName = "Prospector",
 		role = "General progression",
 		description = "Better extraction and a larger cargo hold.",
@@ -82,6 +85,7 @@ local BY_ID: { [string]: ShipDef } = {
 	},
 	CrystalExplorer = {
 		id = "CrystalExplorer",
+		paint = "#8FD3FF",
 		displayName = "Crystal Explorer",
 		role = "Precision mining",
 		description = "Better cooling, range and handling, with a modest hold.",
@@ -102,6 +106,7 @@ local BY_ID: { [string]: ShipDef } = {
 	},
 	HeavyExcavator = {
 		id = "HeavyExcavator",
+		paint = "#C9622F",
 		displayName = "Heavy Excavator",
 		role = "Bulk mining",
 		description = "Powerful extraction and a huge hold, but slow to turn.",
@@ -122,6 +127,7 @@ local BY_ID: { [string]: ShipDef } = {
 	},
 	NebulaCruiser = {
 		id = "NebulaCruiser",
+		paint = "#8C6BD9",
 		displayName = "Nebula Cruiser",
 		role = "Advanced exploration",
 		description = "Strong equipment and fast long-distance travel.",

@@ -285,6 +285,25 @@ function DataSystem.grantCosmetic(player: Player, cosmeticId: string)
 	end
 end
 
+-- Player settings a client may change (all booleans).
+local BOOLEAN_SETTINGS = { stabilization = true, reducedEffects = true }
+
+-- Saves a setting from the client. Unknown names and non-boolean values are
+-- ignored.
+function DataSystem.setSetting(player: Player, name: unknown, value: unknown)
+	local profile = DataSystem.getProfile(player)
+	if
+		profile == nil
+		or type(name) ~= "string"
+		or not BOOLEAN_SETTINGS[name]
+		or type(value) ~= "boolean"
+	then
+		return
+	end
+	(profile.settings :: any)[name] = value
+	push(player, "settings", table.clone(profile.settings))
+end
+
 -- Records the tutorial step to show (0 = finished) and tells the client.
 function DataSystem.setTutorialStep(player: Player, step: number)
 	local profile = DataSystem.getProfile(player)

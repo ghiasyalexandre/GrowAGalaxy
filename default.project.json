@@ -37,6 +37,9 @@
         },
         "ShopRequest": {
           "$className": "RemoteFunction"
+        },
+        "SettingChanged": {
+          "$className": "RemoteEvent"
         }
       }
     },

@@ -6,6 +6,7 @@
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "printProfile")
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "launch")  -- ship at an ISS berth
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "asteroids")  -- how many exist
+--   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "grantCosmetic", "GoldenBeam")
 --
 -- A BindableFunction is used because modules required from the command bar
 -- are separate copies that don't share state with the running game.
@@ -33,6 +34,10 @@ local COMMANDS: { [string]: (player: Player, ...any) -> any } = {
 	region = function(player)
 		local region = RegionSystem.getRegion(player)
 		return if region then region.slot else nil
+	end,
+	grantCosmetic = function(player, cosmeticId)
+		DataSystem.grantCosmetic(player, tostring(cosmeticId))
+		return true
 	end,
 	asteroids = function()
 		return AsteroidSystem.count()

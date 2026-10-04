@@ -237,6 +237,8 @@ ShipBuilder.BERTH_BOX = Vector3.new(20, 14, 24)
 -- anchored; ShipSystem unanchors it when the owner boards.
 function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Model
 	local def = Config.Ships.BY_ID[shipId] or Config.Ships.BY_ID[Config.Ships.STARTER_SHIP]
+	local paint = Color3.fromHex(def.paint)
+	local plain = Color3.fromHex(COLORS.hull)
 
 	local model = Instance.new("Model")
 	model.Name = def.id
@@ -317,6 +319,12 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 	prompt.Parent = hull
 
 	model:SetAttribute("ShipId", def.id)
+	-- Each ship type has its own paint: recolour the plain hull parts.
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") and part.Color == plain then
+			part.Color = paint
+		end
+	end
 	return model
 end
 

@@ -68,6 +68,7 @@ end
 local function refresh()
 	local flying = ClientState.mode == "ship"
 	dust.Enabled = flying
+	dust.Rate = if ClientState.reducedEffects then RATE / 3 else RATE
 	if flying then
 		box.Parent = Workspace.CurrentCamera
 		follow()
@@ -82,6 +83,7 @@ end
 function SpaceDustController.init()
 	build()
 	ClientState.modeChanged:Connect(refresh)
+	ClientState.effectsChanged:Connect(refresh)
 end
 
 return SpaceDustController

@@ -90,7 +90,8 @@ local function makeBeam(name: string, color: string, transparency: number, targe
 end
 
 -- The far end of a beam lives in Terrain, so it can sit anywhere in the world.
-local function makeBeamFx(): BeamFx
+-- `color` is the ship's BeamColor cosmetic, or nil for the standard laser.
+local function makeBeamFx(color: string?): BeamFx
 	local target = Instance.new("Attachment")
 	target.Name = "GaG_BeamTarget"
 	target.Parent = Workspace.Terrain
@@ -103,13 +104,13 @@ local function makeBeamFx(): BeamFx
 	sparks.Lifetime = NumberRange.new(0.15, 0.35)
 	sparks.Size = sequence(0.5, 0)
 	sparks.Drag = 3
-	sparks.Color = ColorSequence.new(Color3.fromHex(B.CORE_COLOR), Color3.fromHex(B.COLOR))
+	sparks.Color = ColorSequence.new(Color3.fromHex(B.CORE_COLOR), Color3.fromHex(color or B.COLOR))
 	sparks.LightEmission = 1
 	sparks.LightInfluence = 0
 	sparks.Parent = target
 
 	local light = Instance.new("PointLight")
-	light.Color = Color3.fromHex(B.COLOR)
+	light.Color = Color3.fromHex(color or B.COLOR)
 	light.Range = 14
 	light.Brightness = 3
 	light.Enabled = false
@@ -117,7 +118,7 @@ local function makeBeamFx(): BeamFx
 
 	return {
 		target = target,
-		outer = makeBeam("Beam", B.COLOR, 0.15, target),
+		outer = makeBeam("Beam", color or B.COLOR, 0.15, target),
 		core = makeBeam("Core", B.CORE_COLOR, 0, target),
 		sparks = sparks,
 		light = light,
@@ -194,7 +195,8 @@ local function updateBeam(v: Visual, hull: BasePart, mine: boolean)
 		return
 	end
 
-	local fx = v.beam or makeBeamFx()
+	local beamColor = v.model:GetAttribute("BeamColor")
+	local fx = v.beam or makeBeamFx(if type(beamColor) == "string" then beamColor else nil)
 	v.beam = fx
 	fx.outer.Attachment0 = muzzle
 	fx.core.Attachment0 = muzzle
