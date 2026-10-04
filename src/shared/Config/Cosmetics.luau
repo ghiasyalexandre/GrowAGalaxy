@@ -8,6 +8,7 @@ export type CosmeticDef = {
 	kind: "ShipSkin" | "BeamColor" | "ThrusterTrail" | "StationTheme" | "Title",
 	enabled: boolean,
 	productKey: string?,
+	color: string?, -- BeamColor: the laser's colour
 }
 
 local BY_ID: { [string]: CosmeticDef } = {
@@ -22,8 +23,9 @@ local BY_ID: { [string]: CosmeticDef } = {
 		id = "GoldenBeam",
 		displayName = "Golden Beam",
 		kind = "BeamColor",
-		enabled = false,
+		enabled = true,
 		productKey = nil,
+		color = "#FFC83D",
 	},
 	AuroraTrail = {
 		id = "AuroraTrail",

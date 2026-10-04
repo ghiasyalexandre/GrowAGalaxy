@@ -29,6 +29,8 @@ ClientState.shipInfo = nil :: Types.ShipInfo?
 
 ClientState.mode = "suit" :: Mode
 ClientState.stabilization = true
+-- Fewer particles (sparkles, space dust) for slower devices or taste.
+ClientState.reducedEffects = false
 ClientState.route = "Station" :: Route
 -- Updated every frame while flying.
 ClientState.flight = {
@@ -50,6 +52,7 @@ ClientState.regionsChanged = Signal.new() :: Signal.Signal<()>
 ClientState.shipChanged = Signal.new() :: Signal.Signal<()>
 ClientState.modeChanged = Signal.new() :: Signal.Signal<()>
 ClientState.stabilizationChanged = Signal.new() :: Signal.Signal<()>
+ClientState.effectsChanged = Signal.new() :: Signal.Signal<()>
 ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 -- A short message to show the player (from the server or a controller).
 ClientState.notify = Signal.new() :: Signal.Signal<string>
@@ -72,9 +75,17 @@ function ClientState.setMode(mode: Mode)
 	end
 end
 
+-- Changes a setting and saves it on the server.
 function ClientState.setStabilization(on: boolean)
 	ClientState.stabilization = on
 	ClientState.stabilizationChanged:Fire()
+	Net.SettingChanged:FireServer("stabilization", on)
+end
+
+function ClientState.setReducedEffects(on: boolean)
+	ClientState.reducedEffects = on
+	ClientState.effectsChanged:Fire()
+	Net.SettingChanged:FireServer("reducedEffects", on)
 end
 
 function ClientState.setRoute(route: Route)
@@ -113,6 +124,14 @@ function ClientState.load()
 		if ok and type(state) == "table" then
 			ClientState.profile = state.profile
 			ClientState.regions = state.regions
+			-- Saved settings, applied without sending them back.
+			local settings = state.profile.settings
+			if type(settings) == "table" then
+				ClientState.stabilization = settings.stabilization ~= false
+				ClientState.reducedEffects = settings.reducedEffects == true
+				ClientState.stabilizationChanged:Fire()
+				ClientState.effectsChanged:Fire()
+			end
 			ClientState.profileChanged:Fire("*")
 			ClientState.regionsChanged:Fire()
 			return

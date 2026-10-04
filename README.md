@@ -14,8 +14,8 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking, mining laser | [Merged](docs/stage-2-movement-ships.md) |
 | 3. Stardust and asteroid mining: scattered asteroids, weak points, Stardust rewards | [Merged](docs/stage-3-stardust-mining.md) |
 | 4. Star tycoon: place stars in 3D, collect their Stardust, upgrade them with planets | [Merged](docs/stage-4-star-tycoon.md) |
-| 5. Progression: click-to-shoot laser, Shipyard, expansions, achievements, tutorial | [In review](docs/stage-5-progression.md) |
-| 6. Persistence | Not started |
+| 5. Progression: click-to-shoot laser, Shipyard, expansions, achievements, tutorial | [Merged](docs/stage-5-progression.md) |
+| 6. Atmosphere and polish: sparkles, saved settings, ship paint, Golden Beam | [Merged](docs/stage-6-polish.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

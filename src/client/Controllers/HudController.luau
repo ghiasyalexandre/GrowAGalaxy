@@ -36,6 +36,7 @@ local hintLabel: TextLabel
 local readoutLabel: TextLabel
 local reticle: TextLabel
 local recoverButton: TextButton
+local effectsButton: TextButton
 local heatPanel: Frame
 local heatFill: Frame
 local heatLabel: TextLabel
@@ -214,6 +215,19 @@ local function build()
 	padding.PaddingBottom = UDim.new(0, 8)
 	padding.Parent = recoverButton
 
+	-- Settings toggle under the wallet.
+	effectsButton = Instance.new("TextButton")
+	effectsButton.Name = "Effects"
+	effectsButton.Position = UDim2.new(0, 16, 0, 116)
+	effectsButton.Size = UDim2.new(0, 150, 0, 26)
+	effectsButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+	effectsButton.BackgroundTransparency = 0.3
+	effectsButton.Font = Enum.Font.Gotham
+	effectsButton.TextSize = 14
+	effectsButton.TextColor3 = Color3.fromRGB(180, 190, 220)
+	effectsButton.Parent = gui
+	corner(effectsButton, 6)
+
 	heatPanel, heatFill, heatLabel = makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL)
 	extractPanel, extractFill, extractLabel =
 		makeGauge(gui, "Extraction", -142, "EXTRACTING", EXTRACT_ROCK)
@@ -333,6 +347,16 @@ function HudController.init()
 	ClientState.modeChanged:Connect(refreshReadout)
 	ClientState.stabilizationChanged:Connect(refreshReadout)
 	Input.deviceChanged:Connect(refreshReadout)
+	local function refreshEffects()
+		effectsButton.Text = if ClientState.reducedEffects
+			then "Effects: reduced"
+			else "Effects: full"
+	end
+	ClientState.effectsChanged:Connect(refreshEffects)
+	refreshEffects()
+	effectsButton.Activated:Connect(function()
+		ClientState.setReducedEffects(not ClientState.reducedEffects)
+	end)
 	recoverButton.Activated:Connect(function()
 		Net.SuitRecover:FireServer()
 	end)

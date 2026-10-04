@@ -10,8 +10,9 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 | 2. Movement and ships | Merged | Passing | Loads without errors; feel **not yet** |
 | 3. Stardust and asteroid mining | Merged | Passing | Loads without errors; mining **not yet** |
 | 4. Star tycoon | Merged | Passing | **Not yet** |
-| 5. Progression (click laser, Shipyard, expansions, achievements, tutorial) | Branch `stage-5-progression` | Passing locally (96 tests) | **Not yet** |
-| 6+. Persistence hardening, polish, monetization | Not started | | |
+| 5. Progression (click laser, Shipyard, expansions, achievements, tutorial) | Merged | Passing | **Not yet** |
+| 6. Atmosphere and polish (sparkles, saved settings, ship paint, Golden Beam) | Merged | Passing | **Not yet** |
+| 7+. Save hardening, tuning, more content, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -43,9 +44,10 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 
 ## Next up
 
-**Stage 6: persistence and polish.** Playtest-driven tuning of stages 2-5; a save-safety pass
-(publish with API access, rejoin tests, session-lock behaviour); settings (stabilizer, look
-sensitivity) saved; per-ship visual differences for the Prospector; showing cosmetic rewards.
+**Stage 7: playtest pass and save hardening.** Needs the user's playtest notes on stages 2-6
+(laser feel, mining pace, star prices, placement). Then: verify saving on a published place
+(rejoin, session lock, shutdown), tune economy numbers, and decide on further content (more star
+types, moons, the next ship, more achievements). Monetization only after that.
 
 ## Open issues and debts
 

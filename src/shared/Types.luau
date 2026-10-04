@@ -72,6 +72,7 @@ export type ProfileView = {
 	ownedShips: { [string]: boolean },
 	ownedEquipment: { [string]: boolean },
 	tutorialStep: number, -- Config.Tutorial step to show, 0 when done
+	settings: Settings,
 }
 
 export type RegionInfo = {

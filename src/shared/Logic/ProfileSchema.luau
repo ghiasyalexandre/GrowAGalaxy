@@ -343,6 +343,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		ownedShips = table.clone(profile.ownedShips),
 		ownedEquipment = table.clone(profile.ownedEquipment),
 		tutorialStep = if profile.tutorial.done then 0 else Progression.tutorialStep(profile.stats),
+		settings = table.clone(profile.settings),
 	}
 end
 

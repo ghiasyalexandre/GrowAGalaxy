@@ -17,6 +17,8 @@
 --   ShopRequest      RemoteFunction  client -> server  (action: "buyShip" | "selectShip" |
 --                                                       "buyEquipment" | "expand", id: string?)
 --                                                       -> (ok: boolean, message: string)
+--   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects",
+--                                                       value: boolean)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -33,6 +35,7 @@ local Net = {
 	Notify = folder:WaitForChild("Notify") :: RemoteEvent,
 	StarRequest = folder:WaitForChild("StarRequest") :: RemoteFunction,
 	ShopRequest = folder:WaitForChild("ShopRequest") :: RemoteFunction,
+	SettingChanged = folder:WaitForChild("SettingChanged") :: RemoteEvent,
 }
 
 return Net

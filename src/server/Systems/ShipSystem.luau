@@ -298,6 +298,20 @@ local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): S
 	-- Read by every client's ship effects (engine glow, beam reach).
 	model:SetAttribute("MaxSpeed", info.maxSpeed)
 	model:SetAttribute("BeamRange", info.beamRange)
+	-- An owned beam-colour cosmetic recolours the laser for everyone.
+	local profile = DataSystem.getProfile(player)
+	for cosmeticId, def in Config.Cosmetics.BY_ID do
+		if
+			def.kind == "BeamColor"
+			and def.enabled
+			and def.color
+			and profile
+			and profile.ownedCosmetics[cosmeticId]
+		then
+			model:SetAttribute("BeamColor", def.color)
+			break
+		end
+	end
 	model:SetAttribute("Piloted", false)
 	model.ModelStreamingMode = Enum.ModelStreamingMode.PersistentPerPlayer
 
