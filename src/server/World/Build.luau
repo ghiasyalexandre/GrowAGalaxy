@@ -45,7 +45,7 @@ export type PromptProps = {
 	warp: string?, -- WarpTarget handled by NavigationSystem
 	launch: string?, -- Hangar ("ISS" or "Station") handled by ShipSystem
 	route: string?, -- RouteTarget ("ISS" or "Station") handled by the client
-	tycoon: string?, -- TycoonAction ("Shop", "Collect" or "Manage")
+	tycoon: string?, -- TycoonAction ("Shop", "Collect", "Manage" or "Shipyard")
 }
 
 local Build = {}

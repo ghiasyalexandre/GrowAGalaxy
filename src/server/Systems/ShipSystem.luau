@@ -384,6 +384,7 @@ function ShipSystem.launch(player: Player, hangar: string)
 	end
 	local ship = spawnShip(player, infoFor(profile), berth)
 	sendState(player)
+	DataSystem.addStat(player, "shipsLaunched", 1)
 	Notify.send(
 		player,
 		if existing

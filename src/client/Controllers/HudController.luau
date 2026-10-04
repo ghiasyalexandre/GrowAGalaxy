@@ -30,6 +30,7 @@ local DOCK_HINTS: { [string]: string } = {
 local HudController = {}
 
 local stardustLabel: TextLabel
+local tutorialLabel: TextLabel
 local sectorLabel: TextLabel
 local hintLabel: TextLabel
 local readoutLabel: TextLabel
@@ -155,6 +156,24 @@ local function build()
 
 	buildWallet(gui)
 
+	-- Tutorial hint, top centre (Config.Tutorial).
+	tutorialLabel = makeLabel(gui, {
+		Name = "Tutorial",
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 16),
+		Size = UDim2.new(0.6, 0, 0, 30),
+		BackgroundColor3 = Color3.fromRGB(16, 20, 36),
+		BackgroundTransparency = 0.25,
+		Text = "",
+		TextScaled = false,
+		TextSize = 17,
+		TextWrapped = true,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		TextColor3 = Color3.fromRGB(255, 230, 160),
+		Visible = false,
+	})
+	corner(tutorialLabel, 8)
+
 	hintLabel = makeLabel(gui, {
 		Name = "Hint",
 		AnchorPoint = Vector2.new(0.5, 1),
@@ -217,6 +236,13 @@ end
 local function refreshStardust()
 	local profile = ClientState.profile
 	stardustLabel.Text = if profile then Format.abbreviate(profile.stardust) else "..."
+end
+
+local function refreshTutorial()
+	local profile = ClientState.profile
+	local step = if profile then Config.Tutorial.STEPS[profile.tutorialStep] else nil
+	tutorialLabel.Visible = step ~= nil
+	tutorialLabel.Text = if step then `Next: {step.text}` else ""
 end
 
 -- Sector, star production and Stardust waiting at the Collect console.
@@ -298,6 +324,9 @@ function HudController.init()
 		end
 		if field == "incomeRate" or field == "uncollected" or field == "*" then
 			refreshSector()
+		end
+		if field == "tutorialStep" or field == "*" then
+			refreshTutorial()
 		end
 	end)
 	ClientState.regionsChanged:Connect(refreshSector)

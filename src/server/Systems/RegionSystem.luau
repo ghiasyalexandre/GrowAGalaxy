@@ -92,6 +92,17 @@ local function release(player: Player)
 	RegionSystem.regionRemoved:Fire(region)
 end
 
+-- Grows the player's region to an expansion level and redraws its edges.
+-- The origin (near face) stays put, so stars and the station don't move.
+function RegionSystem.resize(player: Player, expansion: number)
+	local region = byPlayer[player]
+	if region == nil then
+		return
+	end
+	region.size = sizeFor(expansion)
+	RegionBuilder.buildBounds(region.model, region.origin, region.size, region.color)
+end
+
 function RegionSystem.getRegion(player: Player): Region?
 	return byPlayer[player]
 end

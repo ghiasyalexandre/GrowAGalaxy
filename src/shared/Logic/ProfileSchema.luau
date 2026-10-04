@@ -7,6 +7,7 @@
 -- Pure module: no Roblox services, so the Lune unit tests run it directly.
 
 local Config = require(script.Parent.Parent.Config)
+local Progression = require(script.Parent.Progression)
 local StarMath = require(script.Parent.StarMath)
 local Types = require(script.Parent.Parent.Types)
 
@@ -339,6 +340,9 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		activeShip = profile.activeShip,
 		expansion = profile.galaxy.expansion,
 		incomeRate = StarMath.totalIncome(profile.galaxy.stars),
+		ownedShips = table.clone(profile.ownedShips),
+		ownedEquipment = table.clone(profile.ownedEquipment),
+		tutorialStep = if profile.tutorial.done then 0 else Progression.tutorialStep(profile.stats),
 	}
 end
 

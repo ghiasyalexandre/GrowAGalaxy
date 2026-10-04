@@ -14,6 +14,9 @@
 --   Notify           RemoteEvent     server -> client  (text: string)
 --   StarRequest      RemoteFunction  client -> server  (action: "place" | "move" | "upgrade",
 --                                                       ...) -> (ok: boolean, message: string)
+--   ShopRequest      RemoteFunction  client -> server  (action: "buyShip" | "selectShip" |
+--                                                       "buyEquipment" | "expand", id: string?)
+--                                                       -> (ok: boolean, message: string)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -29,6 +32,7 @@ local Net = {
 	BeamInput = folder:WaitForChild("BeamInput") :: RemoteEvent,
 	Notify = folder:WaitForChild("Notify") :: RemoteEvent,
 	StarRequest = folder:WaitForChild("StarRequest") :: RemoteFunction,
+	ShopRequest = folder:WaitForChild("ShopRequest") :: RemoteFunction,
 }
 
 return Net
