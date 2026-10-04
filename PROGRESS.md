@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-04 (stage 9 merged into `main`).
+Last updated: 2026-10-04 (stage 10 merged into `main`).
 
 ## Status by stage
 
@@ -15,7 +15,8 @@ Last updated: 2026-10-04 (stage 9 merged into `main`).
 | 7. Star and planet tiers | Merged | Passing (101 tests) | **Not yet** |
 | 8. UI juice and reward effects | Merged | Passing (101 tests) | **Not yet** |
 | 9. Boost, laser feel, Star Shop button, isolated controller start-up | Merged | Passing (104 tests) | **Not yet** |
-| 10+. Save hardening, tuning, monetization | Not started | | |
+| 10. Stellar spectacle (star/planet effects, celebrations, shop icons, Next Goal, achievements) | Merged | Passing (105 tests) | **Not yet** |
+| 11+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -49,7 +50,7 @@ Last updated: 2026-10-04 (stage 9 merged into `main`).
 
 **Playtest pass (needs the user).** The user reported (2026-10-04) that the Star Shop console
 didn't open; the cause wasn't found by reading the code. Stage 9 adds a button and B key, and
-logs any controller failure in Output; check for `failed:` lines. Stages 2-9 are untested in Studio beyond loading without
+logs any controller failure in Output; check for `failed:` lines. Stages 2-10 are untested in Studio beyond loading without
 errors. Priorities: laser feel, mining pace, star/planet prices (Config/Stars, Config/Planets),
 placement controls, and whether the reward effects read well. Then save hardening on a published
 place, and the next content (more achievements for the new tiers, sounds once audio assets

@@ -4,7 +4,10 @@
 --   * glowing Stardust orbs burst out on screen and stream into the wallet,
 --     which bounces as they land (HudController),
 --   * a bouncing "+amount" pop-up with what it was for,
---   * for achievements, a gold banner that slides in from the top.
+--   * for achievements, a gold banner that slides in from the top with a
+--     burst of confetti.
+-- Your stars' milestones (ClientState.celebrate) get the same banner in the
+-- star's colour, and an evolution also flashes the screen. Banners queue.
 -- It also keeps a pulsing "ready to collect" label over your station's
 -- Collect console. Presentation only: the server already paid out.
 
@@ -37,8 +40,18 @@ local RewardController = {}
 
 local gui: ScreenGui
 local banner: Frame
+local bannerHeader: TextLabel
 local bannerTitle: TextLabel
 local bannerBody: TextLabel
+local bannerEdge: UIStroke
+local CONFETTI = 28
+local CONFETTI_COLORS = {
+	Color3.fromRGB(255, 210, 90),
+	Color3.fromRGB(120, 230, 255),
+	Color3.fromRGB(255, 120, 200),
+	Color3.fromRGB(150, 255, 160),
+	Color3.fromRGB(190, 150, 255),
+}
 local collectLabel: BillboardGui? = nil
 local collectText: TextLabel? = nil
 
@@ -165,23 +178,104 @@ local function popup(at: Vector2, amount: number, caption: string?)
 	end)
 end
 
-local function showBanner(name: string, details: string)
-	bannerTitle.Text = name
-	bannerBody.Text = details
-	banner.Visible = true
-	banner.Position = UDim2.new(0.5, 0, 0, -120)
-	TweenService:Create(banner, POP, { Position = UDim2.new(0.5, 0, 0, 70) }):Play()
-	Theme.popIn(banner)
-	task.delay(3.5, function()
-		local away = TweenService:Create(
-			banner,
-			TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-			{ Position = UDim2.new(0.5, 0, 0, -120) }
+-- Confetti: little coloured chips that burst out of `at` and tumble down.
+local function confetti(at: Vector2, color: Color3)
+	local amount = if ClientState.reducedEffects then 8 else CONFETTI
+	for _ = 1, amount do
+		local chip = Instance.new("Frame")
+		chip.AnchorPoint = Vector2.new(0.5, 0.5)
+		chip.Position = UDim2.fromOffset(at.X, at.Y)
+		chip.Size = UDim2.fromOffset(math.random(6, 11), math.random(10, 16))
+		chip.Rotation = math.random(0, 360)
+		chip.BackgroundColor3 = if math.random() < 0.5
+			then color
+			else CONFETTI_COLORS[math.random(1, #CONFETTI_COLORS)]
+		chip.BorderSizePixel = 0
+		chip.ZIndex = 7
+		chip.Parent = gui
+		local angle = math.random() * math.pi * 2
+		local out = at + Vector2.new(math.cos(angle) * math.random(80, 260), -math.random(30, 160))
+		local fall = out + Vector2.new(math.random(-60, 60), math.random(160, 320))
+		local burst = TweenService:Create(
+			chip,
+			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{ Position = UDim2.fromOffset(out.X, out.Y), Rotation = chip.Rotation + 180 }
 		)
-		away:Play()
-		away.Completed:Wait()
-		banner.Visible = false
+		burst:Play()
+		burst.Completed:Once(function()
+			local drop = TweenService:Create(
+				chip,
+				TweenInfo.new(1.1, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{
+					Position = UDim2.fromOffset(fall.X, fall.Y),
+					Rotation = chip.Rotation + 360,
+					BackgroundTransparency = 1,
+				}
+			)
+			drop:Play()
+			Debris:AddItem(chip, 1.2)
+		end)
+	end
+end
+
+-- A full-screen flash of `color` that fades out.
+local function screenFlash(color: Color3)
+	if ClientState.reducedEffects then
+		return
+	end
+	local cover = Instance.new("Frame")
+	cover.Size = UDim2.fromScale(1, 1)
+	cover.BackgroundColor3 = color:Lerp(Color3.new(1, 1, 1), 0.6)
+	cover.BackgroundTransparency = 0.35
+	cover.BorderSizePixel = 0
+	cover.ZIndex = 1
+	cover.Parent = gui
+	TweenService:Create(cover, TweenInfo.new(0.8), { BackgroundTransparency = 1 }):Play()
+	Debris:AddItem(cover, 0.9)
+end
+
+type BannerItem = { header: string, name: string, details: string, color: Color3 }
+local bannerQueue: { BannerItem } = {}
+local bannerBusy = false
+
+-- Shows queued banners one after another, so none hides another.
+local function runBanners()
+	if bannerBusy then
+		return
+	end
+	bannerBusy = true
+	task.spawn(function()
+		while #bannerQueue > 0 do
+			local item = table.remove(bannerQueue, 1) :: BannerItem
+			bannerHeader.Text = item.header
+			bannerHeader.TextColor3 = item.color
+			bannerTitle.Text = item.name
+			bannerBody.Text = item.details
+			bannerEdge.Color = item.color
+			banner.Visible = true
+			banner.Position = UDim2.new(0.5, 0, 0, -120)
+			TweenService:Create(banner, POP, { Position = UDim2.new(0.5, 0, 0, 70) }):Play()
+			Theme.popIn(banner)
+			task.delay(0.15, function()
+				confetti(banner.AbsolutePosition + banner.AbsoluteSize / 2, item.color)
+			end)
+			task.wait(if #bannerQueue > 0 then 2 else 3.2)
+			local away = TweenService:Create(
+				banner,
+				TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+				{ Position = UDim2.new(0.5, 0, 0, -120) }
+			)
+			away:Play()
+			away.Completed:Wait()
+			banner.Visible = false
+		end
+		bannerBusy = false
 	end)
+end
+
+local function showBanner(header: string, name: string, details: string, color: Color3)
+	table.insert(bannerQueue, { header = header, name = name, details = details, color = color })
+	runBanners()
 end
 
 local function onReward(kind: unknown, amount: unknown, position: unknown, label: unknown)
@@ -192,7 +286,7 @@ local function onReward(kind: unknown, amount: unknown, position: unknown, label
 	local caption = if type(label) == "string" then label else nil
 	if kind == "achievement" then
 		local name, details = string.match(caption or "", "^(.-)|(.*)$")
-		showBanner(name or "Achievement unlocked", details or "")
+		showBanner("ACHIEVEMENT UNLOCKED", name or "Achievement unlocked", details or "", GOLD)
 		if amount <= 0 then
 			return
 		end
@@ -272,13 +366,12 @@ function RewardController.init()
 	banner.AnchorPoint = Vector2.new(0.5, 0)
 	banner.Size = UDim2.fromOffset(420, 84)
 	banner.Visible = false
-	local edge = banner:FindFirstChildOfClass("UIStroke")
-	if edge then
-		edge.Color = GOLD
-		edge.Transparency = 0
-		edge.Thickness = 3
-	end
-	Theme.label(banner, {
+	bannerEdge = banner:FindFirstChildOfClass("UIStroke") :: UIStroke
+	bannerEdge.Color = GOLD
+	bannerEdge.Transparency = 0
+	bannerEdge.Thickness = 3
+	Theme.shine(banner)
+	bannerHeader = Theme.label(banner, {
 		Position = UDim2.fromOffset(0, 8),
 		Size = UDim2.new(1, 0, 0, 18),
 		Text = "ACHIEVEMENT UNLOCKED",
@@ -306,6 +399,12 @@ end
 
 function RewardController.start()
 	Net.Reward.OnClientEvent:Connect(onReward)
+	ClientState.celebrate:Connect(function(header, name, details, color, flash)
+		if flash then
+			screenFlash(color)
+		end
+		showBanner(header, name, details, color)
+	end)
 	ClientState.profileChanged:Connect(function(field)
 		if field == "uncollected" or field == "*" then
 			refreshCollector()

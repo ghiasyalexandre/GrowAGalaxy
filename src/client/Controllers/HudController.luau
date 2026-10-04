@@ -12,7 +12,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
+local StarController = require(script.Parent.StarController)
+local Theme = require(script.Parent.Parent.UI.Theme)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local RegionMath = require(
+	ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("RegionMath")
+)
+local StarMath =
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("StarMath"))
 local Format =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Format"))
 local Input = require(script.Parent.Parent.Input)
@@ -56,6 +63,14 @@ local boostPanel: Frame
 local boostFill: Frame
 local boostLabel: TextLabel
 local shopButton: TextButton
+local goalButton: TextButton
+local goalEdge: UIStroke
+local goalTitle: TextLabel
+local goalAmount: TextLabel
+local goalFill: Frame
+local goalShine: Frame
+local goalReady = false
+local GOAL_INTERVAL = 1
 local BOOST_READY = Color3.fromRGB(120, 230, 255)
 local BOOST_ON = Color3.fromRGB(255, 255, 255)
 local BOOST_EMPTY = Color3.fromRGB(110, 120, 150)
@@ -308,6 +323,48 @@ local function build()
 		TweenService:Create(shopScale, TweenInfo.new(0.1), { Scale = 1 }):Play()
 	end)
 
+	-- Next goal: the next star tier, with progress towards its price. Opens
+	-- the Star Shop when clicked.
+	goalButton = Instance.new("TextButton")
+	goalButton.Name = "NextGoal"
+	goalButton.Text = ""
+	goalButton.AutoButtonColor = false
+	goalButton.Position = UDim2.new(0, 16, 0, 188)
+	goalButton.Size = UDim2.new(0, 220, 0, 52)
+	goalButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+	goalButton.BackgroundTransparency = 0.2
+	goalButton.Visible = false
+	goalButton.Parent = gui
+	corner(goalButton, 8)
+	goalEdge = Instance.new("UIStroke")
+	goalEdge.Color = WALLET_GOLD
+	goalEdge.Thickness = 2
+	goalEdge.Transparency = 1
+	goalEdge.Parent = goalButton
+	goalTitle = makeLabel(goalButton, {
+		Position = UDim2.fromOffset(10, 6),
+		Size = UDim2.new(1, -20, 0, 16),
+		TextScaled = false,
+		TextSize = 14,
+		TextColor3 = WALLET_GOLD,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	goalAmount = makeLabel(goalButton, {
+		Position = UDim2.fromOffset(10, 22),
+		Size = UDim2.new(1, -20, 0, 14),
+		TextScaled = false,
+		TextSize = 12,
+		Font = Enum.Font.Gotham,
+		TextColor3 = Color3.fromRGB(180, 190, 220),
+	})
+	goalFill = Theme.progress(goalButton, 0, WALLET_GOLD, 6)
+	local goalTrack = goalFill.Parent :: Frame
+	goalTrack.Position = UDim2.new(0, 10, 1, -8)
+	goalTrack.Size = UDim2.new(1, -20, 0, 6)
+	Theme.shine(goalButton)
+	goalShine = goalButton:FindFirstChild("Shine") :: Frame
+	goalShine.Visible = false
+
 	heatPanel, heatFill, heatLabel = makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL)
 	boostPanel, boostFill, boostLabel = makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY)
 	extractPanel, extractFill, extractLabel =
@@ -361,6 +418,53 @@ local function refreshSector()
 		)} to collect`
 	else
 		sectorLabel.Text = `Your galaxy: Sector {slot}`
+	end
+end
+
+-- The next star tier to buy and how close you are. When you can afford it
+-- the panel glows and shines.
+local function refreshGoal()
+	local profile = ClientState.profile
+	local records = StarController.myRecords()
+	local goal = StarMath.nextTier(records)
+	local def = if goal then Config.Stars.BY_ID[goal] else nil
+	if profile == nil or goal == nil or def == nil then
+		goalButton.Visible = false
+		return
+	end
+	goalButton.Visible = true
+	local owned = 0
+	for _ in records do
+		owned += 1
+	end
+	if owned >= RegionMath.maxSystems(profile.expansion) then
+		goalTitle.Text = `NEXT: {def.displayName}`
+		goalAmount.Text = "Galaxy full: expand it at the Shipyard"
+		goalFill.Size = UDim2.fromScale(1, 1)
+		goalReady = false
+	else
+		local cost = StarMath.placeCost(goal, owned) or def.cost
+		local share = math.clamp(profile.stardust / math.max(cost, 1), 0, 1)
+		local ready = share >= 1
+		goalTitle.Text = if ready
+			then `READY: {def.displayName}  ·  press B`
+			else `NEXT GOAL: {def.displayName}`
+		goalAmount.Text =
+			`{Format.abbreviate(math.min(profile.stardust, cost))} / {Format.abbreviate(cost)} {Config.Economy.CURRENCY_NAME}`
+		TweenService:Create(goalFill, TweenInfo.new(0.4), { Size = UDim2.fromScale(share, 1) })
+			:Play()
+		if ready and not goalReady then
+			-- Just became affordable: a little bounce.
+			Theme.popIn(goalButton)
+		end
+		goalReady = ready
+	end
+	goalShine.Visible = goalReady
+	if goalReady then
+		Theme.pulse(goalEdge, 0, 0.6, 4)
+	else
+		Theme.animate(goalEdge, function() end)
+		goalEdge.Transparency = 1
 	end
 end
 
@@ -465,6 +569,9 @@ function HudController.init()
 		if field == "stardust" or field == "*" then
 			refreshStardust()
 		end
+		if field == "stardust" or field == "expansion" or field == "*" then
+			refreshGoal()
+		end
 		if field == "incomeRate" or field == "uncollected" or field == "*" then
 			refreshSector()
 		end
@@ -492,6 +599,9 @@ function HudController.init()
 	shopButton.Activated:Connect(function()
 		ClientState.openStarShop:Fire()
 	end)
+	goalButton.Activated:Connect(function()
+		ClientState.openStarShop:Fire()
+	end)
 	refreshReadout()
 end
 
@@ -499,6 +609,13 @@ function HudController.start()
 	refreshStardust()
 	refreshSector()
 	refreshReadout()
+	-- Stars come and go (placed, evolved) without a profile field changing.
+	task.spawn(function()
+		while true do
+			refreshGoal()
+			task.wait(GOAL_INTERVAL)
+		end
+	end)
 	task.spawn(function()
 		while true do
 			task.wait(READOUT_INTERVAL)
