@@ -1,212 +1,148 @@
 --!strict
--- Owns every player's Profile: loading, saving, and all Stardust changes.
--- Other systems go through this module; nothing else writes leaderstats.
+-- Owns every player's saved profile.
 --
--- Starter-grade persistence (retry + autosave + BindToClose). Before launch,
--- move to session locking (e.g. ProfileStore) so two servers can't race.
+-- ProfileStore handles session locking (one server at a time per profile),
+-- autosaving, saving on leave and on shutdown. If a profile cannot be loaded
+-- the player is kicked: the game never runs on a stand-in profile that could
+-- overwrite real data. Other systems read profiles with getProfile() and change
+-- them only through the functions below, which also update the owner's HUD.
 
-local DataStoreService = game:GetService("DataStoreService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerScriptService = game:GetService("ServerScriptService")
 
-local Config = require(ReplicatedStorage.Shared.Config)
+local Net = require(ReplicatedStorage.Shared.Net)
+local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
+local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 type Profile = Types.Profile
 
-local PROFILE_VERSION = 1
-local MAX_ATTEMPTS = 3
+-- A fresh store: the dropper prototype's saves ("GrowAGalaxy2_Profiles_v1")
+-- use a different format and are deliberately left untouched.
+local STORE_NAME = "PlayerProfiles_v1"
 
 local DataSystem = {}
 
-local profiles: { [Player]: Profile } = {}
-local canSave: { [Player]: boolean } = {}
-local store: DataStore? = nil
+-- Fires once per join, after the profile is loaded and cleaned up.
+DataSystem.profileLoaded = Signal.new() :: Signal.Signal<Player, Profile>
 
-local function defaultProfile(): Profile
-	return {
-		version = PROFILE_VERSION,
-		stardust = Config.STARTING_STARDUST,
-		owned = {},
-	}
-end
-
-local function sanitize(raw: any): Profile
-	local profile = defaultProfile()
-	if typeof(raw) ~= "table" then
-		return profile
-	end
-	local stardust = raw.stardust
-	if typeof(stardust) == "number" and stardust == stardust and stardust >= 0 then
-		profile.stardust = math.floor(stardust)
-	end
-	if typeof(raw.owned) == "table" then
-		for _, id in raw.owned do
-			if typeof(id) == "string" and Config.DROPPERS_BY_ID[id] then
-				table.insert(profile.owned, id)
-			end
-		end
-	end
-	return profile
-end
-
-local function withRetry(label: string, fn: () -> any): (boolean, any)
-	for attempt = 1, MAX_ATTEMPTS do
-		local ok, result = pcall(fn)
-		if ok then
-			return true, result
-		end
-		warn(`[DataSystem] {label} attempt {attempt} failed: {result}`)
-		if attempt < MAX_ATTEMPTS then
-			task.wait(2 ^ attempt)
-		end
-	end
-	return false, nil
-end
+local store: any = nil
+local sessions: { [Player]: any } = {}
 
 local function keyFor(player: Player): string
-	return `player_{player.UserId}`
-end
-
-local function updateLeaderstats(player: Player, profile: Profile)
-	local leaderstats = player:FindFirstChild("leaderstats")
-	local value = leaderstats and leaderstats:FindFirstChild(Config.CURRENCY_NAME)
-	if value and value:IsA("IntValue") then
-		value.Value = profile.stardust
-	end
+	return `Player_{player.UserId}`
 end
 
 local function load(player: Player)
-	local leaderstats = Instance.new("Folder")
-	leaderstats.Name = "leaderstats"
-	local stardust = Instance.new("IntValue")
-	stardust.Name = Config.CURRENCY_NAME
-	stardust.Parent = leaderstats
-	leaderstats.Parent = player
-
-	local profile = defaultProfile()
-	local ds = store
-	if ds then
-		local ok, raw = withRetry("load", function()
-			return ds:GetAsync(keyFor(player))
-		end)
-		if ok then
-			profile = sanitize(raw)
-			canSave[player] = true
-		else
-			-- Never overwrite real data with defaults after a failed load.
-			warn(`[DataSystem] {player.Name} is playing on a temporary profile; it will not save`)
+	local session = store:StartSessionAsync(keyFor(player), {
+		Cancel = function()
+			return player.Parent ~= Players
+		end,
+	})
+	if session == nil then
+		if player.Parent == Players then
+			player:Kick(
+				"We couldn't load your save, so we stopped before anything could be overwritten. Please rejoin."
+			)
 		end
+		return
 	end
+
+	local ok, problem = ProfileSchema.normalize(session.Data)
+	if not ok then
+		warn(`[DataSystem] Not using {player.Name}'s profile: {problem}`)
+		session:EndSession() -- normalize changed nothing, so this saves the data as it was
+		player:Kick(
+			"This server runs an older version of the game. Please rejoin to get a newer server."
+		)
+		return
+	end
+
+	session:AddUserId(player.UserId)
+	session.OnSessionEnd:Connect(function()
+		sessions[player] = nil
+		if player.Parent == Players then
+			player:Kick("Your save was opened on another server. Please rejoin.")
+		end
+	end)
 
 	if player.Parent ~= Players then
-		canSave[player] = nil
+		session:EndSession()
 		return
 	end
-	profiles[player] = profile
-	updateLeaderstats(player, profile)
+	sessions[player] = session
+	DataSystem.profileLoaded:Fire(player, session.Data)
 end
 
-local function save(player: Player)
-	local profile = profiles[player]
-	local ds = store
-	if not profile or not ds or not canSave[player] then
-		return
+local function push(player: Player, field: string, value: any)
+	Net.ProfileChanged:FireClient(player, field, value)
+end
+
+local function wholePositive(amount: number): number?
+	if type(amount) ~= "number" or amount ~= amount or amount == math.huge then
+		return nil
 	end
-	local snapshot = table.clone(profile)
-	snapshot.owned = table.clone(profile.owned)
-	withRetry("save", function()
-		return ds:SetAsync(keyFor(player), snapshot, { player.UserId })
-	end)
+	local whole = math.floor(amount)
+	return if whole > 0 then whole else nil
 end
 
--- Yields until the player's profile is loaded. Returns nil if they leave first.
-function DataSystem.waitForProfile(player: Player): Profile?
-	while player.Parent == Players and not profiles[player] do
-		task.wait()
+function DataSystem.getProfile(player: Player): Profile?
+	local session = sessions[player]
+	return if session then session.Data else nil
+end
+
+-- Yields until the player's profile is ready. Returns nil if they leave, the
+-- load fails, or `timeout` seconds pass.
+function DataSystem.waitForProfile(player: Player, timeout: number?): Profile?
+	local deadline = os.clock() + (timeout or 30)
+	while sessions[player] == nil and player.Parent == Players and os.clock() < deadline do
+		task.wait(0.1)
 	end
-	return profiles[player]
+	return DataSystem.getProfile(player)
 end
 
-function DataSystem.getStardust(player: Player): number
-	local profile = profiles[player]
-	return if profile then profile.stardust else 0
-end
-
-function DataSystem.addStardust(player: Player, amount: number)
-	local profile = profiles[player]
-	if not profile or amount <= 0 then
-		return
-	end
-	profile.stardust += math.floor(amount)
-	updateLeaderstats(player, profile)
-end
-
-function DataSystem.trySpend(player: Player, amount: number): boolean
-	local profile = profiles[player]
-	if not profile or profile.stardust < amount then
+function DataSystem.addCredits(player: Player, amount: number): boolean
+	local profile = DataSystem.getProfile(player)
+	local whole = wholePositive(amount)
+	if profile == nil or whole == nil then
 		return false
 	end
-	profile.stardust -= amount
-	updateLeaderstats(player, profile)
+	profile.credits += whole
+	push(player, "credits", profile.credits)
 	return true
 end
 
-function DataSystem.owns(player: Player, id: string): boolean
-	local profile = profiles[player]
-	return profile ~= nil and table.find(profile.owned, id) ~= nil
-end
-
-function DataSystem.markOwned(player: Player, id: string)
-	local profile = profiles[player]
-	if profile and not table.find(profile.owned, id) then
-		table.insert(profile.owned, id)
+-- Deducts Credits only if the player can afford all of it.
+function DataSystem.spendCredits(player: Player, amount: number): boolean
+	local profile = DataSystem.getProfile(player)
+	local whole = wholePositive(amount)
+	if profile == nil or whole == nil or profile.credits < whole then
+		return false
 	end
+	profile.credits -= whole
+	push(player, "credits", profile.credits)
+	return true
 end
 
 function DataSystem.init()
-	local ok, result = pcall(function()
-		return DataStoreService:GetDataStore(Config.DATASTORE_NAME)
-	end)
-	if ok then
-		store = result
-	else
-		warn(`[DataSystem] DataStores unavailable, progress won't save: {result}`)
-	end
+	store = ProfileStore.New(STORE_NAME, ProfileSchema.default())
 end
 
 function DataSystem.start()
 	Players.PlayerAdded:Connect(load)
+	-- Deferred so the other systems' start() run first and are listening for
+	-- profileLoaded before the first profile can finish loading.
 	for _, player in Players:GetPlayers() do
-		task.spawn(load, player)
+		task.defer(load, player)
 	end
-
 	Players.PlayerRemoving:Connect(function(player)
-		save(player)
-		profiles[player] = nil
-		canSave[player] = nil
-	end)
-
-	game:BindToClose(function()
-		local pending = 0
-		for player in profiles do
-			pending += 1
-			task.spawn(function()
-				save(player)
-				pending -= 1
-			end)
-		end
-		while pending > 0 do
-			task.wait()
+		local session = sessions[player]
+		if session then
+			session:EndSession()
 		end
 	end)
-
-	while true do
-		task.wait(Config.AUTOSAVE_INTERVAL)
-		for player in profiles do
-			task.spawn(save, player)
-		end
-	end
 end
 
 return DataSystem

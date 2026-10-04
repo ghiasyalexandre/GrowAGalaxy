@@ -1,12 +1,11 @@
 [package]
-name = "ghiasyalexandre/grow-a-galaxy-2"
+name = "ghiasyalexandre/grow-a-galaxy"
 version = "0.1.0"
 registry = "https://github.com/UpliftGames/wally-index"
 realm = "shared"
 
+# No packages yet. ProfileStore is vendored in vendor/ (Apache-2.0) so the game
+# builds without running `wally install`.
 [dependencies]
-# Promise = "evaera/promise@4"
-# Trove = "sleitnick/trove@1"
 
 [server-dependencies]
-# ProfileStore = "loleris/profilestore@1"

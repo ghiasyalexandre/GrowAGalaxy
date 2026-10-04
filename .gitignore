@@ -12,6 +12,7 @@ wally.lock
 
 # Toolchain
 sourcemap.json
+globalTypes.d.luau
 roblox.yml
 roblox.toml
 

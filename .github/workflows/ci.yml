@@ -6,8 +6,10 @@ on:
   pull_request:
 
 jobs:
-  lint:
+  checks:
     runs-on: ubuntu-latest
+    env:
+      LUAU_LSP_TYPES: https://raw.githubusercontent.com/JohnnyMorganz/luau-lsp/1.70.1/scripts/globalTypes.d.luau
     steps:
       - uses: actions/checkout@v4
 
@@ -17,10 +19,22 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check formatting
-        run: stylua --check src
+        run: stylua --check src tests
 
       - name: Lint
         run: selene src
 
+      - name: Type check
+        run: |
+          rojo sourcemap default.project.json -o sourcemap.json
+          curl -sSfL -o globalTypes.d.luau "$LUAU_LSP_TYPES"
+          luau-lsp analyze --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/ProfileStore.luau" src
+
+      - name: Unit tests
+        run: lune run tests/run
+
       - name: Build place
         run: rojo build -o build.rbxl
+
+      - name: World builder smoke test
+        run: lune run tests/WorldSmoke build.rbxl
