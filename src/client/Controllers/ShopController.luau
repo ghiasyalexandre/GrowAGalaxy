@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
+local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -36,6 +37,7 @@ local ShopController = {}
 
 local gui: ScreenGui
 local list: ScrollingFrame
+local panel: Frame
 local firstButton: TextButton? = nil
 
 local function close()
@@ -53,16 +55,15 @@ local function request(action: string, id: string?)
 end
 
 local function heading(text: string, order: number)
-	local label = Instance.new("TextLabel")
-	label.LayoutOrder = order
-	label.Size = UDim2.new(1, 0, 0, 24)
-	label.BackgroundTransparency = 1
-	label.Font = Enum.Font.GothamBold
-	label.TextSize = 18
-	label.TextXAlignment = Enum.TextXAlignment.Left
-	label.TextColor3 = Color3.fromRGB(255, 214, 120)
-	label.Text = text
-	label.Parent = list
+	local holder = Theme.row(list, 28, order)
+	holder.BackgroundTransparency = 1
+	Theme.label(holder, {
+		Size = UDim2.fromScale(1, 1),
+		Text = text,
+		TextSize = 18,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = Theme.COLORS.gold,
+	})
 end
 
 -- A row: description on the left, an action button (or status) on the right.
@@ -73,57 +74,30 @@ local function row(
 	buttonText: string,
 	onClick: (() -> ())?
 )
-	local frame = Instance.new("Frame")
-	frame.LayoutOrder = order
-	frame.Size = UDim2.new(1, 0, 0, 52)
-	frame.BackgroundColor3 = Color3.fromRGB(28, 34, 58)
-	frame.BackgroundTransparency = 0.2
-	frame.Parent = list
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = frame
-
-	local name = Instance.new("TextLabel")
-	name.Position = UDim2.fromOffset(10, 4)
-	name.Size = UDim2.new(1, -140, 0, 22)
-	name.BackgroundTransparency = 1
-	name.Font = Enum.Font.GothamBold
-	name.TextSize = 16
-	name.TextXAlignment = Enum.TextXAlignment.Left
-	name.TextColor3 = Color3.new(1, 1, 1)
-	name.Text = title
-	name.Parent = frame
-	local info = name:Clone()
-	info.Position = UDim2.fromOffset(10, 26)
-	info.Font = Enum.Font.Gotham
-	info.TextSize = 13
-	info.TextColor3 = Color3.fromRGB(180, 190, 220)
-	info.TextTruncate = Enum.TextTruncate.AtEnd
-	info.Text = detail
-	info.Parent = frame
-
-	local button = Instance.new("TextButton")
+	local frame = Theme.row(list, 54, order)
+	Theme.label(frame, {
+		Position = UDim2.fromOffset(12, 6),
+		Size = UDim2.new(1, -170, 0, 22),
+		Text = title,
+	})
+	Theme.label(frame, {
+		Position = UDim2.fromOffset(12, 28),
+		Size = UDim2.new(1, -170, 0, 18),
+		Text = detail,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = Theme.COLORS.subtle,
+	})
+	local style: Theme.ButtonStyle = if onClick == nil
+		then "disabled"
+		elseif string.find(buttonText, "Buy") then "buy"
+		else "primary"
+	local button = Theme.button(frame, buttonText, style, onClick)
 	button.AnchorPoint = Vector2.new(1, 0.5)
 	button.Position = UDim2.new(1, -8, 0.5, 0)
-	button.Size = UDim2.fromOffset(120, 34)
-	button.Font = Enum.Font.GothamBold
-	button.TextSize = 14
-	button.TextColor3 = Color3.new(1, 1, 1)
-	button.Text = buttonText
-	button.AutoButtonColor = onClick ~= nil
-	button.Active = onClick ~= nil
-	button.BackgroundColor3 = if onClick
-		then Color3.fromRGB(56, 92, 170)
-		else Color3.fromRGB(50, 54, 70)
-	button.Parent = frame
-	local buttonCorner = Instance.new("UICorner")
-	buttonCorner.CornerRadius = UDim.new(0, 6)
-	buttonCorner.Parent = button
-	if onClick then
-		button.Activated:Connect(onClick)
-		if firstButton == nil then
-			firstButton = button
-		end
+	button.Size = UDim2.fromOffset(140, 36)
+	if onClick and firstButton == nil then
+		firstButton = button
 	end
 end
 
@@ -138,11 +112,7 @@ local function refresh()
 	if profile == nil or not gui.Enabled then
 		return
 	end
-	for _, child in list:GetChildren() do
-		if not child:IsA("UIListLayout") then
-			child:Destroy()
-		end
-	end
+	Theme.clear(list)
 	firstButton = nil
 	local order = 0
 	local function nextOrder(): number
@@ -234,66 +204,37 @@ end
 local function open()
 	gui.Enabled = true
 	refresh()
+	Theme.popIn(panel)
 end
 
 local function build()
-	gui = Instance.new("ScreenGui")
-	gui.Name = "Shipyard"
-	gui.ResetOnSpawn = false
+	gui = Theme.screen("Shipyard", Players.LocalPlayer:WaitForChild("PlayerGui"))
 	gui.Enabled = false
 
-	local panel = Instance.new("Frame")
+	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
 	panel.Size = UDim2.new(0.9, 0, 0.75, 0)
-	panel.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-	panel.BackgroundTransparency = 0.1
-	panel.Parent = gui
 	local size = Instance.new("UISizeConstraint")
-	size.MaxSize = Vector2.new(560, 520)
+	size.MaxSize = Vector2.new(580, 540)
 	size.Parent = panel
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = panel
 
-	local title = Instance.new("TextLabel")
-	title.Position = UDim2.fromOffset(14, 8)
-	title.Size = UDim2.new(1, -120, 0, 30)
-	title.BackgroundTransparency = 1
-	title.Font = Enum.Font.GothamBold
-	title.TextSize = 22
-	title.TextXAlignment = Enum.TextXAlignment.Left
-	title.TextColor3 = Color3.new(1, 1, 1)
-	title.Text = "Shipyard"
-	title.Parent = panel
-
-	local closeButton = Instance.new("TextButton")
+	Theme.label(panel, {
+		Position = UDim2.fromOffset(16, 10),
+		Size = UDim2.new(1, -120, 0, 30),
+		Text = "Shipyard",
+		TextSize = 24,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = Theme.COLORS.gold,
+	})
+	local closeButton = Theme.button(panel, "Close", "primary", close)
 	closeButton.AnchorPoint = Vector2.new(1, 0)
-	closeButton.Position = UDim2.new(1, -10, 0, 8)
-	closeButton.Size = UDim2.fromOffset(90, 30)
-	closeButton.BackgroundColor3 = Color3.fromRGB(90, 50, 60)
-	closeButton.Font = Enum.Font.GothamBold
-	closeButton.TextSize = 14
-	closeButton.TextColor3 = Color3.new(1, 1, 1)
-	closeButton.Text = "Close"
-	closeButton.Parent = panel
-	closeButton.Activated:Connect(close)
+	closeButton.Position = UDim2.new(1, -12, 0, 10)
+	closeButton.Size = UDim2.fromOffset(80, 30)
 
-	list = Instance.new("ScrollingFrame")
-	list.Position = UDim2.fromOffset(12, 46)
-	list.Size = UDim2.new(1, -24, 1, -58)
-	list.BackgroundTransparency = 1
-	list.BorderSizePixel = 0
-	list.ScrollBarThickness = 6
-	list.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	list.CanvasSize = UDim2.new()
-	list.Parent = panel
-	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 6)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Parent = list
-
-	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	list = Theme.list(panel, 6)
+	list.Position = UDim2.fromOffset(14, 50)
+	list.Size = UDim2.new(1, -28, 1, -62)
 end
 
 function ShopController.init()

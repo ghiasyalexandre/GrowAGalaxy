@@ -12,6 +12,7 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local Progression = require(ReplicatedStorage.Shared.Logic.Progression)
+local Reward = require(script.Parent.Parent.Util.Reward)
 
 local CURRENCY = Config.Economy.CURRENCY_NAME
 
@@ -41,7 +42,13 @@ local function check(player: Player)
 			DataSystem.grantShip(player, reward.ship)
 			table.insert(parts, Config.Ships.BY_ID[reward.ship].displayName)
 		end
-		Notify.send(player, `Achievement: {def.displayName}! {table.concat(parts, ", ")}`)
+		Reward.send(
+			player,
+			"achievement",
+			reward.stardust,
+			nil,
+			`{def.displayName}|{table.concat(parts, ", ")}`
+		)
 	end
 
 	if not profile.tutorial.done then

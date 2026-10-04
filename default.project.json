@@ -40,6 +40,9 @@
         },
         "SettingChanged": {
           "$className": "RemoteEvent"
+        },
+        "Reward": {
+          "$className": "RemoteEvent"
         }
       }
     },

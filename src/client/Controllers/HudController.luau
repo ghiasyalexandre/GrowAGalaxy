@@ -5,8 +5,10 @@
 -- heat gauge and, while the beam extracts an asteroid, the extraction bar.
 -- Display only; the server owns every value shown here.
 
+local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
@@ -30,6 +32,12 @@ local DOCK_HINTS: { [string]: string } = {
 local HudController = {}
 
 local stardustLabel: TextLabel
+local walletPanel: Frame
+local walletScale: UIScale
+local shown = Instance.new("NumberValue") -- the wallet number as displayed, tweened
+local COUNT_UP = TweenInfo.new(0.9, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+local BUMP = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local WALLET_GOLD = Color3.fromRGB(255, 214, 110)
 local tutorialLabel: TextLabel
 local sectorLabel: TextLabel
 local hintLabel: TextLabel
@@ -69,10 +77,23 @@ local function buildWallet(gui: ScreenGui)
 	panel.Name = "Wallet"
 	panel.Position = UDim2.new(0, 16, 0, 16)
 	panel.Size = UDim2.new(0.22, 0, 0.11, 0)
-	panel.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-	panel.BackgroundTransparency = 0.25
+	panel.BackgroundColor3 = Color3.new(1, 1, 1)
+	panel.BackgroundTransparency = 0.1
 	panel.Parent = gui
-	corner(panel, 10)
+	corner(panel, 12)
+	walletPanel = panel
+	local background = Instance.new("UIGradient")
+	background.Color = ColorSequence.new(Color3.fromRGB(34, 38, 80), Color3.fromRGB(14, 16, 34))
+	background.Rotation = 90
+	background.Parent = panel
+	local edge = Instance.new("UIStroke")
+	edge.Name = "Edge"
+	edge.Color = WALLET_GOLD
+	edge.Transparency = 0.6
+	edge.Thickness = 2
+	edge.Parent = panel
+	walletScale = Instance.new("UIScale")
+	walletScale.Parent = panel
 
 	local constraint = Instance.new("UISizeConstraint")
 	constraint.MinSize = Vector2.new(180, 64)
@@ -97,7 +118,30 @@ local function buildWallet(gui: ScreenGui)
 		Position = UDim2.fromScale(0, 0.25),
 		Size = UDim2.fromScale(1, 0.48),
 		Text = "...",
+		Font = Enum.Font.GothamBlack,
 	})
+	-- A bright band sweeps across the number now and then.
+	local shimmer = Instance.new("UIGradient")
+	shimmer.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.45, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.5, WALLET_GOLD),
+		ColorSequenceKeypoint.new(0.55, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(1, Color3.new(1, 1, 1)),
+	})
+	shimmer.Offset = Vector2.new(-1, 0)
+	shimmer.Parent = stardustLabel
+	task.spawn(function()
+		local sweep = TweenInfo.new(1.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+		while shimmer.Parent do
+			shimmer.Offset = Vector2.new(-1, 0)
+			TweenService:Create(shimmer, sweep, { Offset = Vector2.new(1, 0) }):Play()
+			task.wait(4)
+		end
+	end)
+	shown.Changed:Connect(function(value)
+		stardustLabel.Text = Format.abbreviate(math.floor(value + 0.5))
+	end)
 	sectorLabel = makeLabel(panel, {
 		Name = "Sector",
 		Position = UDim2.fromScale(0, 0.75),
@@ -247,9 +291,18 @@ local function build()
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
+-- The wallet counts up (or down) to the new balance instead of jumping.
 local function refreshStardust()
 	local profile = ClientState.profile
-	stardustLabel.Text = if profile then Format.abbreviate(profile.stardust) else "..."
+	if profile == nil then
+		stardustLabel.Text = "..."
+		return
+	end
+	if profile.stardust > shown.Value then
+		TweenService:Create(shown, COUNT_UP, { Value = profile.stardust }):Play()
+	else
+		shown.Value = profile.stardust
+	end
 end
 
 local function refreshTutorial()
@@ -327,6 +380,24 @@ local function refreshReadout()
 	else
 		readoutLabel.Text = if ClientState.stabilization then "Stabilizer on" else "Stabilizer off"
 		hintLabel.Text = Input.hint("suit")
+	end
+end
+
+-- Where reward orbs should fly to: the wallet number's centre, in screen
+-- pixels including the top bar inset (for a ScreenGui with IgnoreGuiInset).
+function HudController.walletTarget(): Vector2
+	local inset = GuiService:GetGuiInset()
+	return stardustLabel.AbsolutePosition + stardustLabel.AbsoluteSize / 2 + inset
+end
+
+-- A quick bounce and gold flash of the wallet as Stardust lands in it.
+function HudController.bumpWallet()
+	walletScale.Scale = 1.12
+	TweenService:Create(walletScale, BUMP, { Scale = 1 }):Play()
+	local edge = walletPanel:FindFirstChild("Edge") :: UIStroke?
+	if edge then
+		edge.Transparency = 0
+		TweenService:Create(edge, TweenInfo.new(0.5), { Transparency = 0.6 }):Play()
 	end
 end
 

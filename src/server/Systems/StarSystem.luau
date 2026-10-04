@@ -30,6 +30,7 @@ local Notify = require(script.Parent.Parent.Util.Notify)
 local PlacementRules = require(ReplicatedStorage.Shared.Logic.PlacementRules)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local RegionSystem = require(script.Parent.RegionSystem)
+local Reward = require(script.Parent.Parent.Util.Reward)
 local StarBuilder = require(script.Parent.Parent.World.StarBuilder)
 local StarMath = require(ReplicatedStorage.Shared.Logic.StarMath)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -295,7 +296,14 @@ local function onPrompt(prompt: ProximityPrompt, player: Player)
 	local amount = DataSystem.collectIncome(player)
 	if amount > 0 then
 		DataSystem.addStat(player, "collections", 1)
-		Notify.send(player, `Collected {amount} {CURRENCY}.`)
+		local console = prompt.Parent
+		Reward.send(
+			player,
+			"collect",
+			amount,
+			if console and console:IsA("BasePart") then console.Position else nil,
+			"Collected from your stars"
+		)
 	else
 		local profile = DataSystem.getProfile(player)
 		local hasStars = profile ~= nil and next(profile.galaxy.stars) ~= nil
