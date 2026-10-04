@@ -14,6 +14,7 @@ local WARP_TAG = "WarpPrompt" -- airlocks; NavigationSystem
 local LAUNCH_TAG = "LaunchPrompt" -- hangar consoles; ShipSystem
 local ROUTE_TAG = "RoutePrompt" -- navigation consoles; handled on the client
 local DOCK_ZONE_TAG = "DockZone" -- assisted docking volumes
+local TYCOON_TAG = "TycoonPrompt" -- star shop, collect and manage; StarSystem and the client
 
 export type PartProps = {
 	name: string?,
@@ -44,6 +45,7 @@ export type PromptProps = {
 	warp: string?, -- WarpTarget handled by NavigationSystem
 	launch: string?, -- Hangar ("ISS" or "Station") handled by ShipSystem
 	route: string?, -- RouteTarget ("ISS" or "Station") handled by the client
+	tycoon: string?, -- TycoonAction ("Shop", "Collect" or "Manage")
 }
 
 local Build = {}
@@ -52,6 +54,7 @@ Build.WARP_TAG = WARP_TAG
 Build.LAUNCH_TAG = LAUNCH_TAG
 Build.ROUTE_TAG = ROUTE_TAG
 Build.DOCK_ZONE_TAG = DOCK_ZONE_TAG
+Build.TYCOON_TAG = TYCOON_TAG
 
 function Build.part(props: PartProps): Part
 	local part = Instance.new("Part")
@@ -178,6 +181,10 @@ function Build.prompt(parent: BasePart, props: PromptProps): ProximityPrompt
 	if props.route then
 		prompt:SetAttribute("RouteTarget", props.route)
 		CollectionService:AddTag(prompt, ROUTE_TAG)
+	end
+	if props.tycoon then
+		prompt:SetAttribute("TycoonAction", props.tycoon)
+		CollectionService:AddTag(prompt, TYCOON_TAG)
 	end
 	prompt.Parent = parent
 	return prompt

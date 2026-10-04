@@ -29,7 +29,7 @@ return function(T, Loader)
 			T.equal(data.schemaVersion, ProfileSchema.VERSION)
 			T.equal(data.stardust, 0)
 			T.truthy(data.ownedShips[starter])
-			T.equal(type(data.galaxy.systems), "table")
+			T.equal(type(data.galaxy.stars), "table")
 			T.equal(data.settings.stabilization, true)
 		end)
 
@@ -81,46 +81,53 @@ return function(T, Loader)
 			T.equal(data.loadouts[starter].equipment.Cargo, nil)
 		end)
 
-		T.test("keeps valid galaxy records and drops corrupt ones", function()
+		T.test("keeps valid stars and drops corrupt ones", function()
 			local data = {
 				galaxy = {
 					expansion = 99,
 					nextId = 2,
-					systems = {
-						s1 = { starId = "b2", tier = 1, pos = { x = 0, y = 10, z = 500 } },
-						s9 = { starId = "b3", tier = 1, pos = { x = "far", y = 0, z = 0 } },
-					},
-					bodies = {
-						b2 = { kind = "star", typeId = "StarterStar", systemId = "s1", level = 2 },
-						b5 = {
-							kind = "planet",
-							typeId = "RockyPlanet",
-							systemId = "s1",
-							parentId = "b2",
+					stars = {
+						s1 = { typeId = "YellowDwarf", level = 2, pos = { x = 0, y = 10, z = 500 } },
+						s4 = { typeId = "RetiredStar", level = 1, pos = { x = 1, y = 2, z = 3 } },
+						s9 = {
+							typeId = "YellowDwarf",
 							level = 1,
-							orbit = { slot = 1, tilt = 0.2, node = 1, phase = 3 },
+							pos = { x = "far", y = 0, z = 0 },
 						},
-						b6 = {
-							kind = "planet",
-							typeId = "RockyPlanet",
-							systemId = "s1",
-							parentId = "b2",
-							level = 1,
-						},
-						b7 = { kind = "comet", typeId = "X", systemId = "s1", level = 1 },
+						s7 = { typeId = "YellowDwarf", level = 0, pos = { x = 0, y = 0, z = 0 } },
 					},
 				},
 			}
 			T.truthy(ProfileSchema.normalize(data))
 			local galaxy = data.galaxy
 			T.equal(galaxy.expansion, #Config.Galaxy.EXPANSIONS, "expansion clamped")
-			T.truthy(galaxy.systems.s1)
-			T.equal(galaxy.systems.s9, nil, "system with a bad position")
-			T.truthy(galaxy.bodies.b2)
-			T.truthy(galaxy.bodies.b5)
-			T.equal(galaxy.bodies.b6, nil, "planet without an orbit")
-			T.equal(galaxy.bodies.b7, nil, "unknown kind")
+			T.truthy(galaxy.stars.s1)
+			T.truthy(galaxy.stars.s4, "unknown type kept")
+			T.equal(galaxy.stars.s9, nil, "bad position")
+			T.equal(galaxy.stars.s7, nil, "bad level")
 			T.equal(galaxy.nextId, 10, "nextId moves past every existing id")
+		end)
+
+		T.test("version 2 systems become stars at their positions", function()
+			local data = {
+				schemaVersion = 2,
+				stardust = 5,
+				galaxy = {
+					expansion = 1,
+					nextId = 3,
+					systems = { s1 = { starId = "b2", tier = 1, pos = { x = 0, y = 0, z = 400 } } },
+					bodies = {
+						b2 = { kind = "star", typeId = "StarterStar", systemId = "s1", level = 2 },
+					},
+				},
+			}
+			T.truthy(ProfileSchema.normalize(data))
+			local star = data.galaxy.stars.s1
+			T.truthy(star)
+			T.equal(star.typeId, Config.Stars.DEFAULT_TYPE)
+			T.equal(star.level, 2)
+			T.equal(star.pos.z, 400)
+			T.equal(data.galaxy.systems, nil)
 		end)
 
 		T.test("migrates version 1 Credits to Stardust without losing the balance", function()

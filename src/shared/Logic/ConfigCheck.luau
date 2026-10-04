@@ -247,6 +247,66 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	-- Stars: every level's planets fit inside SYSTEM_RADIUS and clear of the
+	-- star, costs are positive, production never drops.
+	local stars = config.Stars
+	checkOrder("Stars", stars.ORDER, stars.BY_ID)
+	if stars.BY_ID[stars.DEFAULT_TYPE] == nil or not stars.BY_ID[stars.DEFAULT_TYPE].enabled then
+		fail("Stars: DEFAULT_TYPE must exist and be enabled")
+	end
+	if stars.PRICE_GROWTH < 1 then
+		fail("Stars: PRICE_GROWTH must be at least 1")
+	end
+	local largestStar = 0
+	for typeId, def in stars.BY_ID do
+		if def.cost <= 0 then
+			fail(`Star {typeId}: cost must be positive`)
+		end
+		local previous = -1
+		local used: { [number]: boolean } = {}
+		for index, levelDef in def.levels do
+			local where = `Star {typeId} level {index}`
+			if (index == 1) ~= (levelDef.upgradeCost == nil) then
+				fail(`{where}: only level 1 may (and must) have no upgradeCost`)
+			end
+			if levelDef.upgradeCost and levelDef.upgradeCost <= 0 then
+				fail(`{where}: upgradeCost must be positive`)
+			end
+			if levelDef.income < previous then
+				fail(`{where}: income goes down`)
+			end
+			previous = levelDef.income
+			if levelDef.starRadius <= 0 or levelDef.starRadius > galaxy.STAR_MAX_RADIUS then
+				fail(`{where}: starRadius must be within 0..{galaxy.STAR_MAX_RADIUS}`)
+			end
+			largestStar = math.max(largestStar, levelDef.starRadius)
+			if levelDef.planet then
+				if stars.PLANETS[levelDef.planet] == nil then
+					fail(`{where}: unknown planet {levelDef.planet}`)
+				elseif used[levelDef.planet] then
+					fail(`{where}: planet {levelDef.planet} is added twice`)
+				end
+				used[levelDef.planet] = true
+			end
+		end
+	end
+	for index, planet in stars.PLANETS do
+		local where = `Stars planet {index}`
+		if planet.orbit + planet.radius > galaxy.SYSTEM_RADIUS then
+			fail(`{where}: orbit reaches past Galaxy.SYSTEM_RADIUS`)
+		end
+		if planet.orbit - planet.radius <= largestStar then
+			fail(`{where}: orbit touches the star`)
+		end
+		if planet.period <= 0 then
+			fail(`{where}: period must be positive`)
+		end
+		local nextPlanet = stars.PLANETS[index + 1]
+		if nextPlanet and nextPlanet.orbit - nextPlanet.radius <= planet.orbit + planet.radius then
+			fail(`{where}: orbit overlaps the next planet's`)
+		end
+	end
+
 	-- The flight area must hold every region at its largest and stay clear of
 	-- the Earth backdrop.
 	local world = config.World

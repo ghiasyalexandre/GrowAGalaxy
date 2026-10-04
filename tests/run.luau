@@ -16,6 +16,7 @@ local SPECS = {
 	"ShipStats",
 	"AsteroidField",
 	"MiningMath",
+	"StarMath",
 }
 
 for _, name in SPECS do

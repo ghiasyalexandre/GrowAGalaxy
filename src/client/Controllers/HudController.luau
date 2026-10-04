@@ -219,9 +219,19 @@ local function refreshStardust()
 	stardustLabel.Text = if profile then Format.abbreviate(profile.stardust) else "..."
 end
 
+-- Sector, star production and Stardust waiting at the Collect console.
 local function refreshSector()
 	local slot = ClientState.mySlot()
-	sectorLabel.Text = if slot then `Your galaxy: Sector {slot}` else "Finding your galaxy..."
+	local profile = ClientState.profile
+	if slot == nil then
+		sectorLabel.Text = "Finding your galaxy..."
+	elseif profile and profile.incomeRate > 0 then
+		sectorLabel.Text = `Sector {slot} · +{profile.incomeRate}/s · {Format.abbreviate(
+			profile.uncollected
+		)} to collect`
+	else
+		sectorLabel.Text = `Your galaxy: Sector {slot}`
+	end
 end
 
 -- Heat comes from the server (BeamSystem's attributes on your ship).
@@ -285,6 +295,9 @@ function HudController.init()
 	ClientState.profileChanged:Connect(function(field)
 		if field == "stardust" or field == "*" then
 			refreshStardust()
+		end
+		if field == "incomeRate" or field == "uncollected" or field == "*" then
+			refreshSector()
 		end
 	end)
 	ClientState.regionsChanged:Connect(refreshSector)

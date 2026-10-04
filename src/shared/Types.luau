@@ -8,36 +8,19 @@
 
 export type Vec3 = { x: number, y: number, z: number }
 
--- Orbit of a planet around its star, or of a moon around its planet. The radius
--- comes from the slot (Config.Galaxy); the angles are chosen by the player.
-export type Orbit = {
-	slot: number,
-	tilt: number, -- radians, inclination of the orbital plane
-	node: number, -- radians, rotation of the plane around the parent's up axis
-	phase: number, -- radians, starting position along the orbit
-}
-
-export type BodyRecord = {
-	kind: string, -- "star" | "planet" | "moon"
-	typeId: string, -- Config.Celestials id
-	systemId: string,
-	parentId: string?, -- planets: their star; moons: their planet; stars: nil
+-- A placed star. Its planets, orbits and production come from its level and
+-- Config.Stars, so only this is saved.
+export type StarRecord = {
+	typeId: string, -- Config.Stars id
 	level: number,
+	pos: Vec3, -- position relative to the region origin
 	appearance: string?,
-	orbit: Orbit?, -- nil for stars
-}
-
-export type SystemRecord = {
-	starId: string,
-	tier: number,
-	pos: Vec3, -- star position relative to the region origin
 }
 
 export type GalaxyRecord = {
 	expansion: number,
-	nextId: number, -- next unique id for systems and bodies in this save
-	systems: { [string]: SystemRecord },
-	bodies: { [string]: BodyRecord },
+	nextId: number, -- next unique star id number ("s<n>") in this save
+	stars: { [string]: StarRecord },
 }
 
 export type Loadout = {
@@ -85,6 +68,7 @@ export type ProfileView = {
 	cargo: { [string]: number },
 	activeShip: string,
 	expansion: number,
+	incomeRate: number, -- Stardust per second from all stars
 }
 
 export type RegionInfo = {

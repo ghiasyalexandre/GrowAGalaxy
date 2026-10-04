@@ -12,6 +12,8 @@
 --   BeamInput        RemoteEvent     client -> server  (action: "start" | "aim" | "stop",
 --                                                       aim: Vector3?) aim in ship space
 --   Notify           RemoteEvent     server -> client  (text: string)
+--   StarRequest      RemoteFunction  client -> server  (action: "place" | "move" | "upgrade",
+--                                                       ...) -> (ok: boolean, message: string)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -26,6 +28,7 @@ local Net = {
 	SuitRecover = folder:WaitForChild("SuitRecover") :: RemoteEvent,
 	BeamInput = folder:WaitForChild("BeamInput") :: RemoteEvent,
 	Notify = folder:WaitForChild("Notify") :: RemoteEvent,
+	StarRequest = folder:WaitForChild("StarRequest") :: RemoteFunction,
 }
 
 return Net
