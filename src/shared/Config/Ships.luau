@@ -16,6 +16,11 @@ export type ShipStats = {
 	heatCapacity: number, -- heat units before overheating
 	coolingRate: number, -- heat units shed per second while the beam is off
 	cargoCapacity: number, -- material units
+	-- Boost (hold Shift / L3): top speed x boostMultiplier for up to
+	-- boostDuration seconds; an empty tank refills in boostRecharge seconds.
+	boostMultiplier: number,
+	boostDuration: number,
+	boostRecharge: number,
 }
 
 export type Cost = { stardust: number, materials: { [string]: number } }
@@ -58,6 +63,9 @@ local BY_ID: { [string]: ShipDef } = {
 			heatCapacity = 100,
 			coolingRate = 25,
 			cargoCapacity = 60,
+			boostMultiplier = 1.6,
+			boostDuration = 3,
+			boostRecharge = 6,
 		},
 		earn = nil,
 		productKey = nil,
@@ -79,6 +87,9 @@ local BY_ID: { [string]: ShipDef } = {
 			heatCapacity = 120,
 			coolingRate = 30,
 			cargoCapacity = 150,
+			boostMultiplier = 1.8,
+			boostDuration = 4,
+			boostRecharge = 5,
 		},
 		earn = { stardust = 2500, materials = {} },
 		productKey = nil,
@@ -100,6 +111,9 @@ local BY_ID: { [string]: ShipDef } = {
 			heatCapacity = 160,
 			coolingRate = 45,
 			cargoCapacity = 140,
+			boostMultiplier = 2.1,
+			boostDuration = 5,
+			boostRecharge = 4,
 		},
 		earn = { stardust = 15000, materials = {} },
 		productKey = "CrystalExplorerUnlock",
@@ -121,6 +135,9 @@ local BY_ID: { [string]: ShipDef } = {
 			heatCapacity = 200,
 			coolingRate = 30,
 			cargoCapacity = 400,
+			boostMultiplier = 1.5,
+			boostDuration = 3,
+			boostRecharge = 7,
 		},
 		earn = { stardust = 40000, materials = {} },
 		productKey = nil,
@@ -142,6 +159,9 @@ local BY_ID: { [string]: ShipDef } = {
 			heatCapacity = 220,
 			coolingRate = 50,
 			cargoCapacity = 300,
+			boostMultiplier = 2.5,
+			boostDuration = 6,
+			boostRecharge = 4,
 		},
 		earn = { stardust = 120000, materials = {} },
 		productKey = nil,

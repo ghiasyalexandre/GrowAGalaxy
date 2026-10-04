@@ -154,6 +154,15 @@ function ConfigCheck.run(config: any): { string }
 		if movement.DOCK_MAX_SPEED >= ship.stats.maxSpeed then
 			fail(`Movement: DOCK_MAX_SPEED is not below ship {shipId}'s top speed`)
 		end
+		local s = ship.stats
+		if s.boostMultiplier <= 1 or s.boostDuration <= 0 or s.boostRecharge <= 0 then
+			fail(
+				`Ship {shipId}: boost needs a multiplier above 1 and positive duration and recharge`
+			)
+		end
+	end
+	if movement.BOOST_RESTART_SHARE <= 0 or movement.BOOST_RESTART_SHARE > 1 then
+		fail("Movement: BOOST_RESTART_SHARE must be between 0 and 1")
 	end
 	for _, name in { "SHIP_REVERSE_FACTOR", "SHIP_STRAFE_FACTOR", "SHIP_IDLE_BRAKE_FACTOR" } do
 		local value = movement[name]
@@ -168,8 +177,8 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Movement: {name} must be from 0 up to 90`)
 		end
 	end
-	if movement.CAMERA_FOV + movement.CAMERA_FOV_BOOST > 120 then
-		fail("Movement: CAMERA_FOV plus CAMERA_FOV_BOOST is over Roblox's limit of 120")
+	if movement.CAMERA_FOV + movement.CAMERA_FOV_BOOST + movement.CAMERA_BOOST_FOV > 120 then
+		fail("Movement: CAMERA_FOV plus both FOV boosts is over Roblox's limit of 120")
 	end
 
 	-- Mining beam: every ship fires for a while before it overheats.

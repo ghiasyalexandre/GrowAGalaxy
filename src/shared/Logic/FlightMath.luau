@@ -189,6 +189,32 @@ function FlightMath.inBounds(
 	return flat.Magnitude <= radius + margin and math.abs(position.Y) <= height + margin
 end
 
+export type BoostState = {
+	energy: number, -- seconds of boost left
+	locked: boolean, -- emptied; waiting to refill to the restart share
+}
+
+-- One frame of a ship's boost tank. Boosting drains a second per second; not
+-- boosting refills the whole tank in `recharge` seconds. Running dry locks
+-- boost until the tank is back to `restartShare` of `duration`. Returns the
+-- new state and whether the ship boosts this frame.
+function FlightMath.boostStep(
+	state: BoostState,
+	wanted: boolean,
+	duration: number,
+	recharge: number,
+	restartShare: number,
+	dt: number
+): (BoostState, boolean)
+	if wanted and not state.locked and state.energy > 0 then
+		local energy = math.max(0, state.energy - dt)
+		return { energy = energy, locked = energy <= 0 }, true
+	end
+	local energy = math.min(duration, state.energy + duration / math.max(recharge, 0.01) * dt)
+	local locked = state.locked and energy < duration * restartShare
+	return { energy = energy, locked = locked }, false
+end
+
 -- Is a point inside a box part (any rotation)?
 function FlightMath.insideBox(boxCFrame: CFrame, boxSize: Vector3, point: Vector3): boolean
 	local p = boxCFrame:PointToObjectSpace(point)

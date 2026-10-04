@@ -96,6 +96,9 @@ export type ShipInfo = {
 	heatCapacity: number,
 	coolingRate: number,
 	cargoCapacity: number,
+	boostMultiplier: number,
+	boostDuration: number,
+	boostRecharge: number,
 }
 
 export type InitialState = {

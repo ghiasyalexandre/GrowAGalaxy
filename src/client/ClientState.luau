@@ -38,12 +38,17 @@ ClientState.flight = {
 	maxSpeed = 0,
 	throttle = 0, -- 0 to 1, forward thrust the pilot is asking for
 	dock = "none" :: DockStatus,
+	boost = 1, -- 0 to 1, how full the boost tank is
+	boosting = false,
+	boostLocked = false, -- ran dry; refilling before it can boost again
 }
 -- The local pilot's last laser shot, drawn at once without waiting for the
--- server. `direction` is in ship space (-Z is the nose).
+-- server. `direction` is in ship space (-Z is the nose). `hitAt` is when the
+-- last bolt struck something (ShipEffectsController), for camera shake.
 ClientState.beam = {
 	lastShot = 0, -- os.clock() of the last shot
 	direction = Vector3.new(0, 0, -1),
+	hitAt = 0,
 }
 
 -- Fires with the changed field name, or "*" after the initial load.
@@ -56,6 +61,8 @@ ClientState.effectsChanged = Signal.new() :: Signal.Signal<()>
 ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 -- A short message to show the player (from the server or a controller).
 ClientState.notify = Signal.new() :: Signal.Signal<string>
+-- Ask the Star Shop panel to open (HUD button, shortcut, station console).
+ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
 
 -- The local player's region slot, if they have one yet.
 function ClientState.mySlot(): number?

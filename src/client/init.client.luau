@@ -2,6 +2,9 @@
 -- Client entry point. Same two-phase bootstrap as the server: init() every
 -- controller (build UI, connect events), load the starting state from the
 -- server, then start() every controller. The shared input layer starts first.
+--
+-- Each controller is loaded, initialised and started on its own: one that
+-- errors is reported in Output and skipped, and never stops the others.
 
 local ClientState = require(script.ClientState)
 local Input = require(script.Input)
@@ -10,24 +13,36 @@ Input.init()
 
 local Controllers = script.Controllers
 
+local function run(name: string, phase: string, fn: () -> ()): boolean
+	local ok, problem = xpcall(fn :: any, debug.traceback)
+	if not ok then
+		warn(`[Grow a Galaxy] {name}.{phase} failed: {problem}`)
+	end
+	return ok
+end
+
 local loaded: { [string]: any } = {}
 for _, child in Controllers:GetChildren() do
 	if child:IsA("ModuleScript") then
-		loaded[child.Name] = require(child) :: any
+		run(child.Name, "require", function()
+			loaded[child.Name] = require(child) :: any
+		end)
 	end
 end
 
-for _, controller in loaded do
+for name, controller in loaded do
 	if typeof(controller.init) == "function" then
-		controller.init()
+		if not run(name, "init", controller.init) then
+			loaded[name] = nil
+		end
 	end
 end
 
 ClientState.load()
 
-for _, controller in loaded do
+for name, controller in loaded do
 	if typeof(controller.start) == "function" then
-		controller.start()
+		run(name, "start", controller.start)
 	end
 end
 

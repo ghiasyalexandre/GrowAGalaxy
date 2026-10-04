@@ -18,6 +18,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 6. Atmosphere and polish: sparkles, saved settings, ship paint, Golden Beam | [Merged](docs/stage-6-polish.md) |
 | 7. Star and planet tiers: 8 star types to Black Hole, bought planets in 8 tiers | [Merged](docs/stage-7-star-planet-tiers.md) |
 | 8. UI juice: reward orbs, wallet count-up, achievement banner, themed panels | [Merged](docs/stage-8-ui-juice.md) |
+| 9. Boost, heavier laser shots, Star Shop button and sturdier client start-up | [Merged](docs/stage-9-boost-laser-feel.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

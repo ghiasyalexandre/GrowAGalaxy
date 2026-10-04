@@ -31,6 +31,9 @@ local STAT_NAMES: { [string]: string } = {
 	heatCapacity = "heat capacity",
 	coolingRate = "cooling",
 	cargoCapacity = "cargo",
+	boostMultiplier = "boost",
+	boostDuration = "boost time",
+	boostRecharge = "boost recharge",
 }
 
 local ShopController = {}
@@ -128,7 +131,7 @@ local function refresh()
 		end
 		local s = def.stats
 		local detail =
-			`{def.role} · speed {s.maxSpeed} · laser {s.beamPower} · range {s.beamRange} · heat {s.heatCapacity}`
+			`{def.role} · speed {s.maxSpeed} · boost x{s.boostMultiplier} for {s.boostDuration}s · laser {s.beamPower} · heat {s.heatCapacity}`
 		if profile.activeShip == shipId then
 			row(nextOrder(), def.displayName, detail, "Active", nil)
 		elseif profile.ownedShips[shipId] then

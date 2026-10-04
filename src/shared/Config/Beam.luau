@@ -24,8 +24,25 @@ local Beam = {
 	-- Looks
 	COLOR = "#FF6A3D",
 	CORE_COLOR = "#FFF4D6",
-	WIDTH = 0.9, -- studs
-	BOLT_TIME = 0.12, -- seconds a shot's bolt stays visible
+	WIDTH = 1.6, -- studs
+	BOLT_TIME = 0.2, -- seconds a shot's bolt stays visible
+	BOLT_TRAVEL_TIME = 0.05, -- seconds for the bolt to reach what it hits
+	MUZZLE_FLASH_SIZE = 3.5, -- studs, flash at the ship's nose
+	IMPACT_FLASH_SIZE = 9, -- studs, flash and shockwave where a bolt hits
+	SPARK_BURST = 30, -- sparks where a bolt hits
+	DEBRIS_BURST = 10, -- rock chips knocked off an asteroid
+
+	-- Feel (your own ship only). Each shot kicks the camera up by
+	-- RECOIL_DEGREES, recovering at RECOIL_RECOVERY per second, narrows the
+	-- view by RECOIL_FOV degrees and pushes the ship back by RECOIL_PUSH
+	-- studs per second. Shake is in studs and dies away at SHAKE_DECAY.
+	RECOIL_DEGREES = 1.8,
+	RECOIL_RECOVERY = 12,
+	RECOIL_FOV = 3,
+	RECOIL_PUSH = 5,
+	SHOT_SHAKE = 0.2,
+	HIT_SHAKE = 0.5,
+	SHAKE_DECAY = 10,
 }
 
 return Beam

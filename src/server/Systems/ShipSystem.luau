@@ -101,6 +101,9 @@ local function infoFor(profile: Types.Profile): Types.ShipInfo
 		heatCapacity = stats.heatCapacity,
 		coolingRate = stats.coolingRate,
 		cargoCapacity = math.floor(stats.cargoCapacity),
+		boostMultiplier = stats.boostMultiplier,
+		boostDuration = stats.boostDuration,
+		boostRecharge = stats.boostRecharge,
 	}
 end
 
@@ -274,7 +277,9 @@ local function board(ship: Ship, player: Player)
 	ship.model:SetAttribute("Piloted", true)
 	humanoid.PlatformStand = false
 	ship.seat:Sit(humanoid)
-	FlightGuard.track(player, ship.hull, ship.info.maxSpeed)
+	-- Boost is driven by the pilot's client, so the guard allows the boosted
+	-- top speed (Config.Ships boostMultiplier).
+	FlightGuard.track(player, ship.hull, ship.info.maxSpeed * ship.info.boostMultiplier)
 	sendState(player)
 
 	humanoid.Died:Once(function()

@@ -10,9 +10,15 @@
 -- the bank. Thrust is relative to the ship: throttle, strafe and up/down.
 -- Letting go glides to a stop; Brake stops quickly.
 --
+-- Boost (Shift, L3 or the Boost button, while throttling forward) raises top
+-- speed and acceleration by the ship's boost stats until the tank runs dry
+-- (FlightMath.boostStep); the camera pulls back, widens and shakes.
+--
 -- The laser fires one shot per click (RT, or the Laser button) where the
 -- reticle points, within a cone around the nose. This client draws its own
--- bolt at once; the server decides heat and overheating (BeamSystem).
+-- bolt at once; the server decides heat and overheating (BeamSystem). Each
+-- shot kicks the camera up, nudges the ship back and shakes the view; a hit
+-- shakes it harder.
 --
 -- Also owns the suit/ship mode switch, hides Board prompts that aren't
 -- yours, and works out whether you can dock right now.
@@ -56,6 +62,9 @@ type Handling = {
 	braking: number,
 	turnRate: number,
 	beamRange: number,
+	boostMultiplier: number,
+	boostDuration: number,
+	boostRecharge: number,
 }
 
 type Flight = {
@@ -75,6 +84,11 @@ type Flight = {
 	rayParams: RaycastParams,
 	wasHeld: boolean, -- the fire button was down last frame
 	lastShot: number, -- os.clock() of the last shot
+	boost: FlightMath.BoostState,
+	boostBlend: number, -- 0 to 1, smoothed, for the camera
+	kick: number, -- camera recoil pitch in radians, recovering to 0
+	shake: number, -- camera shake in studs, dying away
+	hitSeen: number, -- ClientState.beam.hitAt already shaken for
 }
 
 local ShipController = {}
@@ -145,6 +159,9 @@ local function leave()
 	ClientState.flight.speed = 0
 	ClientState.flight.throttle = 0
 	ClientState.flight.dock = "none"
+	ClientState.flight.boosting = false
+	ClientState.flight.boost = 1
+	ClientState.flight.boostLocked = false
 	Input.setMode("suit")
 	ClientState.setMode("suit")
 end
@@ -188,6 +205,18 @@ local function updateBeam(f: Flight)
 	ClientState.beam.direction = direction
 	ClientState.beam.lastShot = now
 	Net.BeamInput:FireServer("shot", direction)
+	-- Weight: the camera kicks up, the ship is pushed back a little.
+	f.kick = math.rad(B.RECOIL_DEGREES)
+	f.shake = math.max(f.shake, B.SHOT_SHAKE)
+	f.localVelocity += Vector3.new(0, 0, B.RECOIL_PUSH)
+end
+
+-- A random offset of up to `amount` studs, for camera shake.
+local function jitter(amount: number): Vector3
+	if amount <= 0.001 then
+		return Vector3.zero
+	end
+	return Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * 2 * amount
 end
 
 local function update(dt: number)
@@ -219,9 +248,20 @@ local function update(dt: number)
 	local input = Input.moveVector()
 	local braking = Input.isHeld("Brake")
 	local thrusting = not braking and input.Magnitude > INPUT_DEADZONE
+	-- Boost only pushes forward.
+	local boostWanted = Input.isHeld("Boost") and thrusting and input.Z > INPUT_DEADZONE
+	local boosting
+	f.boost, boosting = FlightMath.boostStep(
+		f.boost,
+		boostWanted,
+		f.handling.boostDuration,
+		f.handling.boostRecharge,
+		M.BOOST_RESTART_SHARE,
+		dt
+	)
 	local target = if thrusting
 		then FlightMath.shipTarget(input, CFrame.identity, {
-			maxSpeed = f.handling.maxSpeed,
+			maxSpeed = f.handling.maxSpeed * (if boosting then f.handling.boostMultiplier else 1),
 			reverseFactor = M.SHIP_REVERSE_FACTOR,
 			strafeFactor = M.SHIP_STRAFE_FACTOR,
 		})
@@ -229,12 +269,17 @@ local function update(dt: number)
 	local decel = if thrusting or braking
 		then f.handling.braking
 		else f.handling.braking * M.SHIP_IDLE_BRAKE_FACTOR
+	if thrusting and not boosting and f.localVelocity.Magnitude > f.handling.maxSpeed then
+		-- Coming off a boost: ease back down to top speed instead of braking.
+		decel = f.handling.braking * M.SHIP_IDLE_BRAKE_FACTOR
+	end
+	local accel = f.handling.acceleration * (if boosting then M.BOOST_ACCEL_FACTOR else 1)
 
 	local actual = f.hull.AssemblyLinearVelocity
 	if f.localVelocity.Magnitude > actual.Magnitude + COLLISION_SLACK then
 		f.localVelocity = f.localVelocity.Unit * (actual.Magnitude + COLLISION_SLACK)
 	end
-	f.localVelocity = FlightMath.step(f.localVelocity, target, f.handling.acceleration, decel, dt)
+	f.localVelocity = FlightMath.step(f.localVelocity, target, accel, decel, dt)
 	local velocity = f.orientation:VectorToWorldSpace(f.localVelocity)
 	f.engine.VectorVelocity = FlightMath.clampToBounds(
 		f.hull.Position,
@@ -257,16 +302,35 @@ local function update(dt: number)
 	f.steer.CFrame = f.orientation * CFrame.Angles(0, 0, f.bank)
 
 	-- Chase camera: behind and above the aim, smoothed, looking ahead. It
-	-- pulls back and widens with forward speed and follows some of the bank.
+	-- pulls back and widens with forward speed and boost, follows some of the
+	-- bank, kicks up with each shot and shakes when boosting or hitting.
 	local forward = math.clamp(-f.localVelocity.Z / f.handling.maxSpeed, 0, 1)
+	f.boostBlend = FlightMath.smooth(f.boostBlend, if boosting then 1 else 0, 6, dt)
 	local position = f.hull.Position
-	local distance = M.CAMERA_DISTANCE + M.CAMERA_SPEED_PULLBACK * forward
+	local distance = M.CAMERA_DISTANCE
+		+ M.CAMERA_SPEED_PULLBACK * forward
+		+ M.CAMERA_BOOST_PULLBACK * f.boostBlend
 	local desired = position + aim:VectorToWorldSpace(Vector3.new(0, M.CAMERA_HEIGHT, distance))
 	f.cameraPosition = f.cameraPosition:Lerp(desired, 1 - math.exp(-M.CAMERA_SMOOTHING * dt))
 	local up = (aim * CFrame.Angles(0, 0, f.bank * M.CAMERA_ROLL_SHARE)).UpVector
+	if ClientState.beam.hitAt ~= f.hitSeen then
+		f.hitSeen = ClientState.beam.hitAt
+		f.shake = math.max(f.shake, B.HIT_SHAKE)
+	end
+	f.shake *= math.exp(-B.SHAKE_DECAY * dt)
+	f.kick *= math.exp(-B.RECOIL_RECOVERY * dt)
+	local shake = jitter(f.shake + M.CAMERA_BOOST_SHAKE * f.boostBlend)
 	local camera = Workspace.CurrentCamera
-	camera.CFrame = CFrame.lookAt(f.cameraPosition, position + aim.LookVector * LOOK_AHEAD, up)
-	camera.FieldOfView = M.CAMERA_FOV + M.CAMERA_FOV_BOOST * forward
+	camera.CFrame = CFrame.lookAt(
+		f.cameraPosition + shake,
+		position + aim.LookVector * LOOK_AHEAD,
+		up
+	) * CFrame.Angles(f.kick, 0, 0)
+	local kickShare = f.kick / math.rad(math.max(B.RECOIL_DEGREES, 0.01))
+	camera.FieldOfView = M.CAMERA_FOV
+		+ M.CAMERA_FOV_BOOST * forward
+		+ M.CAMERA_BOOST_FOV * f.boostBlend
+		- B.RECOIL_FOV * kickShare
 
 	updateBeam(f)
 
@@ -275,6 +339,9 @@ local function update(dt: number)
 	ClientState.flight.maxSpeed = f.handling.maxSpeed
 	ClientState.flight.throttle = if thrusting then math.max(input.Z, 0) else 0
 	ClientState.flight.dock = dockStatus(position, speed)
+	ClientState.flight.boost = f.boost.energy / math.max(f.handling.boostDuration, 0.01)
+	ClientState.flight.boosting = boosting
+	ClientState.flight.boostLocked = f.boost.locked
 end
 
 local function enter(ship: Model)
@@ -309,12 +376,13 @@ local function enter(ship: Model)
 	local rayParams = RaycastParams.new()
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	rayParams.FilterDescendantsInstances = exclude
+	local handling = handlingFor(ship)
 	local f: Flight = {
 		ship = ship,
 		hull = hull,
 		engine = engine,
 		steer = steer,
-		handling = handlingFor(ship),
+		handling = handling,
 		yaw = yaw,
 		pitch = math.clamp(pitch, -MAX_PITCH, MAX_PITCH),
 		orientation = hull.CFrame.Rotation,
@@ -326,6 +394,11 @@ local function enter(ship: Model)
 		rayParams = rayParams,
 		wasHeld = true, -- a click that boarded the ship doesn't fire
 		lastShot = 0,
+		boost = { energy = handling.boostDuration, locked = false },
+		boostBlend = 0,
+		kick = 0,
+		shake = 0,
+		hitSeen = ClientState.beam.hitAt,
 	}
 	flight = f
 	setOwnPrompt(ship, false)
