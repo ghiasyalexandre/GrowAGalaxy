@@ -20,7 +20,8 @@ local ProfileSchema = {}
 
 -- 1: first release. 2: "credits" renamed to "stardust" (the one currency).
 -- 3: galaxy saves stars (level-based upgrades) instead of systems and bodies.
-ProfileSchema.VERSION = 3
+-- 4: stars save the planets bought for them (planets became purchases).
+ProfileSchema.VERSION = 4
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -160,10 +161,28 @@ local function galaxy(raw: any): Types.GalaxyRecord
 			-- Unknown types are kept (a config mistake must not wipe a save);
 			-- gameplay code checks config before using them.
 			if pos and level and level >= 1 and type(star.typeId) == "string" and appearanceOk then
+				-- Planets: slot keys "1".."4" with planet ids; anything else is dropped.
+				local planets: { [string]: string } = {}
+				if type(star.planets) == "table" then
+					for slot, planetId in star.planets do
+						local n = tonumber(slot)
+						if
+							type(slot) == "string"
+							and n
+							and n >= 1
+							and n <= #Config.Stars.SLOTS
+							and n == math.floor(n)
+							and type(planetId) == "string"
+						then
+							planets[tostring(n)] = planetId
+						end
+					end
+				end
 				stars[id] = {
 					typeId = star.typeId,
 					level = level,
 					pos = pos,
+					planets = planets,
 					appearance = star.appearance,
 				}
 			end

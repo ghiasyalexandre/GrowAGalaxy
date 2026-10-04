@@ -12,7 +12,9 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 | 4. Star tycoon | Merged | Passing | **Not yet** |
 | 5. Progression (click laser, Shipyard, expansions, achievements, tutorial) | Merged | Passing | **Not yet** |
 | 6. Atmosphere and polish (sparkles, saved settings, ship paint, Golden Beam) | Merged | Passing | **Not yet** |
-| 7+. Save hardening, tuning, more content, monetization | Not started | | |
+| 7. Star and planet tiers | Merged | Passing (101 tests) | **Not yet** |
+| 8. UI juice and collect effects | In progress | | |
+| 9+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 

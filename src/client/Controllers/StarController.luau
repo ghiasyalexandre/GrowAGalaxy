@@ -1,41 +1,42 @@
 --!strict
--- Every placed star, on this client: its planets orbiting on tilted orbits
--- (drawn as faint rings), a production label, and for your own stars the
--- Manage panel (upgrade preview, Upgrade and Move). Planets are local and
--- derived from the star's Level attribute (Logic/StarMath), so the server
--- only sends the star. Prompts on other players' stars are hidden here; the
--- server checks ownership anyway.
+-- Every placed star, on this client: its planets orbiting in their slots on
+-- tilted orbits (drawn as faint rings), a production label, and for your own
+-- stars the Manage panel: level up, evolve to the next star type, move, and
+-- buy or upgrade the planet in each orbit slot. Planets are local, drawn from
+-- the star's Planets attribute; the server (StarSystem) checks every action.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local PlacementController = require(script.Parent.PlacementController)
+local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
-local StarsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Stars"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 
 local S = Config.Stars
+local P = Config.Planets
+local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local RING_COLOR = Color3.fromRGB(150, 180, 255)
 -- Bezier handle length for a quarter circle of radius 1.
 local QUARTER = 0.5523
 
-type Planet = { part: Part, def: StarsConfig.PlanetDef, phase: number }
+type Planet = { part: Part, slot: number, phase: number }
 
 type Visual = {
 	model: Model,
 	core: BasePart,
-	level: number,
 	planets: { Planet },
 	rings: { Instance },
 	label: BillboardGui,
@@ -46,19 +47,30 @@ local StarController = {}
 
 local visuals: { [Model]: Visual } = {}
 local panel: Frame
-local panelTitle: TextLabel
-local panelBody: TextLabel
-local upgradeButton: TextButton
-local moveButton: TextButton
+local title: TextLabel
+local subtitle: TextLabel
+local actions: Frame
+local list: ScrollingFrame
 local panelStar: Model? = nil
+local picking = false -- the planet picker is showing instead of the slots
 
 local function isMine(model: Model): boolean
 	return model:GetAttribute("OwnerUserId") == Players.LocalPlayer.UserId
 end
 
+local function fmt(n: number): string
+	return Format.abbreviate(n)
+end
+
 -- A faint circle of `radius` around `core`, tilted `tilt` degrees, drawn
 -- with four curved beams between attachments on the core.
-local function ring(core: BasePart, radius: number, tilt: number): { Instance }
+local function ring(
+	core: BasePart,
+	radius: number,
+	tilt: number,
+	color: Color3,
+	width: number
+): { Instance }
 	local made: { Instance } = {}
 	local plane = CFrame.Angles(math.rad(tilt), 0, 0)
 	local points: { Attachment } = {}
@@ -82,11 +94,11 @@ local function ring(core: BasePart, radius: number, tilt: number): { Instance }
 		beam.CurveSize0 = radius * QUARTER
 		beam.CurveSize1 = radius * QUARTER
 		beam.Segments = 16
-		beam.Width0 = 0.35
-		beam.Width1 = 0.35
+		beam.Width0 = width
+		beam.Width1 = width
 		beam.FaceCamera = true
 		beam.LightEmission = 1
-		beam.Color = ColorSequence.new(RING_COLOR)
+		beam.Color = ColorSequence.new(color)
 		beam.Transparency = NumberSequence.new(0.6)
 		beam.Parent = core
 		table.insert(made, beam)
@@ -107,30 +119,45 @@ end
 
 local function buildPlanets(v: Visual)
 	clearPlanets(v)
-	local typeId = v.model:GetAttribute("TypeId")
+	local encoded = v.model:GetAttribute("Planets")
 	local level = v.model:GetAttribute("Level")
-	if type(typeId) ~= "string" or type(level) ~= "number" then
+	if type(encoded) ~= "string" or type(level) ~= "number" then
 		return
 	end
-	v.level = level
-	for _, index in StarMath.planetsAt(typeId, level) do
-		local def = S.PLANETS[index]
-		local part = Instance.new("Part")
-		part.Name = `GaG_Planet_{def.name}`
-		part.Shape = Enum.PartType.Ball
-		part.Size = Vector3.one * def.radius * 2
-		part.Color = Color3.fromHex(def.color)
-		part.Material = (Enum.Material :: any)[def.material] or Enum.Material.SmoothPlastic
-		part.Anchored = true
-		part.CanCollide = false
-		part.CanQuery = false
-		part.CanTouch = false
-		part.CastShadow = false
-		part.Parent = v.model
-		-- Start planets spread around their orbits, same on every client.
-		table.insert(v.planets, { part = part, def = def, phase = index * 2.1 })
-		for _, item in ring(v.core, def.orbit, def.tilt) do
+	local planets = StarMath.decodePlanets(encoded)
+	for slot = 1, StarMath.slots(level) do
+		local slotDef = S.SLOTS[slot]
+		local planetId = planets[slot]
+		local def = if planetId then P.BY_ID[planetId] else nil
+		-- Open orbits show as rings even before a planet is bought.
+		for _, item in
+			ring(v.core, slotDef.orbit, slotDef.tilt, RING_COLOR, if def then 0.35 else 0.2)
+		do
 			table.insert(v.rings, item)
+		end
+		if def then
+			local part = Instance.new("Part")
+			part.Name = `GaG_Planet_{def.id}`
+			part.Shape = Enum.PartType.Ball
+			part.Size = Vector3.one * def.radius * 2
+			part.Color = Color3.fromHex(def.color)
+			part.Material = (Enum.Material :: any)[def.material] or Enum.Material.SmoothPlastic
+			part.Anchored = true
+			part.CanCollide = false
+			part.CanQuery = false
+			part.CanTouch = false
+			part.CastShadow = false
+			part.Parent = v.model
+			local planetRing = def.ring
+			if planetRing then
+				for _, item in
+					ring(part, def.radius * 1.8, 20, Color3.fromHex(planetRing), def.radius * 0.5)
+				do
+					table.insert(v.rings, item)
+				end
+			end
+			-- Start planets spread around their orbits, same on every client.
+			table.insert(v.planets, { part = part, slot = slot, phase = slot * 2.1 })
 		end
 	end
 end
@@ -138,16 +165,19 @@ end
 local function refreshLabel(v: Visual)
 	local text = v.label:FindFirstChildOfClass("TextLabel")
 	local income = v.model:GetAttribute("Income")
+	local typeId = v.model:GetAttribute("TypeId")
+	local def = if type(typeId) == "string" then S.BY_ID[typeId] else nil
 	if text then
-		text.Text = `+{if type(income) == "number" then income else 0}/s`
+		local name = if def then def.displayName else "Star"
+		text.Text = `{name}  +{fmt(if type(income) == "number" then income else 0)}/s`
 	end
-	v.label.StudsOffsetWorldSpace = Vector3.new(0, v.core.Size.Y / 2 + 6, 0)
+	v.label.StudsOffsetWorldSpace = Vector3.new(0, v.core.Size.Y / 2 + 8, 0)
 end
 
 local function makeLabel(core: BasePart, mine: boolean): BillboardGui
 	local gui = Instance.new("BillboardGui")
 	gui.Name = "GaG_StarLabel"
-	gui.Size = UDim2.fromOffset(120, 26)
+	gui.Size = UDim2.fromOffset(200, 26)
 	gui.LightInfluence = 0
 	gui.MaxDistance = 3000
 	gui.Adornee = core
@@ -157,13 +187,108 @@ local function makeLabel(core: BasePart, mine: boolean): BillboardGui
 	text.BackgroundTransparency = 1
 	text.Font = Enum.Font.GothamBold
 	text.TextScaled = true
-	text.TextColor3 = if mine then Color3.fromRGB(255, 214, 120) else Color3.fromRGB(200, 205, 220)
+	text.TextColor3 = if mine then C.gold else Color3.fromRGB(200, 205, 220)
 	text.TextStrokeTransparency = 0.4
 	text.Parent = gui
 	return gui
 end
 
-local function refreshPanel()
+-- Panel ------------------------------------------------------------------
+
+local function request(...: any)
+	local ok, message = Net.StarRequest:InvokeServer(...)
+	ClientState.notify:Fire(
+		if type(message) == "string" then message else if ok then "Done" else "Failed"
+	)
+end
+
+local function stardust(): number
+	local profile = ClientState.profile
+	return if profile then profile.stardust else 0
+end
+
+local function priceButton(
+	parent: Instance,
+	verb: string,
+	cost: number,
+	onClick: () -> ()
+): TextButton
+	local affordable = stardust() >= cost
+	return Theme.button(
+		parent,
+		`{verb} · {fmt(cost)}`,
+		if affordable then "buy" else "disabled",
+		if affordable then onClick else nil
+	)
+end
+
+local function placeRight(button: TextButton, width: number)
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -8, 0.5, 0)
+	button.Size = UDim2.fromOffset(width, 34)
+end
+
+local function rowText(row: Frame, titleText: string, detail: string?, indent: number)
+	Theme.label(row, {
+		Position = UDim2.fromOffset(indent, if detail then 6 else 0),
+		Size = UDim2.new(1, -indent - 186, 0, if detail then 20 else 52),
+		Text = titleText,
+		TextColor3 = if detail then C.text else C.subtle,
+	})
+	if detail then
+		Theme.label(row, {
+			Position = UDim2.fromOffset(indent, 27),
+			Size = UDim2.new(1, -indent - 186, 0, 18),
+			Text = detail,
+			Font = Enum.Font.Gotham,
+			TextSize = 13,
+			TextColor3 = C.subtle,
+		})
+	end
+end
+
+local refreshPanel: () -> ()
+
+local function showPicker(model: Model, typeId: string)
+	Theme.clear(list)
+	local back = Theme.row(list, 36, 0)
+	back.BackgroundTransparency = 1
+	local backButton = Theme.button(back, "Back to orbits", "primary", function()
+		picking = false
+		refreshPanel()
+	end)
+	backButton.Size = UDim2.new(0, 160, 1, -4)
+	for order, planetId in P.ORDER do
+		local def = P.BY_ID[planetId]
+		local row = Theme.row(list, 52, order)
+		local dot = Theme.swatch(row, Color3.fromHex(def.color), 28, true)
+		dot.Position = UDim2.fromOffset(10, 12)
+		rowText(
+			row,
+			`{def.displayName}  ·  tier {def.tier}`,
+			`+{fmt(def.income)} {CURRENCY}/s`,
+			48
+		)
+		local button
+		if StarMath.planetAllowed(typeId, planetId) then
+			button = priceButton(row, "Buy", def.cost, function()
+				picking = false
+				request("buyPlanet", model:GetAttribute("StarId"), planetId)
+			end)
+		else
+			local needed = S.BY_ID[S.ORDER[def.tier]]
+			button = Theme.button(
+				row,
+				`Needs {if needed then needed.displayName else "a bigger star"}`,
+				"disabled",
+				nil
+			)
+		end
+		placeRight(button, 170)
+	end
+end
+
+refreshPanel = function()
 	local model = panelStar
 	if model == nil or model.Parent == nil then
 		panel.Visible = false
@@ -172,34 +297,114 @@ local function refreshPanel()
 	end
 	local typeId = model:GetAttribute("TypeId") :: string
 	local level = model:GetAttribute("Level") :: number
+	local encoded = model:GetAttribute("Planets")
+	local planets = StarMath.decodePlanets(if type(encoded) == "string" then encoded else "")
 	local def = S.BY_ID[typeId]
-	local maxLevel = StarMath.maxLevel(typeId)
-	local now = StarMath.income(typeId, level)
-	local cost = StarMath.upgradeCost(typeId, level)
-	panelTitle.Text = `{if def then def.displayName else typeId}: level {level} / {maxLevel}`
-	local lines = { `Produces {now} {CURRENCY}/s` }
-	if cost then
-		local nextDef = StarMath.levelDef(typeId, level + 1)
-		local planet = if nextDef and nextDef.planet then S.PLANETS[nextDef.planet] else nil
-		table.insert(lines, `Upgrade: {Format.abbreviate(cost)} {CURRENCY}`)
-		table.insert(lines, `  {now} -> {StarMath.income(typeId, level + 1)} {CURRENCY}/s`)
-		if planet then
-			table.insert(lines, `  Adds the planet {planet.name}`)
+	local income = model:GetAttribute("Income")
+	local starId = model:GetAttribute("StarId")
+
+	title.Text =
+		`{if def then def.displayName else typeId}  ·  level {level}/{StarMath.maxLevel()}`
+	title.TextColor3 = if def then Color3.fromHex(def.light) else C.gold
+	subtitle.Text =
+		`+{fmt(if type(income) == "number" then income else 0)} {CURRENCY}/s  ·  holds planets up to tier {if def
+			then def.tier
+			else 1}`
+
+	-- Actions: level up, evolve, move.
+	Theme.clear(actions)
+	local buttons: { TextButton } = {}
+	local upgradeCost = StarMath.upgradeCost(typeId, level)
+	if upgradeCost then
+		table.insert(
+			buttons,
+			priceButton(actions, "Level up", upgradeCost, function()
+				request("upgrade", starId)
+			end)
+		)
+	end
+	local target = StarMath.evolveTarget(typeId)
+	if target then
+		local targetDef = S.BY_ID[target]
+		table.insert(
+			buttons,
+			priceButton(actions, `Evolve: {targetDef.displayName}`, targetDef.cost, function()
+				request("evolve", starId)
+			end)
+		)
+	end
+	table.insert(
+		buttons,
+		Theme.button(actions, "Move", "primary", function()
+			panel.Visible = false
+			panelStar = nil
+			if type(starId) == "string" then
+				PlacementController.begin({ mode = "move", starId = starId })
+			end
+		end)
+	)
+	for index, button in buttons do
+		button.Size = UDim2.new(1 / #buttons, -6, 1, 0)
+		button.Position = UDim2.new((index - 1) / #buttons, 3, 0, 0)
+	end
+
+	if picking then
+		showPicker(model, typeId)
+		return
+	end
+
+	-- Orbit slots.
+	Theme.clear(list)
+	local open = StarMath.slots(level)
+	for slot = 1, #S.SLOTS do
+		local row = Theme.row(list, 52, slot)
+		local planetId = planets[slot]
+		local planetDef = if planetId then P.BY_ID[planetId] else nil
+		local button: TextButton
+		if planetDef and planetId then
+			local dot = Theme.swatch(row, Color3.fromHex(planetDef.color), 28, true)
+			dot.Position = UDim2.fromOffset(10, 12)
+			rowText(row, planetDef.displayName, `Orbit {slot}  ·  +{fmt(planetDef.income)}/s`, 48)
+			local nextId, cost = StarMath.planetUpgrade(planetId)
+			if nextId and cost and StarMath.planetAllowed(typeId, nextId) then
+				button = priceButton(row, `To {P.BY_ID[nextId].displayName}`, cost, function()
+					request("upgradePlanet", starId, tostring(slot))
+				end)
+			elseif nextId then
+				button = Theme.button(row, "Evolve star to upgrade", "disabled", nil)
+			else
+				button = Theme.button(row, "Finest planet", "disabled", nil)
+			end
+		elseif slot <= open then
+			rowText(row, `Orbit {slot}: empty`, nil, 14)
+			button = Theme.button(row, "Buy a planet", "buy", function()
+				picking = true
+				refreshPanel()
+			end)
+		else
+			local needLevel = #S.LEVELS
+			for index, levelDef in S.LEVELS do
+				if levelDef.slots >= slot then
+					needLevel = index
+					break
+				end
+			end
+			rowText(row, `Orbit {slot}: locked`, nil, 14)
+			button = Theme.button(row, `Star level {needLevel}`, "disabled", nil)
 		end
-		local profile = ClientState.profile
-		if profile and profile.stardust < cost then
-			table.insert(lines, `  You need {Format.abbreviate(cost - profile.stardust)} more`)
-		end
-	else
-		table.insert(lines, "Fully upgraded")
+		placeRight(button, 170)
 	end
 	if ClientState.mode == "ship" and Input.device() == "keyboard" then
-		table.insert(lines, "(Hold Alt to use the mouse while flying)")
+		local hint = Theme.row(list, 22, 99)
+		hint.BackgroundTransparency = 1
+		Theme.label(hint, {
+			Size = UDim2.fromScale(1, 1),
+			Text = "Hold Alt to use the mouse while flying",
+			Font = Enum.Font.Gotham,
+			TextSize = 13,
+			TextColor3 = C.subtle,
+		})
 	end
-	panelBody.Text = table.concat(lines, "\n")
-	upgradeButton.Visible = cost ~= nil
-	upgradeButton.Text = "Upgrade (U)"
-	moveButton.Text = "Move (M)"
 end
 
 local function closePanel()
@@ -212,99 +417,58 @@ end
 
 local function openPanel(model: Model)
 	panelStar = model
+	picking = false
 	panel.Visible = true
 	refreshPanel()
+	Theme.popIn(panel)
 	if Input.device() == "gamepad" then
-		GuiService.SelectedObject = if upgradeButton.Visible then upgradeButton else moveButton
+		GuiService.SelectedObject = actions:FindFirstChildOfClass("TextButton")
 	end
-end
-
-local function doUpgrade()
-	local model = panelStar
-	if model == nil then
-		return
-	end
-	local ok, message = Net.StarRequest:InvokeServer("upgrade", model:GetAttribute("StarId"))
-	ClientState.notify:Fire(
-		if type(message) == "string" then message else if ok then "Upgraded" else "Failed"
-	)
-	refreshPanel()
-end
-
-local function doMove()
-	local model = panelStar
-	if model == nil then
-		return
-	end
-	local starId = model:GetAttribute("StarId")
-	closePanel()
-	if type(starId) == "string" then
-		PlacementController.begin({ mode = "move", starId = starId })
-	end
-end
-
-local function button(parent: Instance, name: string, x: number): TextButton
-	local b = Instance.new("TextButton")
-	b.Name = name
-	b.AnchorPoint = Vector2.new(0, 1)
-	b.Position = UDim2.new(x, 4, 1, -8)
-	b.Size = UDim2.new(1 / 3, -8, 0, 34)
-	b.BackgroundColor3 = Color3.fromRGB(40, 52, 90)
-	b.TextColor3 = Color3.new(1, 1, 1)
-	b.Font = Enum.Font.GothamBold
-	b.TextScaled = true
-	b.Parent = parent
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
-	corner.Parent = b
-	return b
 end
 
 local function buildPanel()
-	local gui = Instance.new("ScreenGui")
-	gui.Name = "StarPanel"
-	gui.ResetOnSpawn = false
-	panel = Instance.new("Frame")
-	panel.Name = "Panel"
+	local gui = Theme.screen("StarPanel", Players.LocalPlayer:WaitForChild("PlayerGui"))
+	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(1, 0.5)
 	panel.Position = UDim2.new(1, -16, 0.5, 0)
-	panel.Size = UDim2.fromOffset(300, 210)
-	panel.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-	panel.BackgroundTransparency = 0.15
+	panel.Size = UDim2.new(0.42, 0, 0.62, 0)
 	panel.Visible = false
-	panel.Parent = gui
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = panel
-	panelTitle = Instance.new("TextLabel")
-	panelTitle.Position = UDim2.fromOffset(12, 8)
-	panelTitle.Size = UDim2.new(1, -24, 0, 24)
-	panelTitle.BackgroundTransparency = 1
-	panelTitle.Font = Enum.Font.GothamBold
-	panelTitle.TextScaled = true
-	panelTitle.TextXAlignment = Enum.TextXAlignment.Left
-	panelTitle.TextColor3 = Color3.fromRGB(255, 214, 120)
-	panelTitle.Parent = panel
-	panelBody = Instance.new("TextLabel")
-	panelBody.Position = UDim2.fromOffset(12, 38)
-	panelBody.Size = UDim2.new(1, -24, 1, -88)
-	panelBody.BackgroundTransparency = 1
-	panelBody.Font = Enum.Font.Gotham
-	panelBody.TextSize = 15
-	panelBody.TextWrapped = true
-	panelBody.TextXAlignment = Enum.TextXAlignment.Left
-	panelBody.TextYAlignment = Enum.TextYAlignment.Top
-	panelBody.TextColor3 = Color3.fromRGB(220, 225, 240)
-	panelBody.Parent = panel
-	upgradeButton = button(panel, "Upgrade", 0)
-	moveButton = button(panel, "Move", 1 / 3)
-	local close = button(panel, "Close", 2 / 3)
-	close.Text = "Close"
-	upgradeButton.Activated:Connect(doUpgrade)
-	moveButton.Activated:Connect(doMove)
-	close.Activated:Connect(closePanel)
-	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local size = Instance.new("UISizeConstraint")
+	size.MinSize = Vector2.new(330, 360)
+	size.MaxSize = Vector2.new(470, 480)
+	size.Parent = panel
+
+	title = Theme.label(panel, {
+		Position = UDim2.fromOffset(16, 10),
+		Size = UDim2.new(1, -110, 0, 26),
+		TextSize = 20,
+		Font = Enum.Font.GothamBlack,
+	})
+	subtitle = Theme.label(panel, {
+		Position = UDim2.fromOffset(16, 38),
+		Size = UDim2.new(1, -32, 0, 18),
+		Font = Enum.Font.Gotham,
+		TextSize = 14,
+		TextColor3 = C.subtle,
+	})
+	local close = Theme.button(panel, "Close", "primary", closePanel)
+	close.AnchorPoint = Vector2.new(1, 0)
+	close.Position = UDim2.new(1, -12, 0, 10)
+	close.Size = UDim2.fromOffset(80, 28)
+
+	actions = Instance.new("Frame")
+	actions.Name = "Actions"
+	actions.BackgroundTransparency = 1
+	actions.Position = UDim2.fromOffset(13, 64)
+	actions.Size = UDim2.new(1, -26, 0, 36)
+	actions.Parent = panel
+
+	list = Theme.list(panel, 6)
+	list.Position = UDim2.fromOffset(16, 110)
+	list.Size = UDim2.new(1, -32, 1, -122)
 end
+
+-- Stars ------------------------------------------------------------------
 
 local function add(model: Instance)
 	if not model:IsA("Model") or model:GetAttribute("StarId") == nil or visuals[model] then
@@ -322,7 +486,6 @@ local function add(model: Instance)
 	local v: Visual = {
 		model = model,
 		core = core,
-		level = 0,
 		planets = {},
 		rings = {},
 		label = makeLabel(core, mine),
@@ -331,16 +494,16 @@ local function add(model: Instance)
 	visuals[model] = v
 	buildPlanets(v)
 	refreshLabel(v)
-	table.insert(
-		v.connections,
-		model:GetAttributeChangedSignal("Level"):Connect(function()
-			buildPlanets(v)
-			refreshLabel(v)
-			if panelStar == model then
-				refreshPanel()
-			end
-		end)
-	)
+	local function changed()
+		buildPlanets(v)
+		refreshLabel(v)
+		if panelStar == model then
+			refreshPanel()
+		end
+	end
+	for _, attribute in { "Level", "Planets", "TypeId", "Income" } do
+		table.insert(v.connections, model:GetAttributeChangedSignal(attribute):Connect(changed))
+	end
 	table.insert(
 		v.connections,
 		model.AncestryChanged:Connect(function()
@@ -359,17 +522,16 @@ local function animate()
 	for _, v in visuals do
 		local center = v.core.CFrame.Position
 		for _, planet in v.planets do
-			local def = planet.def
-			local angle = planet.phase + now / def.period * 2 * math.pi
-			local offset = CFrame.Angles(math.rad(def.tilt), 0, 0)
-				* Vector3.new(math.cos(angle) * def.orbit, 0, math.sin(angle) * def.orbit)
+			local slot = S.SLOTS[planet.slot]
+			local angle = planet.phase + now / slot.period * 2 * math.pi
+			local offset = CFrame.Angles(math.rad(slot.tilt), 0, 0)
+				* Vector3.new(math.cos(angle) * slot.orbit, 0, math.sin(angle) * slot.orbit)
 			planet.part.CFrame = CFrame.new(center + offset) * CFrame.Angles(0, angle, 0)
 		end
 	end
 end
 
--- Stars owned by the local player: region-space positions and count, for
--- the shop price and placement checks.
+-- The local player's own star models by id, for the shop and placement.
 function StarController.myStars(): { [string]: Model }
 	local mine: { [string]: Model } = {}
 	for model in visuals do
@@ -400,37 +562,16 @@ function StarController.start()
 			refreshPanel()
 		end
 	end)
-
 	ProximityPromptService.PromptTriggered:Connect(function(prompt)
-		local action = prompt:GetAttribute("TycoonAction")
-		if action == "Manage" then
+		if prompt:GetAttribute("TycoonAction") == "Manage" then
 			local model = prompt:FindFirstAncestorOfClass("Model")
 			if model and isMine(model) then
 				openPanel(model)
 			end
-		elseif action == "Shop" then
-			-- The station sits inside its owner's region model.
-			local owner: Instance? = prompt:FindFirstAncestorOfClass("Model")
-			while owner and owner:GetAttribute("OwnerUserId") == nil do
-				owner = owner:FindFirstAncestorOfClass("Model")
-			end
-			if owner and owner:GetAttribute("OwnerUserId") ~= Players.LocalPlayer.UserId then
-				ClientState.notify:Fire("This is someone else's Star Shop.")
-				return
-			end
-			PlacementController.begin({ mode = "place", typeId = S.DEFAULT_TYPE })
 		end
 	end)
-
-	game:GetService("UserInputService").InputBegan:Connect(function(input, processed)
-		if processed or panelStar == nil then
-			return
-		end
-		if input.KeyCode == Enum.KeyCode.U then
-			doUpgrade()
-		elseif input.KeyCode == Enum.KeyCode.M then
-			doMove()
-		elseif input.KeyCode == Enum.KeyCode.Backspace then
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if not processed and panelStar and input.KeyCode == Enum.KeyCode.Backspace then
 			closePanel()
 		end
 	end)

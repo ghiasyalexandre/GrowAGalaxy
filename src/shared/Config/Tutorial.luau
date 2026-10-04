@@ -18,8 +18,8 @@ local STEPS: { StepDef } = {
 	{ stat = "starsPlaced", text = "Back at your station, buy your first star at the Star Shop." },
 	{ stat = "collections", text = "Your star makes Stardust. Pick it up at the Collect console." },
 	{
-		stat = "starUpgrades",
-		text = "Fly to your star, choose Manage star and upgrade it to add a planet.",
+		stat = "planetsBought",
+		text = "Fly to your star, choose Manage star and buy a planet to orbit it.",
 	},
 }
 

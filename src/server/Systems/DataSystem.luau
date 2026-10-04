@@ -149,18 +149,32 @@ function DataSystem.addStar(player: Player, star: Types.StarRecord): string?
 	return id
 end
 
--- Changes a star's level or position (already validated by the caller).
-function DataSystem.updateStar(player: Player, id: string, level: number?, pos: Types.Vec3?)
+export type StarChanges = {
+	typeId: string?,
+	level: number?,
+	pos: Types.Vec3?,
+	slot: string?, -- with planet: put this planet in this orbit slot
+	planet: string?,
+}
+
+-- Changes a star (already validated and paid for by the caller).
+function DataSystem.updateStar(player: Player, id: string, changes: StarChanges)
 	local profile = DataSystem.getProfile(player)
 	local star = profile and profile.galaxy.stars[id]
 	if profile == nil or star == nil then
 		return
 	end
-	if level then
-		star.level = level
+	if changes.typeId then
+		star.typeId = changes.typeId
 	end
-	if pos then
-		star.pos = pos
+	if changes.level then
+		star.level = changes.level
+	end
+	if changes.pos then
+		star.pos = changes.pos
+	end
+	if changes.slot and changes.planet then
+		star.planets[changes.slot] = changes.planet
 	end
 	pushIncome(player, profile)
 end

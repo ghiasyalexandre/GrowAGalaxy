@@ -269,8 +269,17 @@ function PlacementController.begin(options: Options)
 	active = options
 	distance = S.GHOST_DISTANCE
 	height = 0
-	local def = S.BY_ID[if options.mode == "place" then options.typeId else S.DEFAULT_TYPE]
-	ghost.Size = Vector3.one * def.levels[1].starRadius * 2
+	local ghostType = S.DEFAULT_TYPE
+	if options.mode == "place" then
+		ghostType = options.typeId
+	else
+		local model = starSource()[options.starId]
+		local typeId = model and model:GetAttribute("TypeId")
+		ghostType = if type(typeId) == "string" then typeId else ghostType
+	end
+	local def = S.BY_ID[ghostType]
+	ghost.Size = Vector3.one * StarMath.radius(ghostType, 1) * 2
+	ghost.Color = Color3.fromHex(def.color)
 	ghost.Parent = Workspace.CurrentCamera
 	footprint.Parent = Workspace.CurrentCamera
 	for name, binding in BINDINGS do

@@ -2,34 +2,83 @@ return function(T, Loader)
 	local Config = Loader.require("src/shared/Config")
 	local StarMath = Loader.require("src/shared/Logic/StarMath")
 
-	local id = Config.Stars.DEFAULT_TYPE
-	local def = Config.Stars.BY_ID[id]
+	local S, P = Config.Stars, Config.Planets
+	local first = S.DEFAULT_TYPE
+
+	local function star(typeId, level, planets)
+		return {
+			typeId = typeId,
+			level = level,
+			pos = { x = 0, y = 0, z = 0 },
+			planets = planets or {},
+		}
+	end
 
 	T.describe("StarMath", function()
 		T.test("each star you own makes the next one pricier", function()
-			T.equal(StarMath.placeCost(id, 0), def.cost)
-			T.truthy(StarMath.placeCost(id, 1) > def.cost)
+			T.equal(StarMath.placeCost(first, 0), S.BY_ID[first].cost)
+			T.truthy(StarMath.placeCost(first, 1) > S.BY_ID[first].cost)
 			T.equal(StarMath.placeCost("Nope", 0), nil)
 		end)
 
-		T.test("upgrades cost the next level's price and stop at the top", function()
-			T.equal(StarMath.upgradeCost(id, 1), def.levels[2].upgradeCost)
-			T.equal(StarMath.upgradeCost(id, #def.levels), nil)
+		T.test("a tier unlocks once you own a star of the tier before it", function()
+			T.truthy(StarMath.typeUnlocked(first, {}))
+			T.falsy(StarMath.typeUnlocked("RedDwarf", {}))
+			T.truthy(StarMath.typeUnlocked("RedDwarf", { a = star(first, 1) }))
+			T.falsy(StarMath.typeUnlocked("BlackHole", { a = star("RedGiant", 1) }))
+			T.truthy(StarMath.typeUnlocked("BlackHole", { a = star("RedSupergiant", 1) }))
 		end)
 
-		T.test("a new star has no planets; upgrades add them", function()
-			T.equal(#StarMath.planetsAt(id, 1), 0)
-			T.equal(#StarMath.planetsAt(id, 2), 1)
-			T.truthy(#StarMath.planetsAt(id, #def.levels) >= 2)
+		T.test("stars evolve up the ladder and stop at the black hole", function()
+			T.equal(StarMath.evolveTarget("BrownDwarf"), "RedDwarf")
+			T.equal(StarMath.evolveTarget("RedSupergiant"), "BlackHole")
+			T.equal(StarMath.evolveTarget("BlackHole"), nil)
 		end)
 
-		T.test("total income sums every star, unknown types make nothing", function()
-			local stars = {
-				a = { typeId = id, level = 1, pos = { x = 0, y = 0, z = 0 } },
-				b = { typeId = id, level = 2, pos = { x = 0, y = 0, z = 0 } },
-				c = { typeId = "Nope", level = 3, pos = { x = 0, y = 0, z = 0 } },
-			}
-			T.near(StarMath.totalIncome(stars), def.levels[1].income + def.levels[2].income)
+		T.test("levels open orbit slots and stop at the top", function()
+			T.equal(StarMath.slots(1), 1)
+			T.equal(StarMath.slots(#S.LEVELS), #S.SLOTS)
+			T.truthy(StarMath.upgradeCost(first, 1))
+			T.equal(StarMath.upgradeCost(first, #S.LEVELS), nil)
+		end)
+
+		T.test("a star holds planets up to its own tier", function()
+			T.truthy(StarMath.planetAllowed("BrownDwarf", "Barren"))
+			T.falsy(StarMath.planetAllowed("BrownDwarf", "Molten"))
+			T.truthy(StarMath.planetAllowed("BlackHole", "Crystal"))
+		end)
+
+		T.test("free slots respect the level and skip taken orbits", function()
+			T.equal(StarMath.freeSlot(star(first, 1)), "1")
+			T.equal(StarMath.freeSlot(star(first, 1, { ["1"] = "Barren" })), nil)
+			T.equal(StarMath.freeSlot(star(first, 3, { ["1"] = "Barren" })), "2")
+		end)
+
+		T.test(
+			"planet upgrades go one tier up, credit half the old price, stop at the top",
+			function()
+				local nextId, cost = StarMath.planetUpgrade("Barren")
+				T.equal(nextId, "Molten")
+				T.equal(cost, P.BY_ID.Molten.cost - P.BY_ID.Barren.cost * P.UPGRADE_CREDIT)
+				T.equal((StarMath.planetUpgrade("Crystal")), nil)
+			end
+		)
+
+		T.test("income adds the star (by level) and its planets", function()
+			local s = star("RedDwarf", 2, { ["1"] = "Barren", ["2"] = "Molten" })
+			local expected = S.BY_ID.RedDwarf.income * S.LEVELS[2].incomeMultiplier
+				+ P.BY_ID.Barren.income
+				+ P.BY_ID.Molten.income
+			T.near(StarMath.income(s), expected)
+			T.near(StarMath.totalIncome({ a = s, b = star("Nope", 1) }), expected)
+		end)
+
+		T.test("planets round-trip through the attribute string", function()
+			local text = StarMath.encodePlanets({ ["1"] = "Barren", ["3"] = "Ocean" })
+			local back = StarMath.decodePlanets(text)
+			T.equal(back[1], "Barren")
+			T.equal(back[2], nil)
+			T.equal(back[3], "Ocean")
 		end)
 
 		T.test("income accrues up to the cap and never lowers an amount above it", function()
