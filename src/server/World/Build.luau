@@ -9,8 +9,11 @@ local Config = require(ReplicatedStorage.Shared.Config)
 
 local COLORS = Config.World.COLORS
 
--- Tag on every navigation prompt; NavigationSystem listens for it.
-local WARP_TAG = "WarpPrompt"
+-- Tags the server and client listen for (CollectionService tags replicate).
+local WARP_TAG = "WarpPrompt" -- airlocks; NavigationSystem
+local LAUNCH_TAG = "LaunchPrompt" -- hangar consoles; ShipSystem
+local ROUTE_TAG = "RoutePrompt" -- navigation consoles; handled on the client
+local DOCK_ZONE_TAG = "DockZone" -- assisted docking volumes
 
 export type PartProps = {
 	name: string?,
@@ -39,11 +42,16 @@ export type PromptProps = {
 	action: string,
 	object: string,
 	warp: string?, -- WarpTarget handled by NavigationSystem
+	launch: string?, -- Hangar ("ISS" or "Station") handled by ShipSystem
+	route: string?, -- RouteTarget ("ISS" or "Station") handled by the client
 }
 
 local Build = {}
 
 Build.WARP_TAG = WARP_TAG
+Build.LAUNCH_TAG = LAUNCH_TAG
+Build.ROUTE_TAG = ROUTE_TAG
+Build.DOCK_ZONE_TAG = DOCK_ZONE_TAG
 
 function Build.part(props: PartProps): Part
 	local part = Instance.new("Part")
@@ -163,8 +171,57 @@ function Build.prompt(parent: BasePart, props: PromptProps): ProximityPrompt
 		prompt:SetAttribute("WarpTarget", props.warp)
 		CollectionService:AddTag(prompt, WARP_TAG)
 	end
+	if props.launch then
+		prompt:SetAttribute("Hangar", props.launch)
+		CollectionService:AddTag(prompt, LAUNCH_TAG)
+	end
+	if props.route then
+		prompt:SetAttribute("RouteTarget", props.route)
+		CollectionService:AddTag(prompt, ROUTE_TAG)
+	end
 	prompt.Parent = parent
 	return prompt
+end
+
+-- A marked docking volume. Ships inside it below Movement.DOCK_MAX_SPEED can
+-- dock. ownerUserId 0 means anyone may dock (the ISS).
+function Build.dockZone(cframe: CFrame, size: Vector3, ownerUserId: number, parent: Instance): Part
+	local zone = Build.part({
+		name = "DockZone",
+		size = size,
+		cframe = cframe,
+		color = COLORS.accent,
+		transparency = 0.92,
+		collide = false,
+		parent = parent,
+	})
+	zone.CanQuery = false
+	zone:SetAttribute("OwnerUserId", ownerUserId)
+	CollectionService:AddTag(zone, DOCK_ZONE_TAG)
+	return zone
+end
+
+-- Glowing square outline on a floor, marking a berth.
+function Build.berthOutline(floor: CFrame, size: number, parent: Instance)
+	local half = size / 2
+	for _, edge in
+		{
+			{ size = Vector3.new(size, 0.2, 0.6), offset = Vector3.new(0, 0, -half) },
+			{ size = Vector3.new(size, 0.2, 0.6), offset = Vector3.new(0, 0, half) },
+			{ size = Vector3.new(0.6, 0.2, size), offset = Vector3.new(-half, 0, 0) },
+			{ size = Vector3.new(0.6, 0.2, size), offset = Vector3.new(half, 0, 0) },
+		}
+	do
+		Build.part({
+			name = "BerthOutline",
+			size = edge.size,
+			cframe = floor * CFrame.new(edge.offset),
+			color = COLORS.accent,
+			material = Enum.Material.Neon,
+			collide = false,
+			parent = parent,
+		})
+	end
 end
 
 return Build

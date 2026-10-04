@@ -144,6 +144,44 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	-- Movement: the suit must be slower than every ship, and docking must be
+	-- possible below every ship's top speed.
+	local movement = config.Movement
+	for shipId, ship in config.Ships.BY_ID do
+		if movement.SUIT_MAX_SPEED >= ship.stats.maxSpeed then
+			fail(`Movement: the spacesuit is not slower than ship {shipId}`)
+		end
+		if movement.DOCK_MAX_SPEED >= ship.stats.maxSpeed then
+			fail(`Movement: DOCK_MAX_SPEED is not below ship {shipId}'s top speed`)
+		end
+	end
+	for _, name in { "SHIP_REVERSE_FACTOR", "SHIP_STRAFE_FACTOR", "SHIP_IDLE_BRAKE_FACTOR" } do
+		local value = movement[name]
+		if type(value) ~= "number" or value <= 0 or value > 1 then
+			fail(`Movement: {name} must be between 0 and 1`)
+		end
+	end
+
+	-- The flight area must hold every region at its largest and stay clear of
+	-- the Earth backdrop.
+	local world = config.World
+	local largest = config.Galaxy.EXPANSIONS[#config.Galaxy.EXPANSIONS].size
+	local farthest = math.sqrt((world.REGION_RING_RADIUS + largest.z) ^ 2 + (largest.x / 2) ^ 2)
+	if movement.FLIGHT_BOUNDS_RADIUS <= farthest then
+		fail(
+			`Movement: FLIGHT_BOUNDS_RADIUS does not reach the far corners of the largest region ({math.ceil(
+				farthest
+			)} studs)`
+		)
+	end
+	if movement.FLIGHT_BOUNDS_HEIGHT <= math.abs(world.REGION_RING_HEIGHT) + largest.y / 2 then
+		fail("Movement: FLIGHT_BOUNDS_HEIGHT does not cover the tallest region")
+	end
+	local earthTop = world.EARTH_CENTER.y + world.EARTH_DIAMETER / 2
+	if -movement.FLIGHT_BOUNDS_HEIGHT <= earthTop then
+		fail("Movement: the flight area reaches into the Earth backdrop")
+	end
+
 	-- Equipment
 	local slots: { [string]: boolean } = {}
 	for _, slot in config.Equipment.SLOTS do

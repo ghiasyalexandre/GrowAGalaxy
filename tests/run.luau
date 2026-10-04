@@ -11,6 +11,8 @@ local SPECS = {
 	"RegionMath",
 	"PlacementRules",
 	"ProfileSchema",
+	"FlightMath",
+	"ShipStats",
 }
 
 for _, name in SPECS do

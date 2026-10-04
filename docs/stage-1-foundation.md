@@ -101,6 +101,9 @@ PlayerGui/Hud, PlayerGui/StationWaypoint
 
 ### Replacing the greybox ISS
 
+Stage 2 changed this contract (berths, docking zone, hangar and route prompts); see
+[Stage 2](stage-2-movement-ships.md#replacing-the-greybox-iss).
+
 Build your own ISS model in Studio and put it at `ServerStorage/Assets/ISS` (a Model). It must
 contain parts named `ArrivalSpawn` (a SpawnLocation), `AirlockInside`, `DockingSpawn`, `Berth1`,
 `Berth2` and `Berth3`. For the consoles, add ProximityPrompts with the CollectionService tag

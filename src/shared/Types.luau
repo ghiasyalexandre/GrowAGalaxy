@@ -93,6 +93,18 @@ export type RegionInfo = {
 	name: string,
 }
 
+-- What the server tells a player about their spawned ship (ShipState):
+-- effective stats with equipment applied.
+export type ShipInfo = {
+	shipId: string,
+	displayName: string,
+	maxSpeed: number,
+	acceleration: number,
+	braking: number,
+	turnRate: number,
+	cargoCapacity: number,
+}
+
 export type InitialState = {
 	profile: ProfileView,
 	regions: { RegionInfo },

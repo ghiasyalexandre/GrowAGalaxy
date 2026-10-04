@@ -16,6 +16,18 @@
         },
         "RegionsChanged": {
           "$className": "RemoteEvent"
+        },
+        "ShipRequest": {
+          "$className": "RemoteEvent"
+        },
+        "ShipState": {
+          "$className": "RemoteEvent"
+        },
+        "SuitRecover": {
+          "$className": "RemoteEvent"
+        },
+        "Notify": {
+          "$className": "RemoteEvent"
         }
       }
     },
@@ -35,6 +47,12 @@
         "Client": {
           "$path": "src/client"
         }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "Gravity": 0,
+        "FallenPartsDestroyHeight": -10000
       }
     }
   }

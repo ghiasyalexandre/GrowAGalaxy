@@ -4,6 +4,7 @@
 -- From the Studio command bar while playtesting (server view):
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "addCredits", 500)
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "printProfile")
+--   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "launch")  -- ship at an ISS berth
 --
 -- A BindableFunction is used because modules required from the command bar
 -- are separate copies that don't share state with the running game.
@@ -14,6 +15,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local DataSystem = require(script.Parent.DataSystem)
 local RegionSystem = require(script.Parent.RegionSystem)
+local ShipSystem = require(script.Parent.ShipSystem)
 
 local DevSystem = {}
 
@@ -29,6 +31,10 @@ local COMMANDS: { [string]: (player: Player, ...any) -> any } = {
 	region = function(player)
 		local region = RegionSystem.getRegion(player)
 		return if region then region.slot else nil
+	end,
+	launch = function(player, hangar)
+		ShipSystem.launch(player, if hangar == "Station" then "Station" else "ISS")
+		return true
 	end,
 }
 

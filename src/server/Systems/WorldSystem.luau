@@ -1,13 +1,14 @@
 --!strict
--- Builds the shared world when the server starts: space lighting, the ISS hub
--- and the Earth backdrop. Also clears leftovers from Studio's Baseplate
--- template (the baseplate, its spawn and its atmosphere) that would break the
--- space scene.
+-- Builds the shared world when the server starts: zero gravity, space
+-- lighting, the ISS hub and the Earth backdrop. Also clears leftovers from
+-- Studio's Baseplate template (the baseplate, its spawn and its atmosphere)
+-- that would break the space scene.
 --
 -- To use a hand-built ISS instead of the greybox, put a Model named "ISS" in
 -- ServerStorage/Assets. It must contain every part listed in MARKERS, plus
--- ProximityPrompts tagged "WarpPrompt" with a WarpTarget attribute (see
--- NavigationSystem).
+-- ProximityPrompts tagged "WarpPrompt" with a WarpTarget attribute for the
+-- airlocks (NavigationSystem), one tagged "LaunchPrompt" with Hangar = "ISS"
+-- (ShipSystem), and the DockZone part tagged "DockZone" with OwnerUserId = 0.
 
 local Lighting = game:GetService("Lighting")
 local ServerStorage = game:GetService("ServerStorage")
@@ -23,9 +24,10 @@ WorldSystem.MARKERS = {
 	"ArrivalSpawn", -- SpawnLocation where players appear
 	"AirlockInside", -- standing point inside the docking module
 	"DockingSpawn", -- standing point on the exterior docking platform
-	"Berth1", -- ship berths on the docking platform (Stage 2)
+	"Berth1", -- ship berths on the docking platform, facing the way ships leave
 	"Berth2",
 	"Berth3",
+	"DockZone", -- assisted docking volume around the berths
 }
 
 local iss: Model? = nil
@@ -117,6 +119,9 @@ function WorldSystem.getMarker(name: string): BasePart?
 end
 
 function WorldSystem.init()
+	-- Also set in default.project.json; set here too so a place file with
+	-- different settings still plays in zero-g.
+	Workspace.Gravity = 0
 	setupLighting()
 	clearTemplate()
 

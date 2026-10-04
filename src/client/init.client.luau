@@ -1,9 +1,12 @@
 --!strict
 -- Client entry point. Same two-phase bootstrap as the server: init() every
 -- controller (build UI, connect events), load the starting state from the
--- server, then start() every controller.
+-- server, then start() every controller. The shared input layer starts first.
 
 local ClientState = require(script.ClientState)
+local Input = require(script.Input)
+
+Input.init()
 
 local Controllers = script.Controllers
 

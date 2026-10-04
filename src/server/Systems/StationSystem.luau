@@ -9,7 +9,12 @@ local StationSystem = {}
 
 local stations: { [Player]: StationBuilder.Station } = {}
 
--- Where the player stands when they warp to their own station.
+-- The player's own station: spawn point, ship berth and docking zone.
+function StationSystem.getStation(player: Player): StationBuilder.Station?
+	return stations[player]
+end
+
+-- Where the player floats when they return to their own station.
 function StationSystem.getSpawn(player: Player): CFrame?
 	local station = stations[player]
 	return if station then station.spawn else nil
@@ -21,6 +26,7 @@ function StationSystem.start()
 			region.model,
 			region.origin,
 			region.owner.DisplayName,
+			region.owner.UserId,
 			region.color
 		)
 	end)

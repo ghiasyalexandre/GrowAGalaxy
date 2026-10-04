@@ -71,6 +71,24 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(broken), "has no id"))
 		end)
 
+		T.test("catches a spacesuit faster than a ship", function()
+			local broken = T.deepCopy(Config)
+			broken.Movement.SUIT_MAX_SPEED = 500
+			T.truthy(hasProblem(ConfigCheck.run(broken), "spacesuit is not slower"))
+		end)
+
+		T.test("catches a flight area smaller than the regions", function()
+			local broken = T.deepCopy(Config)
+			broken.Movement.FLIGHT_BOUNDS_RADIUS = 3500
+			T.truthy(hasProblem(ConfigCheck.run(broken), "FLIGHT_BOUNDS_RADIUS"))
+		end)
+
+		T.test("catches a flight area that reaches the Earth", function()
+			local broken = T.deepCopy(Config)
+			broken.Movement.FLIGHT_BOUNDS_HEIGHT = 2500
+			T.truthy(hasProblem(ConfigCheck.run(broken), "Earth backdrop"))
+		end)
+
 		T.test("catches a paid ship with no earnable path", function()
 			local broken = T.deepCopy(Config)
 			broken.Ships.BY_ID.CrystalExplorer.earn = nil

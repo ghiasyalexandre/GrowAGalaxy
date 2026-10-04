@@ -5,6 +5,7 @@
 
 return {
 	World = require(script.World),
+	Movement = require(script.Movement),
 	Materials = require(script.Materials),
 	Zones = require(script.Zones),
 	Ships = require(script.Ships),

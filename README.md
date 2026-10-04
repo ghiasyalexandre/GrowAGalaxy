@@ -9,8 +9,8 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 
 | Stage | Status |
 |---|---|
-| 1. Foundation: config, save data, ISS hub, galaxy regions | [In review](docs/stage-1-foundation.md) |
-| 2. Movement and ships | Not started |
+| 1. Foundation: config, save data, ISS hub, galaxy regions | [Merged](docs/stage-1-foundation.md) |
+| 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking | [In review](docs/stage-2-movement-ships.md) |
 | 3. Mining | Not started |
 | 4. Galaxy construction | Not started |
 | 5. Progression | Not started |
@@ -44,9 +44,9 @@ needs a playtest in Studio.
 | `src/shared/Config` | ReplicatedStorage/Shared/Config | Every tunable number (prices, stats, recipes, sizes) |
 | `src/shared/Logic` | ReplicatedStorage/Shared/Logic | Pure rules shared by client and server, unit-tested |
 | `src/server` | ServerScriptService/Server | Server bootstrap, Systems, world builders |
-| `src/client` | StarterPlayer/StarterPlayerScripts/Client | Client bootstrap, state, UI controllers |
+| `src/client` | StarterPlayer/StarterPlayerScripts/Client | Client bootstrap, state, input layer, controllers |
 | `vendor` | ServerScriptService/Vendor | ProfileStore (Apache-2.0, by loleris) |
-| `tests` | not synced | Lune unit tests for `src/shared/Logic` |
+| `tests` | not synced | Lune unit tests for `src/shared/Logic`, and the world smoke test |
 
 Remotes are declared in `default.project.json` under ReplicatedStorage/Remotes and used only
 through `src/shared/Net.luau`.
