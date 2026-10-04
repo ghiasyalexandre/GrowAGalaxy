@@ -33,6 +33,7 @@ return function(T, Loader)
 				shipsLaunched = true,
 				collections = true,
 				starUpgrades = true,
+				planetsBought = true,
 			}
 			for id, def in Config.Achievements.BY_ID do
 				if def.enabled then

@@ -8,12 +8,13 @@
 
 export type Vec3 = { x: number, y: number, z: number }
 
--- A placed star. Its planets, orbits and production come from its level and
--- Config.Stars, so only this is saved.
+-- A placed star and the planets bought for it. Orbits and production come
+-- from Config.Stars and Config.Planets, so only this is saved.
 export type StarRecord = {
 	typeId: string, -- Config.Stars id
 	level: number,
 	pos: Vec3, -- position relative to the region origin
+	planets: { [string]: string }, -- orbit slot ("1".."4") -> Config.Planets id
 	appearance: string?,
 }
 

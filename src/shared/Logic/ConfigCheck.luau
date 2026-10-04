@@ -247,68 +247,97 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
-	-- Stars: every level's planets fit inside SYSTEM_RADIUS and clear of the
-	-- star, costs are positive, production never drops.
+	-- Stars and planets: a clean tier ladder each, planets fit their orbit
+	-- slots inside SYSTEM_RADIUS and clear of the largest star, prices and
+	-- production rise with tier, levels only improve.
 	local stars = config.Stars
+	local planets = config.Planets
 	checkOrder("Stars", stars.ORDER, stars.BY_ID)
-	if stars.BY_ID[stars.DEFAULT_TYPE] == nil or not stars.BY_ID[stars.DEFAULT_TYPE].enabled then
-		fail("Stars: DEFAULT_TYPE must exist and be enabled")
+	checkOrder("Planets", planets.ORDER, planets.BY_ID)
+	local defaultStar = stars.BY_ID[stars.DEFAULT_TYPE]
+	if defaultStar == nil or not defaultStar.enabled or defaultStar.tier ~= 1 then
+		fail("Stars: DEFAULT_TYPE must exist, be enabled and be tier 1")
+	elseif config.Economy.STARTING_STARDUST < defaultStar.cost then
+		fail("Economy: STARTING_STARDUST doesn't cover the first star")
 	end
 	if stars.PRICE_GROWTH < 1 then
 		fail("Stars: PRICE_GROWTH must be at least 1")
 	end
-	local firstStar = stars.BY_ID[stars.DEFAULT_TYPE]
-	if firstStar and config.Economy.STARTING_STARDUST < firstStar.cost then
-		fail("Economy: STARTING_STARDUST doesn't cover the first star")
+	local function checkLadder(name: string, order: { string }, byId: { [string]: any })
+		local previous: any = nil
+		for index, id in order do
+			local def = byId[id]
+			if def == nil then
+				continue
+			end
+			if def.tier ~= index then
+				fail(`{name} {id}: tier must be {index} (its place in ORDER)`)
+			end
+			if def.cost <= 0 or def.income <= 0 then
+				fail(`{name} {id}: cost and income must be positive`)
+			end
+			if previous and (def.cost <= previous.cost or def.income <= previous.income) then
+				fail(`{name} {id}: must cost and earn more than {previous.id}`)
+			end
+			previous = def
+		end
 	end
+	checkLadder("Star", stars.ORDER, stars.BY_ID)
+	checkLadder("Planet", planets.ORDER, planets.BY_ID)
+	local previousLevel: any = nil
+	for index, level in stars.LEVELS do
+		if (index == 1) ~= (level.upgradeShare == nil) then
+			fail(`Star level {index}: only level 1 may (and must) have no upgradeShare`)
+		end
+		if level.slots < 1 or level.slots > #stars.SLOTS then
+			fail(`Star level {index}: slots must be 1..{#stars.SLOTS}`)
+		end
+		if
+			previousLevel
+			and (
+				level.incomeMultiplier < previousLevel.incomeMultiplier
+				or level.slots < previousLevel.slots
+				or level.radiusScale < previousLevel.radiusScale
+			)
+		then
+			fail(`Star level {index}: must not be worse than level {index - 1}`)
+		end
+		previousLevel = level
+	end
+	local maxScale = stars.LEVELS[#stars.LEVELS].radiusScale
 	local largestStar = 0
-	for typeId, def in stars.BY_ID do
-		if def.cost <= 0 then
-			fail(`Star {typeId}: cost must be positive`)
+	for id, def in stars.BY_ID do
+		local radius = def.radius * maxScale
+		if radius > galaxy.STAR_MAX_RADIUS then
+			fail(`Star {id}: at its top level it is bigger than Galaxy.STAR_MAX_RADIUS`)
 		end
-		local previous = -1
-		local used: { [number]: boolean } = {}
-		for index, levelDef in def.levels do
-			local where = `Star {typeId} level {index}`
-			if (index == 1) ~= (levelDef.upgradeCost == nil) then
-				fail(`{where}: only level 1 may (and must) have no upgradeCost`)
-			end
-			if levelDef.upgradeCost and levelDef.upgradeCost <= 0 then
-				fail(`{where}: upgradeCost must be positive`)
-			end
-			if levelDef.income < previous then
-				fail(`{where}: income goes down`)
-			end
-			previous = levelDef.income
-			if levelDef.starRadius <= 0 or levelDef.starRadius > galaxy.STAR_MAX_RADIUS then
-				fail(`{where}: starRadius must be within 0..{galaxy.STAR_MAX_RADIUS}`)
-			end
-			largestStar = math.max(largestStar, levelDef.starRadius)
-			if levelDef.planet then
-				if stars.PLANETS[levelDef.planet] == nil then
-					fail(`{where}: unknown planet {levelDef.planet}`)
-				elseif used[levelDef.planet] then
-					fail(`{where}: planet {levelDef.planet} is added twice`)
-				end
-				used[levelDef.planet] = true
-			end
-		end
+		largestStar = math.max(largestStar, radius)
 	end
-	for index, planet in stars.PLANETS do
-		local where = `Stars planet {index}`
-		if planet.orbit + planet.radius > galaxy.SYSTEM_RADIUS then
+	local largestPlanet = 0
+	for id, def in planets.BY_ID do
+		if def.radius <= 0 or def.radius > galaxy.PLANET_MAX_RADIUS then
+			fail(`Planet {id}: radius must be within 0..{galaxy.PLANET_MAX_RADIUS}`)
+		end
+		largestPlanet = math.max(largestPlanet, def.radius)
+	end
+	for index, slot in stars.SLOTS do
+		local where = `Stars slot {index}`
+		if slot.orbit + largestPlanet > galaxy.SYSTEM_RADIUS then
 			fail(`{where}: orbit reaches past Galaxy.SYSTEM_RADIUS`)
 		end
-		if planet.orbit - planet.radius <= largestStar then
-			fail(`{where}: orbit touches the star`)
+		if slot.orbit - largestPlanet <= largestStar then
+			fail(`{where}: a big planet would touch the biggest star`)
 		end
-		if planet.period <= 0 then
+		if slot.period <= 0 then
 			fail(`{where}: period must be positive`)
 		end
-		local nextPlanet = stars.PLANETS[index + 1]
-		if nextPlanet and nextPlanet.orbit - nextPlanet.radius <= planet.orbit + planet.radius then
-			fail(`{where}: orbit overlaps the next planet's`)
+		local nextSlot = stars.SLOTS[index + 1]
+		if nextSlot and nextSlot.orbit - slot.orbit <= 2 * largestPlanet then
+			fail(`{where}: too close to the next orbit`)
 		end
+	end
+	if planets.UPGRADE_CREDIT < 0 or planets.UPGRADE_CREDIT >= 1 then
+		fail("Planets: UPGRADE_CREDIT must be from 0 up to 1")
 	end
 
 	-- The flight area must hold every region at its largest and stay clear of

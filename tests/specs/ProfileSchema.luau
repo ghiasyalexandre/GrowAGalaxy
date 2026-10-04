@@ -87,7 +87,12 @@ return function(T, Loader)
 					expansion = 99,
 					nextId = 2,
 					stars = {
-						s1 = { typeId = "YellowDwarf", level = 2, pos = { x = 0, y = 10, z = 500 } },
+						s1 = {
+							typeId = "YellowDwarf",
+							level = 2,
+							pos = { x = 0, y = 10, z = 500 },
+							planets = { ["1"] = "Barren", ["9"] = "Ocean", [2] = "Desert" },
+						},
 						s4 = { typeId = "RetiredStar", level = 1, pos = { x = 1, y = 2, z = 3 } },
 						s9 = {
 							typeId = "YellowDwarf",
@@ -102,7 +107,11 @@ return function(T, Loader)
 			local galaxy = data.galaxy
 			T.equal(galaxy.expansion, #Config.Galaxy.EXPANSIONS, "expansion clamped")
 			T.truthy(galaxy.stars.s1)
+			T.equal(galaxy.stars.s1.planets["1"], "Barren")
+			T.equal(galaxy.stars.s1.planets["9"], nil, "slot out of range")
+			T.equal(galaxy.stars.s1.planets["2"], nil, "number key dropped")
 			T.truthy(galaxy.stars.s4, "unknown type kept")
+			T.equal(type(galaxy.stars.s4.planets), "table", "planets filled in")
 			T.equal(galaxy.stars.s9, nil, "bad position")
 			T.equal(galaxy.stars.s7, nil, "bad level")
 			T.equal(galaxy.nextId, 10, "nextId moves past every existing id")
