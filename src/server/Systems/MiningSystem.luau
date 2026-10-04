@@ -1,12 +1,12 @@
 --!strict
--- Asteroid mining with ship beams. BeamSystem calls step() every tick for
--- each piloted ship whose beam is firing, and stop() otherwise.
+-- Asteroid mining with ship lasers. BeamSystem calls shot() for every shot a
+-- pilot fires, and refresh() every tick.
 --
--- The server casts its own ray from the ship's muzzle along the beam's aim
+-- The server casts its own ray from the ship's muzzle along the shot's aim
 -- (already clamped to the aim cone) out to the ship's beamRange. The ISS
 -- blocks it; ships and players don't. If it hits an asteroid the player can
--- reserve, extraction progress grows at the ship's beamPower on the weak
--- point, or a share of it on plain rock (Logic/MiningMath). At the asteroid's
+-- reserve, each shot adds Config.Beam.SHOT_POWER seconds of the ship's
+-- beamPower on the weak point, or a share of it on plain rock (Logic/MiningMath). At the asteroid's
 -- durability it breaks and pays Stardust exactly once: AsteroidSystem marks
 -- it broken before anything is paid, and a broken asteroid can't be hit.
 --
@@ -34,11 +34,14 @@ local CURRENCY = Config.Economy.CURRENCY_NAME
 
 local MiningSystem = {}
 
+local SHOT_POWER = Config.Beam.SHOT_POWER
+
 local rayParams: RaycastParams? = nil
 local lastBusyNotice: { [Player]: number } = {}
 -- The asteroid each player last extracted, and the one they last overheated on.
 local currentTarget: { [Player]: number } = {}
 local overheatedOn: { [Player]: number } = {}
+local lastHitAt: { [Player]: number } = {}
 
 -- Asteroids and the shared world (the ISS) stop the beam; ships, players and
 -- region boundaries don't.
@@ -104,38 +107,41 @@ local function payOut(player: Player, asteroid: AsteroidSystem.Asteroid)
 	)
 end
 
--- One tick of a firing beam. `aim` is the beam direction in ship space.
-function MiningSystem.step(
-	player: Player,
-	model: Model,
-	info: Types.ShipInfo,
-	aim: Vector3,
-	dt: number
-)
+-- Clears the readout once the player hasn't hit their asteroid for as long
+-- as its reservation lasts (by then its progress is gone anyway).
+function MiningSystem.refresh(player: Player, model: Model)
+	local last = lastHitAt[player]
+	if last and os.clock() - last >= A.RESERVATION_TIMEOUT then
+		lastHitAt[player] = nil
+		MiningSystem.stop(model)
+	end
+end
+
+-- One shot. `aim` is its direction in ship space. A miss leaves the readout
+-- (and the reservation) alone, so a stray shot doesn't cost progress.
+function MiningSystem.shot(player: Player, model: Model, info: Types.ShipInfo, aim: Vector3)
 	local hull = model.PrimaryPart
 	local muzzle = hull and hull:FindFirstChild("BeamOrigin")
 	if hull == nil or muzzle == nil or not muzzle:IsA("Attachment") then
-		MiningSystem.stop(model)
 		return
 	end
 	local direction = hull.CFrame:VectorToWorldSpace(aim) * info.beamRange
 	local hit = Workspace:Raycast(muzzle.WorldPosition, direction, params())
 	local asteroid = if hit then AsteroidSystem.fromPart(hit.Instance) else nil
 	if hit == nil or asteroid == nil then
-		MiningSystem.stop(model)
 		return
 	end
 
 	local now = os.clock()
 	if not AsteroidSystem.reserve(asteroid, player, now) then
-		MiningSystem.stop(model)
 		busy(player, now)
 		return
 	end
+	lastHitAt[player] = now
 
 	currentTarget[player] = asteroid.id
 	local onWeakPoint = hit.Instance == asteroid.weakPoint
-	local gained = MiningMath.rate(info.beamPower, onWeakPoint, A.ROCK_EFFICIENCY) * dt
+	local gained = MiningMath.rate(info.beamPower, onWeakPoint, A.ROCK_EFFICIENCY) * SHOT_POWER
 	asteroid.progress += gained
 	if onWeakPoint then
 		asteroid.weakProgress += gained
@@ -165,6 +171,7 @@ function MiningSystem.start()
 		lastBusyNotice[player] = nil
 		currentTarget[player] = nil
 		overheatedOn[player] = nil
+		lastHitAt[player] = nil
 	end)
 end
 

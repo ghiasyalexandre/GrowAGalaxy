@@ -13,6 +13,18 @@ return function(T, Loader)
 	end
 
 	T.describe("BeamMath", function()
+		T.test("each shot adds heat and the last one overheats at capacity", function()
+			local heat, overheated = 0, false
+			for _ = 1, 11 do
+				heat, overheated = BeamMath.shotHeat(heat, 100, 9)
+			end
+			T.near(heat, 99)
+			T.falsy(overheated)
+			heat, overheated = BeamMath.shotHeat(heat, 100, 9)
+			T.equal(heat, 100)
+			T.truthy(overheated)
+		end)
+
 		T.test("firing heats the beam until it overheats at capacity", function()
 			local heat, overheated = 0, false
 			for _ = 1, 40 do
