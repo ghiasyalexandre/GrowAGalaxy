@@ -96,6 +96,7 @@ local function infoFor(profile: Types.Profile): Types.ShipInfo
 		acceleration = stats.acceleration,
 		braking = stats.braking,
 		turnRate = stats.turnRate,
+		beamPower = stats.beamPower,
 		beamRange = stats.beamRange,
 		heatCapacity = stats.heatCapacity,
 		coolingRate = stats.coolingRate,

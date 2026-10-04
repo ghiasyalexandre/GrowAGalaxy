@@ -8,7 +8,7 @@ return function(T, Loader)
 		T.test("default profile owns and flies the starter ship", function()
 			local profile = ProfileSchema.default()
 			T.equal(profile.schemaVersion, ProfileSchema.VERSION)
-			T.equal(profile.credits, Config.Economy.STARTING_CREDITS)
+			T.equal(profile.stardust, Config.Economy.STARTING_STARDUST)
 			T.truthy(profile.ownedShips[starter])
 			T.equal(profile.activeShip, starter)
 			T.truthy(profile.unlockedZones[Config.Zones.STARTER_ZONE])
@@ -27,29 +27,29 @@ return function(T, Loader)
 			local data = {}
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.schemaVersion, ProfileSchema.VERSION)
-			T.equal(data.credits, 0)
+			T.equal(data.stardust, 0)
 			T.truthy(data.ownedShips[starter])
 			T.equal(type(data.galaxy.systems), "table")
 			T.equal(data.settings.stabilization, true)
 		end)
 
 		T.test("refuses data from a newer game version and leaves it untouched", function()
-			local data = { schemaVersion = ProfileSchema.VERSION + 1, credits = 77 }
+			local data = { schemaVersion = ProfileSchema.VERSION + 1, stardust = 77 }
 			local ok, reason = ProfileSchema.normalize(data)
 			T.falsy(ok)
 			T.truthy(reason)
-			T.equal(data.credits, 77)
+			T.equal(data.stardust, 77)
 			T.equal(data.ownedShips, nil)
 		end)
 
 		T.test("repairs bad numbers", function()
 			local data = {
-				credits = -5,
+				stardust = -5,
 				uncollected = 0 / 0,
 				materials = { Iron = 12.7, Silicate = -3, Ice = "lots", [5] = 3 },
 			}
 			T.truthy(ProfileSchema.normalize(data))
-			T.equal(data.credits, 0)
+			T.equal(data.stardust, 0)
 			T.equal(data.uncollected, 0)
 			T.equal(data.materials.Iron, 12)
 			T.equal(data.materials.Silicate, nil)
@@ -123,6 +123,27 @@ return function(T, Loader)
 			T.equal(galaxy.nextId, 10, "nextId moves past every existing id")
 		end)
 
+		T.test("migrates version 1 Credits to Stardust without losing the balance", function()
+			local data = { schemaVersion = 1, credits = 1234, uncollected = 5.5 }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.schemaVersion, ProfileSchema.VERSION)
+			T.equal(data.stardust, 1234)
+			T.equal(data.credits, nil, "old field removed")
+			T.near(data.uncollected, 5.5)
+		end)
+
+		T.test("version 1 Credits win over a template-filled Stardust default", function()
+			local data = { schemaVersion = 1, credits = 900, stardust = 0 }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.stardust, 900)
+		end)
+
+		T.test("a version 2 profile keeps its Stardust and ignores stray credits", function()
+			local data = { schemaVersion = 2, stardust = 50, credits = 999 }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.stardust, 50)
+		end)
+
 		T.test("keeps only the most recent purchase receipts", function()
 			local receipts = {}
 			for i = 1, 60 do
@@ -137,9 +158,9 @@ return function(T, Loader)
 
 		T.test("view exposes only client-safe fields", function()
 			local profile = ProfileSchema.default()
-			profile.credits = 42
+			profile.stardust = 42
 			local view = ProfileSchema.view(profile)
-			T.equal(view.credits, 42)
+			T.equal(view.stardust, 42)
 			T.equal(view.expansion, 1)
 			T.equal((view :: any).receipts, nil)
 		end)

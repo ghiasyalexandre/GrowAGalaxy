@@ -1,15 +1,15 @@
 --!strict
 -- Celestial body types and their upgrade levels.
 --
--- Stars and planets produce Credits per second. Moons add a percentage bonus
+-- Stars and planets produce Stardust per second. Moons add a percentage bonus
 -- to their parent planet's income. Visual radii are capped by Config.Galaxy so
 -- upgrades can never make bodies collide.
 
-export type Cost = { credits: number, materials: { [string]: number } }
+export type Cost = { stardust: number, materials: { [string]: number } }
 
 export type LevelDef = {
 	name: string,
-	income: number, -- Credits per second (stars and planets)
+	income: number, -- Stardust per second (stars and planets)
 	moonBonus: number, -- moons only: fraction added to the parent planet's income
 	planetSlots: number, -- stars only: orbital slots this level supports
 	moonSlots: number, -- planets only: moon slots this level supports
@@ -54,13 +54,13 @@ local BY_ID: { [string]: CelestialDef } = {
 				income = 2.5,
 				planetSlots = 3,
 				radius = 23,
-				upgradeCost = { credits = 400, materials = { Iron = 40, Silicate = 40 } },
+				upgradeCost = { stardust = 400, materials = { Iron = 40, Silicate = 40 } },
 			}),
 			level("Radiant Star", {
 				income = 5,
 				planetSlots = 4,
 				radius = 28,
-				upgradeCost = { credits = 2500, materials = { Iron = 150, Silicate = 150 } },
+				upgradeCost = { stardust = 2500, materials = { Iron = 150, Silicate = 150 } },
 			}),
 		},
 	},
@@ -76,19 +76,19 @@ local BY_ID: { [string]: CelestialDef } = {
 				income = 1.2,
 				moonSlots = 1,
 				radius = 5,
-				upgradeCost = { credits = 150, materials = { Iron = 20, Silicate = 30 } },
+				upgradeCost = { stardust = 150, materials = { Iron = 20, Silicate = 30 } },
 			}),
 			level("Established", {
 				income = 2.5,
 				moonSlots = 2,
 				radius = 6,
-				upgradeCost = { credits = 900, materials = { Iron = 60, Silicate = 80 } },
+				upgradeCost = { stardust = 900, materials = { Iron = 60, Silicate = 80 } },
 			}),
 			level("Advanced", {
 				income = 5,
 				moonSlots = 2,
 				radius = 7,
-				upgradeCost = { credits = 4000, materials = { Iron = 200, Silicate = 250 } },
+				upgradeCost = { stardust = 4000, materials = { Iron = 200, Silicate = 250 } },
 			}),
 		},
 	},
@@ -104,13 +104,13 @@ local BY_ID: { [string]: CelestialDef } = {
 				income = 1.8,
 				moonSlots = 1,
 				radius = 5.5,
-				upgradeCost = { credits = 300, materials = { Ice = 40, Silicate = 20 } },
+				upgradeCost = { stardust = 300, materials = { Ice = 40, Silicate = 20 } },
 			}),
 			level("Glacial", {
 				income = 3.5,
 				moonSlots = 2,
 				radius = 6.5,
-				upgradeCost = { credits = 1500, materials = { Ice = 120, Iron = 40 } },
+				upgradeCost = { stardust = 1500, materials = { Ice = 120, Iron = 40 } },
 			}),
 		},
 	},
@@ -126,13 +126,13 @@ local BY_ID: { [string]: CelestialDef } = {
 				income = 3.5,
 				moonSlots = 2,
 				radius = 6,
-				upgradeCost = { credits = 2500, materials = { Crystal = 60, Silicate = 60 } },
+				upgradeCost = { stardust = 2500, materials = { Crystal = 60, Silicate = 60 } },
 			}),
 			level("Prismatic", {
 				income = 7,
 				moonSlots = 2,
 				radius = 7,
-				upgradeCost = { credits = 9000, materials = { Crystal = 180, Iron = 100 } },
+				upgradeCost = { stardust = 9000, materials = { Crystal = 180, Iron = 100 } },
 			}),
 		},
 	},
@@ -147,12 +147,12 @@ local BY_ID: { [string]: CelestialDef } = {
 			level("Cratered", {
 				moonBonus = 0.15,
 				radius = 1.8,
-				upgradeCost = { credits = 200, materials = { Iron = 15, Silicate = 20 } },
+				upgradeCost = { stardust = 200, materials = { Iron = 15, Silicate = 20 } },
 			}),
 			level("Luminous", {
 				moonBonus = 0.25,
 				radius = 2,
-				upgradeCost = { credits = 1200, materials = { Iron = 60, Silicate = 60 } },
+				upgradeCost = { stardust = 1200, materials = { Iron = 60, Silicate = 60 } },
 			}),
 		},
 	},

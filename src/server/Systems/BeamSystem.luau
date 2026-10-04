@@ -2,8 +2,8 @@
 -- Ship mining lasers. The pilot's client says when the beam starts and stops
 -- and where it points; this system decides whether it may fire, tracks heat
 -- and overheating, and publishes the result on the ship model so every
--- client draws the same beam. Stage 2 has no asteroids, so a beam doesn't
--- extract anything yet; Stage 3 hooks mining in here.
+-- client draws the same beam. While it fires, MiningSystem extracts
+-- whatever asteroid it hits.
 --
 -- BeamInput (client -> server):
 --   "start", aim   start firing (only while piloting)
@@ -30,6 +30,7 @@ local RunService = game:GetService("RunService")
 
 local BeamMath = require(ReplicatedStorage.Shared.Logic.BeamMath)
 local Config = require(ReplicatedStorage.Shared.Config)
+local MiningSystem = require(script.Parent.MiningSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
@@ -86,6 +87,7 @@ end
 local function clear(model: Model?)
 	if model and model.Parent then
 		model:SetAttribute("BeamOn", false)
+		MiningSystem.stop(model)
 	end
 end
 
@@ -151,10 +153,16 @@ local function tick(dt: number)
 		)
 		if state.overheated and not wasOverheated then
 			state.firing = false
+			MiningSystem.noteOverheat(player)
 			Notify.send(player, "Laser overheated. It fires again once it cools down.")
 		end
-		if model then
+		if model and info then
 			publish(model, state)
+			if state.firing and not state.overheated then
+				MiningSystem.step(player, model, info, state.aim, dt)
+			else
+				MiningSystem.stop(model)
+			end
 		elseif state.heat <= 0 then
 			states[player] = nil
 		end

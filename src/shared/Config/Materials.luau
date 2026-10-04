@@ -1,6 +1,6 @@
 --!strict
--- Crafting materials gathered by mining. Credits are a separate currency
--- (see Config.Economy) and never appear here.
+-- Crafting materials. Deferred: the revised MVP uses Stardust only, so no
+-- system grants or spends materials yet. Kept for a possible later crafting layer.
 
 export type MaterialDef = {
 	id: string,

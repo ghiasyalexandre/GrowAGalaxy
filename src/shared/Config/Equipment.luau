@@ -2,7 +2,7 @@
 -- Ship equipment. Each item fits one slot and multiplies ship stats. Equipment
 -- is owned by the player and can be fitted to any owned ship.
 
-export type Cost = { credits: number, materials: { [string]: number } }
+export type Cost = { stardust: number, materials: { [string]: number } }
 
 export type EquipmentDef = {
 	id: string,
@@ -30,7 +30,7 @@ local BY_ID: { [string]: EquipmentDef } = {
 		slot = "Beam",
 		enabled = true,
 		modifiers = { beamPower = 1.25 },
-		cost = { credits = 600, materials = { Iron = 60, Silicate = 30 } },
+		cost = { stardust = 600, materials = { Iron = 60, Silicate = 30 } },
 	},
 	BeamMk3 = {
 		id = "BeamMk3",
@@ -38,7 +38,7 @@ local BY_ID: { [string]: EquipmentDef } = {
 		slot = "Beam",
 		enabled = false,
 		modifiers = { beamPower = 1.5, beamRange = 1.1 },
-		cost = { credits = 6000, materials = { Iron = 200, Crystal = 60 } },
+		cost = { stardust = 6000, materials = { Iron = 200, Crystal = 60 } },
 	},
 	ThrustersMk2 = {
 		id = "ThrustersMk2",
@@ -46,7 +46,7 @@ local BY_ID: { [string]: EquipmentDef } = {
 		slot = "Thrusters",
 		enabled = true,
 		modifiers = { maxSpeed = 1.15, acceleration = 1.2 },
-		cost = { credits = 500, materials = { Iron = 50, Silicate = 40 } },
+		cost = { stardust = 500, materials = { Iron = 50, Silicate = 40 } },
 	},
 	CoolingMk2 = {
 		id = "CoolingMk2",
@@ -54,7 +54,7 @@ local BY_ID: { [string]: EquipmentDef } = {
 		slot = "Cooling",
 		enabled = true,
 		modifiers = { coolingRate = 1.3, heatCapacity = 1.2 },
-		cost = { credits = 500, materials = { Iron = 40, Silicate = 50 } },
+		cost = { stardust = 500, materials = { Iron = 40, Silicate = 50 } },
 	},
 	CargoMk2 = {
 		id = "CargoMk2",
@@ -62,7 +62,7 @@ local BY_ID: { [string]: EquipmentDef } = {
 		slot = "Cargo",
 		enabled = true,
 		modifiers = { cargoCapacity = 1.4 },
-		cost = { credits = 700, materials = { Iron = 80, Silicate = 40 } },
+		cost = { stardust = 700, materials = { Iron = 80, Silicate = 40 } },
 	},
 }
 

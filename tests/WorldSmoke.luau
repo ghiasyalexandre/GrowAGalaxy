@@ -1,7 +1,8 @@
 -- Smoke test for the server's world builders, run outside Studio.
 --
 -- Loads the place built by Rojo with Lune's Roblox library, runs WorldSystem.init,
--- builds every region and station, and puts a ship on every berth. Then checks
+-- builds every region and station, puts a ship on every berth and builds
+-- sample asteroids of every size. Then checks
 -- part budgets, the markers and tags other systems rely on, and that berths,
 -- launch paths and exit points are clear of solid parts. This catches runtime
 -- errors and layout mistakes in builder code; it does not simulate physics,
@@ -389,6 +390,54 @@ check(
 		and math.max(-own.lo.z, own.hi.z) * 2 <= box.Z,
 	"the ship fits inside ShipBuilder.BERTH_BOX"
 )
+
+-- Asteroids: one of every size, built the way AsteroidSystem builds them.
+print("Asteroids")
+local AsteroidBuilder = requireModule(server.World.AsteroidBuilder)
+local AsteroidConfig = requireModule(game:GetService("ReplicatedStorage").Shared.Config.Asteroids)
+local seed = 0
+local function rng()
+	seed = (seed * 1103515245 + 12345) % 2147483648
+	return seed / 2147483648
+end
+for index, sizeId in AsteroidConfig.SIZE_ORDER do
+	local size = AsteroidConfig.SIZES[sizeId]
+	for trial = 1, 20 do
+		local built =
+			AsteroidBuilder.build(index * 100 + trial, size, roblox.Vector3.new(0, 0, 0), rng)
+		local model, rock, weak = built.model, built.rock, built.weakPoint
+		local ok = model.PrimaryPart == rock
+			and model.ModelStreamingMode == roblox.Enum.ModelStreamingMode.Persistent
+			and #built.parts == 4
+			and not weak.CanCollide
+			and weak.CanQuery
+			and weak.Material == roblox.Enum.Material.Neon
+			and model:GetAttribute("Size") == sizeId
+		-- The weak point must poke out of the rock and not sit inside a lump.
+		local exposed = weak.CFrame.Position.Magnitude + weak.Size.X / 2 > rock.Size.X / 2
+		for _, part in built.parts do
+			if part.Name:match("^Lump") then
+				local gap = (weak.CFrame.Position - part.CFrame.Position).Magnitude
+				exposed = exposed and gap > part.Size.X / 2
+			end
+		end
+		-- Placement treats an asteroid as 1.4 x its radius (AsteroidSystem EXTENT).
+		local extent = 0
+		for _, part in built.parts do
+			extent = math.max(extent, part.CFrame.Position.Magnitude + part.Size.X / 2)
+		end
+		if trial == 1 or not (ok and exposed and extent <= size.radius * 1.4) then
+			check(ok, `{sizeId} asteroid has its rock, lumps and a non-colliding neon weak point`)
+			check(exposed, `{sizeId} asteroid's weak point is exposed (trial {trial})`)
+			check(
+				extent <= size.radius * 1.4,
+				`{sizeId} asteroid fits its placement extent ({extent} vs {size.radius * 1.4})`
+			)
+		end
+		model:Destroy()
+	end
+end
+
 check(#warnings == 0, `no warnings ({table.concat(warnings, "; ")})`)
 
 print(`\n{failures} failed`)

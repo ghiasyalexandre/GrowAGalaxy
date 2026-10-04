@@ -57,10 +57,10 @@ export type Settings = {
 
 export type Profile = {
 	schemaVersion: number,
-	credits: number,
+	stardust: number,
 	uncollected: number,
-	materials: { [string]: number }, -- station storage
-	cargo: { [string]: number }, -- ship hold; capacity comes from the active ship
+	materials: { [string]: number }, -- deferred: no system uses materials yet
+	cargo: { [string]: number }, -- deferred: mining pays Stardust directly
 	ownedShips: { [string]: boolean },
 	activeShip: string,
 	loadouts: { [string]: Loadout }, -- per owned ship
@@ -79,7 +79,7 @@ export type Profile = {
 
 -- The part of a profile its owner's client is told about.
 export type ProfileView = {
-	credits: number,
+	stardust: number,
 	uncollected: number,
 	materials: { [string]: number },
 	cargo: { [string]: number },
@@ -102,6 +102,7 @@ export type ShipInfo = {
 	acceleration: number,
 	braking: number,
 	turnRate: number,
+	beamPower: number,
 	beamRange: number,
 	heatCapacity: number,
 	coolingRate: number,

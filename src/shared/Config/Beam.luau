@@ -1,7 +1,7 @@
 --!strict
 -- Ship mining laser. Range, heat capacity and cooling come from each ship's
--- stats (Config.Ships); these are the rules every beam shares. Stage 2 has
--- no asteroids yet, so the beam is seen but doesn't extract anything.
+-- stats (Config.Ships); these are the rules every beam shares. What the beam
+-- does to asteroids is in Config.Asteroids.
 
 local Beam = {
 	-- Heat added per second while the beam fires. A ship with heatCapacity

@@ -1,6 +1,6 @@
 --!strict
 -- Physical layout of one server: the ISS hub, the Earth backdrop, galaxy regions
--- and mining fields. Distances are in studs. Keep everything within ~6000 studs
+-- and personal stations. Distances are in studs. Keep everything within ~6000 studs
 -- of the origin so physics and rendering stay precise.
 
 export type Vec3 = { x: number, y: number, z: number }
@@ -22,11 +22,7 @@ local World = {
 	EARTH_CENTER = { x = 0, y = -3000, z = 0 } :: Vec3,
 	EARTH_DIAMETER = 2000, -- a single Part can be at most 2048 studs
 
-	-- Mining fields (built in Stage 3). Angle is measured around the ISS, in degrees;
-	-- 22.5 sits between region slots 1 and 2.
-	FIELDS = {
-		OuterBelt = { angle = 22.5, distance = 1500, height = -150, radius = 400 },
-	},
+	-- Asteroids are scattered across the whole flight area: see Config.Asteroids.
 
 	WARP_COOLDOWN = 2, -- seconds between navigation warps per player
 

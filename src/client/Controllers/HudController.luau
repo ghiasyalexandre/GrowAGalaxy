@@ -1,8 +1,8 @@
 --!strict
--- Heads-up display: Credits and the player's galaxy sector (top left), the
+-- Heads-up display: Stardust and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Station button (bottom left), and while flying a reticle and the laser's
--- heat gauge.
+-- Station button (bottom left), and while flying a reticle, the laser's
+-- heat gauge and, while the beam extracts an asteroid, the extraction bar.
 -- Display only; the server owns every value shown here.
 
 local Players = game:GetService("Players")
@@ -18,6 +18,8 @@ local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net")
 local READOUT_INTERVAL = 0.1
 local HEAT_COOL = Color3.fromRGB(255, 170, 70)
 local HEAT_HOT = Color3.fromRGB(255, 70, 50)
+local EXTRACT_ROCK = Color3.fromRGB(150, 200, 255)
+local EXTRACT_WEAK = Color3.fromRGB(127, 247, 255)
 
 local DOCK_HINTS: { [string]: string } = {
 	keyboard = "Docking area: press G to dock",
@@ -27,7 +29,7 @@ local DOCK_HINTS: { [string]: string } = {
 
 local HudController = {}
 
-local creditsLabel: TextLabel
+local stardustLabel: TextLabel
 local sectorLabel: TextLabel
 local hintLabel: TextLabel
 local readoutLabel: TextLabel
@@ -36,6 +38,9 @@ local recoverButton: TextButton
 local heatPanel: Frame
 local heatFill: Frame
 local heatLabel: TextLabel
+local extractPanel: Frame
+local extractFill: Frame
+local extractLabel: TextLabel
 
 local function makeLabel(parent: Instance, props: { [string]: any }): TextLabel
 	local label = Instance.new("TextLabel")
@@ -80,13 +85,13 @@ local function buildWallet(gui: ScreenGui)
 	padding.Parent = panel
 
 	makeLabel(panel, {
-		Name = "CreditsTitle",
+		Name = "StardustTitle",
 		Size = UDim2.fromScale(1, 0.25),
 		Text = Config.Economy.CURRENCY_NAME:upper(),
 		TextColor3 = Color3.fromRGB(255, 196, 92),
 	})
-	creditsLabel = makeLabel(panel, {
-		Name = "Credits",
+	stardustLabel = makeLabel(panel, {
+		Name = "Stardust",
 		Position = UDim2.fromScale(0, 0.25),
 		Size = UDim2.fromScale(1, 0.48),
 		Text = "...",
@@ -99,6 +104,47 @@ local function buildWallet(gui: ScreenGui)
 		Font = Enum.Font.Gotham,
 		TextColor3 = Color3.fromRGB(180, 190, 220),
 	})
+end
+
+-- A titled bar: the laser heat gauge and the extraction bar.
+local function makeGauge(
+	gui: ScreenGui,
+	name: string,
+	y: number,
+	title: string,
+	color: Color3
+): (Frame, Frame, TextLabel)
+	local panel = Instance.new("Frame")
+	panel.Name = name
+	panel.AnchorPoint = Vector2.new(0, 1)
+	panel.Position = UDim2.new(0, 16, 1, y)
+	panel.Size = UDim2.new(0, 220, 0, 30)
+	panel.BackgroundTransparency = 1
+	panel.Visible = false
+	panel.Parent = gui
+	local label = makeLabel(panel, {
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 14),
+		Text = title,
+		TextColor3 = color,
+		TextStrokeTransparency = 0.5,
+	})
+	local track = Instance.new("Frame")
+	track.Name = "Track"
+	track.Position = UDim2.new(0, 0, 0, 18)
+	track.Size = UDim2.new(1, 0, 0, 10)
+	track.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+	track.BackgroundTransparency = 0.25
+	track.Parent = panel
+	corner(track, 5)
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BackgroundColor3 = color
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	corner(fill, 5)
+	return panel, fill, label
 end
 
 local function build()
@@ -149,36 +195,9 @@ local function build()
 	padding.PaddingBottom = UDim.new(0, 8)
 	padding.Parent = recoverButton
 
-	heatPanel = Instance.new("Frame")
-	heatPanel.Name = "LaserHeat"
-	heatPanel.AnchorPoint = Vector2.new(0, 1)
-	heatPanel.Position = UDim2.new(0, 16, 1, -108)
-	heatPanel.Size = UDim2.new(0, 220, 0, 30)
-	heatPanel.BackgroundTransparency = 1
-	heatPanel.Visible = false
-	heatPanel.Parent = gui
-	heatLabel = makeLabel(heatPanel, {
-		Name = "Title",
-		Size = UDim2.new(1, 0, 0, 14),
-		Text = "LASER HEAT",
-		TextColor3 = HEAT_COOL,
-		TextStrokeTransparency = 0.5,
-	})
-	local track = Instance.new("Frame")
-	track.Name = "Track"
-	track.Position = UDim2.new(0, 0, 0, 18)
-	track.Size = UDim2.new(1, 0, 0, 10)
-	track.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-	track.BackgroundTransparency = 0.25
-	track.Parent = heatPanel
-	corner(track, 5)
-	heatFill = Instance.new("Frame")
-	heatFill.Name = "Fill"
-	heatFill.Size = UDim2.fromScale(0, 1)
-	heatFill.BackgroundColor3 = HEAT_COOL
-	heatFill.BorderSizePixel = 0
-	heatFill.Parent = track
-	corner(heatFill, 5)
+	heatPanel, heatFill, heatLabel = makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL)
+	extractPanel, extractFill, extractLabel =
+		makeGauge(gui, "Extraction", -142, "EXTRACTING", EXTRACT_ROCK)
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -195,9 +214,9 @@ local function build()
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 end
 
-local function refreshCredits()
+local function refreshStardust()
 	local profile = ClientState.profile
-	creditsLabel.Text = if profile then Format.abbreviate(profile.credits) else "..."
+	stardustLabel.Text = if profile then Format.abbreviate(profile.stardust) else "..."
 end
 
 local function refreshSector()
@@ -217,10 +236,32 @@ local function refreshHeat()
 	heatLabel.TextColor3 = if overheated then HEAT_HOT else HEAT_COOL
 end
 
+-- Extraction comes from the server too (MiningSystem's attributes).
+local function refreshExtraction(flying: boolean)
+	local ship = ClientState.ship
+	local target = if ship then ship:GetAttribute("MiningTarget") else nil
+	local active = flying and type(target) == "number" and target ~= 0
+	extractPanel.Visible = active
+	if not active or ship == nil then
+		return
+	end
+	local progress = ship:GetAttribute("MiningProgress")
+	local share = if type(progress) == "number" then math.clamp(progress, 0, 1) else 0
+	local weak = ship:GetAttribute("MiningWeak") == true
+	local color = if weak then EXTRACT_WEAK else EXTRACT_ROCK
+	extractFill.Size = UDim2.fromScale(share, 1)
+	extractFill.BackgroundColor3 = color
+	extractLabel.TextColor3 = color
+	extractLabel.Text = if weak
+		then "EXTRACTING: WEAK POINT"
+		else "EXTRACTING: AIM AT THE GLOWING WEAK POINT"
+end
+
 local function refreshReadout()
 	local flying = ClientState.mode == "ship"
 	reticle.Visible = flying
 	heatPanel.Visible = flying
+	refreshExtraction(flying)
 	if flying then
 		refreshHeat()
 		local flight = ClientState.flight
@@ -242,8 +283,8 @@ end
 function HudController.init()
 	build()
 	ClientState.profileChanged:Connect(function(field)
-		if field == "credits" or field == "*" then
-			refreshCredits()
+		if field == "stardust" or field == "*" then
+			refreshStardust()
 		end
 	end)
 	ClientState.regionsChanged:Connect(refreshSector)
@@ -257,7 +298,7 @@ function HudController.init()
 end
 
 function HudController.start()
-	refreshCredits()
+	refreshStardust()
 	refreshSector()
 	refreshReadout()
 	task.spawn(function()

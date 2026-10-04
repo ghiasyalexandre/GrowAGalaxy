@@ -5,7 +5,7 @@
 -- Rule (checked by Logic/ConfigCheck): tier N's requirements must be reachable
 -- under tier N-1's caps, so an upgrade never requires something only it unlocks.
 
-export type Cost = { credits: number, materials: { [string]: number } }
+export type Cost = { stardust: number, materials: { [string]: number } }
 
 export type TierRequirements = {
 	starLevel: number,
@@ -44,7 +44,7 @@ local TIERS: { TierDef } = {
 			planets = 2,
 			planetMinLevel = 2,
 			moons = 1,
-			cost = { credits = 1500, materials = { Iron = 120, Silicate = 120 } },
+			cost = { stardust = 1500, materials = { Iron = 120, Silicate = 120 } },
 		},
 	},
 	{
@@ -58,7 +58,7 @@ local TIERS: { TierDef } = {
 			planets = 3,
 			planetMinLevel = 3,
 			moons = 3,
-			cost = { credits = 8000, materials = { Iron = 400, Silicate = 400 } },
+			cost = { stardust = 8000, materials = { Iron = 400, Silicate = 400 } },
 		},
 	},
 }

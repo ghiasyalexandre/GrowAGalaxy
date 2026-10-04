@@ -103,27 +103,36 @@ function DataSystem.waitForProfile(player: Player, timeout: number?): Profile?
 	return DataSystem.getProfile(player)
 end
 
-function DataSystem.addCredits(player: Player, amount: number): boolean
+function DataSystem.addStardust(player: Player, amount: number): boolean
 	local profile = DataSystem.getProfile(player)
 	local whole = wholePositive(amount)
 	if profile == nil or whole == nil then
 		return false
 	end
-	profile.credits += whole
-	push(player, "credits", profile.credits)
+	profile.stardust += whole
+	push(player, "stardust", profile.stardust)
 	return true
 end
 
--- Deducts Credits only if the player can afford all of it.
-function DataSystem.spendCredits(player: Player, amount: number): boolean
+-- Deducts Stardust only if the player can afford all of it.
+function DataSystem.spendStardust(player: Player, amount: number): boolean
 	local profile = DataSystem.getProfile(player)
 	local whole = wholePositive(amount)
-	if profile == nil or whole == nil or profile.credits < whole then
+	if profile == nil or whole == nil or profile.stardust < whole then
 		return false
 	end
-	profile.credits -= whole
-	push(player, "credits", profile.credits)
+	profile.stardust -= whole
+	push(player, "stardust", profile.stardust)
 	return true
+end
+
+-- Adds to a lifetime stat (profile.stats), e.g. asteroids mined. Stats feed
+-- achievements. Not shown on the HUD, so nothing is pushed.
+function DataSystem.addStat(player: Player, stat: string, amount: number)
+	local profile = DataSystem.getProfile(player)
+	if profile and type(amount) == "number" and amount == amount and amount > 0 then
+		profile.stats[stat] = (profile.stats[stat] or 0) + amount
+	end
 end
 
 function DataSystem.init()

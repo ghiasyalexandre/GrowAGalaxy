@@ -142,7 +142,7 @@ function StationBuilder.build(
 		Build.console("HangarConsole", "Hangar\nLaunch your ship", at(-4, FLOOR_Y, 4), station)
 	Build.prompt(hangar, { action = "Launch ship", object = "Station hangar", launch = "Station" })
 	Build.console("DepositConsole", "Cargo deposit\n(Stage 4)", at(4, FLOOR_Y, 4), station)
-	Build.console("CollectConsole", "Collect Credits\n(Stage 5)", at(12, FLOOR_Y, 4), station)
+	Build.console("CollectConsole", "Collect Stardust\n(Stage 4)", at(12, FLOOR_Y, 4), station)
 
 	-- Berth pad off the -Z edge of the deck, joined by a short gangway. The
 	-- ship parks above it facing into the region. The docking zone covers the
