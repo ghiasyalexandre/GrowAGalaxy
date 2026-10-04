@@ -35,8 +35,8 @@ function ConfigCheck.run(config: any): { string }
 		if cost == nil then
 			return
 		end
-		if type(cost.credits) ~= "number" or cost.credits < 0 then
-			fail(`{where}: credits must be zero or more`)
+		if type(cost.stardust) ~= "number" or cost.stardust < 0 then
+			fail(`{where}: stardust must be zero or more`)
 		end
 		checkMaterials(where, cost.materials)
 	end
@@ -142,6 +142,129 @@ function ConfigCheck.run(config: any): { string }
 		if ship.productKey and config.Products.BY_KEY[ship.productKey] == nil then
 			fail(`Ship {shipId}: unknown product "{ship.productKey}"`)
 		end
+	end
+
+	-- Movement: the suit must be slower than every ship, and docking must be
+	-- possible below every ship's top speed.
+	local movement = config.Movement
+	for shipId, ship in config.Ships.BY_ID do
+		if movement.SUIT_MAX_SPEED >= ship.stats.maxSpeed then
+			fail(`Movement: the spacesuit is not slower than ship {shipId}`)
+		end
+		if movement.DOCK_MAX_SPEED >= ship.stats.maxSpeed then
+			fail(`Movement: DOCK_MAX_SPEED is not below ship {shipId}'s top speed`)
+		end
+	end
+	for _, name in { "SHIP_REVERSE_FACTOR", "SHIP_STRAFE_FACTOR", "SHIP_IDLE_BRAKE_FACTOR" } do
+		local value = movement[name]
+		if type(value) ~= "number" or value <= 0 or value > 1 then
+			fail(`Movement: {name} must be between 0 and 1`)
+		end
+	end
+
+	for _, name in { "SHIP_MAX_BANK_DEGREES", "SUIT_LEAN_DEGREES", "SUIT_ROLL_DEGREES" } do
+		local value = movement[name]
+		if type(value) ~= "number" or value < 0 or value >= 90 then
+			fail(`Movement: {name} must be from 0 up to 90`)
+		end
+	end
+	if movement.CAMERA_FOV + movement.CAMERA_FOV_BOOST > 120 then
+		fail("Movement: CAMERA_FOV plus CAMERA_FOV_BOOST is over Roblox's limit of 120")
+	end
+
+	-- Mining beam: every ship fires for a while before it overheats.
+	local beam = config.Beam
+	if type(beam.HEAT_PER_SECOND) ~= "number" or beam.HEAT_PER_SECOND <= 0 then
+		fail("Beam: HEAT_PER_SECOND must be a positive number")
+	else
+		for shipId, ship in config.Ships.BY_ID do
+			if ship.stats.heatCapacity / beam.HEAT_PER_SECOND < 2 then
+				fail(`Beam: ship {shipId} overheats in under 2 seconds`)
+			end
+		end
+	end
+	if beam.OVERHEAT_RESUME_SHARE <= 0 or beam.OVERHEAT_RESUME_SHARE >= 1 then
+		fail("Beam: OVERHEAT_RESUME_SHARE must be between 0 and 1")
+	end
+	if beam.AIM_CONE_DEGREES <= 0 or beam.AIM_CONE_DEGREES >= 90 then
+		fail("Beam: AIM_CONE_DEGREES must be between 0 and 90")
+	end
+
+	-- Asteroids: sizes make sense, the population caps agree, and the spawn
+	-- volume sits inside the flight area with room outside the ISS.
+	local asteroids = config.Asteroids
+	checkOrder("Asteroids sizes", asteroids.SIZE_ORDER, asteroids.SIZES)
+	local largestRock = 0
+	for sizeId, size in asteroids.SIZES do
+		local where = `Asteroid size {sizeId}`
+		for _, field in { "weight", "radius", "weakPointRadius", "durability", "reward" } do
+			if type(size[field]) ~= "number" or size[field] <= 0 then
+				fail(`{where}: {field} must be a positive number`)
+			end
+		end
+		if size.weakPointRadius >= size.radius then
+			fail(`{where}: the weak point must be smaller than the rock`)
+		end
+		largestRock = math.max(largestRock, size.radius)
+	end
+	if asteroids.TARGET_COUNT <= 0 or asteroids.TARGET_COUNT > asteroids.MAX_COUNT then
+		fail("Asteroids: TARGET_COUNT must be positive and at most MAX_COUNT")
+	end
+	if asteroids.CLUSTER_MIN < 1 or asteroids.CLUSTER_MAX < asteroids.CLUSTER_MIN then
+		fail("Asteroids: need 1 <= CLUSTER_MIN <= CLUSTER_MAX")
+	end
+	if asteroids.ISS_CLEARANCE + 2 * largestRock >= asteroids.MAX_DISTANCE then
+		fail("Asteroids: no room between ISS_CLEARANCE and MAX_DISTANCE")
+	end
+	if asteroids.MAX_DISTANCE >= movement.FLIGHT_BOUNDS_RADIUS then
+		fail("Asteroids: MAX_DISTANCE reaches past the flight area")
+	end
+	if asteroids.HEIGHT >= movement.FLIGHT_BOUNDS_HEIGHT then
+		fail("Asteroids: HEIGHT reaches past the flight area")
+	end
+	-- The station sits STATION_DISTANCE in front of its region, with its
+	-- berth and docking approach reaching about 100 studs further.
+	if asteroids.REGION_CLEARANCE < config.World.STATION_DISTANCE + 100 then
+		fail("Asteroids: REGION_CLEARANCE does not keep asteroids off personal stations")
+	end
+	if asteroids.ROCK_EFFICIENCY <= 0 or asteroids.ROCK_EFFICIENCY > 1 then
+		fail("Asteroids: ROCK_EFFICIENCY must be above 0 and at most 1")
+	end
+	for _, name in { "SCAN_RANGE", "SCAN_MARKERS", "SCAN_INTERVAL" } do
+		if type(asteroids[name]) ~= "number" or asteroids[name] <= 0 then
+			fail(`Asteroids: {name} must be a positive number`)
+		end
+	end
+	if asteroids.BREAK_SOUND ~= "" and not string.match(asteroids.BREAK_SOUND, "^rbxasset") then
+		fail("Asteroids: BREAK_SOUND must be an rbxasset:// or rbxassetid:// URI, or empty")
+	end
+	if asteroids.PRECISION_BONUS < 0 then
+		fail("Asteroids: PRECISION_BONUS must be zero or more")
+	end
+	for shipId, ship in config.Ships.BY_ID do
+		if ship.stats.beamRange <= 2 * largestRock then
+			fail(`Asteroids: ship {shipId}'s beam range is too short for the largest asteroid`)
+		end
+	end
+
+	-- The flight area must hold every region at its largest and stay clear of
+	-- the Earth backdrop.
+	local world = config.World
+	local largest = config.Galaxy.EXPANSIONS[#config.Galaxy.EXPANSIONS].size
+	local farthest = math.sqrt((world.REGION_RING_RADIUS + largest.z) ^ 2 + (largest.x / 2) ^ 2)
+	if movement.FLIGHT_BOUNDS_RADIUS <= farthest then
+		fail(
+			`Movement: FLIGHT_BOUNDS_RADIUS does not reach the far corners of the largest region ({math.ceil(
+				farthest
+			)} studs)`
+		)
+	end
+	if movement.FLIGHT_BOUNDS_HEIGHT <= math.abs(world.REGION_RING_HEIGHT) + largest.y / 2 then
+		fail("Movement: FLIGHT_BOUNDS_HEIGHT does not cover the tallest region")
+	end
+	local earthTop = world.EARTH_CENTER.y + world.EARTH_DIAMETER / 2
+	if -movement.FLIGHT_BOUNDS_HEIGHT <= earthTop then
+		fail("Movement: the flight area reaches into the Earth backdrop")
 	end
 
 	-- Equipment

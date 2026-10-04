@@ -7,7 +7,7 @@
 
 export type MaterialWeight = { material: string, weight: number }
 
-export type Cost = { credits: number, materials: { [string]: number } }
+export type Cost = { stardust: number, materials: { [string]: number } }
 
 export type ZoneDef = {
 	id: string,
@@ -54,7 +54,7 @@ local BY_ID: { [string]: ZoneDef } = {
 		respawnSeconds = 25,
 		weakPoints = "Static",
 		extractionStages = 1,
-		unlock = { credits = 3000, materials = { Iron = 100, Silicate = 100 } },
+		unlock = { stardust = 3000, materials = { Iron = 100, Silicate = 100 } },
 	},
 	CrystalBelt = {
 		id = "CrystalBelt",
@@ -69,7 +69,7 @@ local BY_ID: { [string]: ZoneDef } = {
 		respawnSeconds = 30,
 		weakPoints = "Moving",
 		extractionStages = 2,
-		unlock = { credits = 20000, materials = { Iron = 200, Ice = 200 } },
+		unlock = { stardust = 20000, materials = { Iron = 200, Ice = 200 } },
 	},
 	NebulaBelt = {
 		id = "NebulaBelt",
@@ -84,7 +84,7 @@ local BY_ID: { [string]: ZoneDef } = {
 		respawnSeconds = 35,
 		weakPoints = "Moving",
 		extractionStages = 3,
-		unlock = { credits = 75000, materials = { Crystal = 300, Ice = 300 } },
+		unlock = { stardust = 75000, materials = { Crystal = 300, Ice = 300 } },
 	},
 }
 

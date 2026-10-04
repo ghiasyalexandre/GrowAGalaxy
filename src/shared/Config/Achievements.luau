@@ -3,7 +3,7 @@
 -- an achievement is just "stat reaches goal".
 
 export type Reward = {
-	credits: number,
+	stardust: number,
 	cosmetic: string?,
 	ship: string?,
 }
@@ -36,7 +36,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "starsPlaced",
 		goal = 1,
-		reward = { credits = 100, cosmetic = "StargazerTitle" },
+		reward = { stardust = 100, cosmetic = "StargazerTitle" },
 	},
 	FirstMoon = {
 		id = "FirstMoon",
@@ -45,7 +45,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "moonsPlaced",
 		goal = 1,
-		reward = { credits = 150 },
+		reward = { stardust = 150 },
 	},
 	Miner100 = {
 		id = "Miner100",
@@ -54,7 +54,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "asteroidsMined",
 		goal = 100,
-		reward = { credits = 1000, cosmetic = "GoldenBeam" },
+		reward = { stardust = 1000, cosmetic = "GoldenBeam" },
 	},
 	AdvancedWorld = {
 		id = "AdvancedWorld",
@@ -63,7 +63,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "advancedPlanets",
 		goal = 1,
-		reward = { credits = 2000 },
+		reward = { stardust = 2000 },
 	},
 	StarCluster = {
 		id = "StarCluster",
@@ -72,7 +72,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "starsPlaced",
 		goal = 3,
-		reward = { credits = 5000 },
+		reward = { stardust = 5000 },
 	},
 	Cartographer = {
 		id = "Cartographer",
@@ -81,7 +81,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "zonesDiscovered",
 		goal = 4,
-		reward = { credits = 10000 },
+		reward = { stardust = 10000 },
 	},
 	CoolHead = {
 		id = "CoolHead",
@@ -90,7 +90,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "coolExtractions",
 		goal = 1,
-		reward = { credits = 3000 },
+		reward = { stardust = 3000 },
 	},
 }
 

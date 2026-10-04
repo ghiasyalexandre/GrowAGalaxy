@@ -4,8 +4,8 @@
 -- Exterior: a line of connected cylindrical modules, a long truss crossing
 -- above them, four solar-array assemblies, two radiators, a docking platform
 -- and a glass-walled observation cupola at the far end.
--- Interior: one module per hub area, with floors (Stage 1 keeps normal
--- gravity; Stage 2 switches to zero-g).
+-- Interior: one module per hub area. Gravity is off everywhere, so players
+-- float through the modules; the floors give them something to push along.
 --
 -- The parts named in WorldSystem.MARKERS are the contract with the rest of the
 -- game: a hand-built replacement model must contain them too.
@@ -23,6 +23,8 @@ local FLOOR_Y = -5
 local FLOOR_WIDTH = 17
 local TRUSS_Y = 22
 local TRUSS_LENGTH = 340
+-- Ship berths float this high: clear of the deck and of the outer rail.
+local BERTH_Y = FLOOR_Y + 6
 
 type ModuleDef = {
 	id: string,
@@ -161,7 +163,7 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 
 		Build.sign({
 			name = "Welcome",
-			text = "Welcome to Grow a Galaxy!\nHead to Navigation to warp to your own galaxy.",
+			text = "Welcome to Grow a Galaxy!\nFloat to the Docking Airlock to launch your ship.",
 			size = Vector3.new(16, 5, 0.4),
 			cframe = CFrame.new(span.center, 0, -8.3),
 			faces = { Enum.NormalId.Back },
@@ -177,21 +179,16 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 	elseif def.id == "Navigation" then
 		local console = Build.console(
 			"NavigationConsole",
-			"Navigation\nWarp to your station",
+			"Navigation\nRoute to your station",
 			wallSpot(span.center),
 			parent
 		)
 		Build.prompt(
 			console,
-			{ action = "Warp to my station", object = "Navigation", warp = "OwnStation" }
+			{ action = "Show route to my station", object = "Navigation", route = "Station" }
 		)
 	elseif def.id == "Showroom" then
-		Build.console(
-			"Showroom",
-			"Ship Showroom\nShips arrive in Stage 2",
-			wallSpot(span.center),
-			parent
-		)
+		Build.console("Showroom", "Ship Showroom\n(coming soon)", wallSpot(span.center), parent)
 		for _, x in { span.center - 12, span.center + 12 } do
 			Build.part({
 				name = "DisplayPad",
@@ -333,30 +330,21 @@ local function dockingArea(parent: Instance, dockingSpan: Span)
 		})
 	end
 
-	-- Three berths, marked by glowing outlines on the deck (ships use them in Stage 2).
+	-- Three berths, marked by glowing outlines on the deck. Ships sit above
+	-- them facing away from the station (+X), so they launch over the rail.
 	local berthX = cx + 12
 	for index, z in { -22, 0, 22 } do
-		Build.marker(`Berth{index}`, CFrame.new(berthX, FLOOR_Y + 6, z), parent)
-		local half = 8
-		for _, edge in
-			{
-				{ size = Vector3.new(16, 0.2, 0.6), offset = Vector3.new(0, 0, -half) },
-				{ size = Vector3.new(16, 0.2, 0.6), offset = Vector3.new(0, 0, half) },
-				{ size = Vector3.new(0.6, 0.2, 16), offset = Vector3.new(-half, 0, 0) },
-				{ size = Vector3.new(0.6, 0.2, 16), offset = Vector3.new(half, 0, 0) },
-			}
-		do
-			Build.part({
-				name = "BerthOutline",
-				size = edge.size,
-				cframe = CFrame.new(berthX, FLOOR_Y + 0.1, z) + edge.offset,
-				color = COLORS.accent,
-				material = Enum.Material.Neon,
-				collide = false,
-				parent = parent,
-			})
-		end
+		local berth = Vector3.new(berthX, BERTH_Y, z)
+		Build.marker(`Berth{index}`, CFrame.lookAt(berth, berth + Vector3.xAxis), parent)
+		Build.berthOutline(CFrame.new(berthX, FLOOR_Y + 0.1, z), 16, parent)
 	end
+	-- The marked docking volume: the platform and the space above and beyond it.
+	Build.dockZone(
+		CFrame.new(cx + 20, FLOOR_Y + 14, 0),
+		Vector3.new(length + 60, 40, width + 30),
+		0,
+		parent
+	)
 
 	Build.marker(
 		"DockingSpawn",
@@ -370,12 +358,19 @@ local function dockingArea(parent: Instance, dockingSpan: Span)
 		parent
 	)
 	Build.prompt(console, { action = "Go inside", object = "Airlock", warp = "Interior" })
+	local hangar = Build.console(
+		"HangarConsole",
+		"Hangar\nLaunch your ship",
+		CFrame.new(x0 + 10, FLOOR_Y, 10),
+		parent
+	)
+	Build.prompt(hangar, { action = "Launch ship", object = "Hangar", launch = "ISS" })
 	Build.sign({
 		name = "DockingSign",
-		text = "Docking Area\nShips arrive in Stage 2",
-		size = Vector3.new(0.4, 6, 20),
-		cframe = CFrame.new(x0 + length + 2, FLOOR_Y + 6, 0),
-		faces = { Enum.NormalId.Left },
+		text = "Docking Area\nLaunch at the hangar console. Fly in slowly to dock.",
+		size = Vector3.new(24, 6, 0.4),
+		cframe = CFrame.new(cx, FLOOR_Y + 8, -width / 2),
+		faces = { Enum.NormalId.Back },
 		parent = parent,
 	})
 end

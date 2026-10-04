@@ -1,8 +1,9 @@
 --!strict
 -- A player's personal station, floating just in front of their region's near
 -- face. Station space: -Z faces into the region, +Z faces back towards the ISS.
--- Stage 1 has the deck, hub, beacon, name sign and the navigation console;
--- the other consoles are placeholders for later stages.
+-- It has the deck, hub, beacon, name sign, a navigation console, a hangar
+-- console, and a ship berth with its docking zone off the -Z edge of the deck.
+-- The deposit and collect consoles are placeholders for later stages.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -12,18 +13,24 @@ local Build = require(script.Parent.Build)
 local COLORS = Config.World.COLORS
 local DECK = 44
 local FLOOR_Y = -5
+local BERTH_Z = 42 -- berth centre, studs out from the deck centre along -Z
+local BERTH_PAD = 20
+local BERTH_Z_NEAR = BERTH_Z - BERTH_PAD / 2
 
 local StationBuilder = {}
 
 export type Station = {
 	model: Model,
 	spawn: CFrame,
+	berth: CFrame, -- where the owner's ship parks, facing out
+	dockZone: BasePart,
 }
 
 function StationBuilder.build(
 	region: Model,
 	origin: CFrame,
 	ownerName: string,
+	ownerUserId: number,
 	color: string
 ): Station
 	local station = Build.model("Station", region)
@@ -123,23 +130,53 @@ function StationBuilder.build(
 	-- Console row in front of the hub, screens facing the deck.
 	local navigation = Build.console(
 		"NavigationConsole",
-		"Navigation\nWarp to the ISS",
+		"Navigation\nRoute to the ISS",
 		at(-12, FLOOR_Y, 4),
 		station
 	)
 	Build.prompt(
 		navigation,
-		{ action = "Warp to the ISS", object = "Station navigation", warp = "Arrival" }
+		{ action = "Show route to the ISS", object = "Station navigation", route = "ISS" }
 	)
-	Build.console("HangarConsole", "Hangar\n(Stage 2)", at(-4, FLOOR_Y, 4), station)
+	local hangar =
+		Build.console("HangarConsole", "Hangar\nLaunch your ship", at(-4, FLOOR_Y, 4), station)
+	Build.prompt(hangar, { action = "Launch ship", object = "Station hangar", launch = "Station" })
 	Build.console("DepositConsole", "Cargo deposit\n(Stage 4)", at(4, FLOOR_Y, 4), station)
-	Build.console("CollectConsole", "Collect Credits\n(Stage 5)", at(12, FLOOR_Y, 4), station)
+	Build.console("CollectConsole", "Collect Stardust\n(Stage 4)", at(12, FLOOR_Y, 4), station)
+
+	-- Berth pad off the -Z edge of the deck, joined by a short gangway. The
+	-- ship parks above it facing into the region. The docking zone covers the
+	-- berth and the approach in front of it.
+	Build.part({
+		name = "Gangway",
+		size = Vector3.new(8, 1, BERTH_Z_NEAR - DECK / 2),
+		cframe = at(0, FLOOR_Y - 0.5, -(DECK / 2 + BERTH_Z_NEAR) / 2),
+		color = COLORS.deck,
+		material = Enum.Material.DiamondPlate,
+		parent = station,
+	})
+	Build.part({
+		name = "BerthPad",
+		size = Vector3.new(BERTH_PAD, 2, BERTH_PAD),
+		cframe = at(0, FLOOR_Y - 1, -BERTH_Z),
+		color = COLORS.deck,
+		material = Enum.Material.DiamondPlate,
+		parent = station,
+	})
+	Build.berthOutline(at(0, FLOOR_Y + 0.1, -BERTH_Z), 16, station)
+	local berth = at(0, FLOOR_Y + 6, -BERTH_Z)
+	Build.marker("StationBerth", berth, station)
+	local dockZone = Build.dockZone(
+		at(0, FLOOR_Y + 9, -BERTH_Z - 13),
+		Vector3.new(60, 36, 70),
+		ownerUserId,
+		station
+	)
 
 	local spawn = at(0, FLOOR_Y + 3, -6)
 	Build.marker("StationSpawn", spawn, station)
-	Build.marker("StationBerth", at(0, 0, -40), station)
 
-	return { model = station, spawn = spawn }
+	return { model = station, spawn = spawn, berth = berth, dockZone = dockZone }
 end
 
 return StationBuilder

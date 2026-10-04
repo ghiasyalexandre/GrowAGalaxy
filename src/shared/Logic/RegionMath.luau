@@ -41,6 +41,18 @@ function RegionMath.toWorld(slot: number, localPos: Vec3): Vec3
 	}
 end
 
+-- World space -> region space for a slot; the inverse of toWorld.
+function RegionMath.toLocal(slot: number, worldPos: Vec3): Vec3
+	local origin, yaw = RegionMath.slotOrigin(slot)
+	local c, s = math.cos(yaw), math.sin(yaw)
+	local dx, dz = worldPos.x - origin.x, worldPos.z - origin.z
+	return {
+		x = c * dx - s * dz,
+		y = worldPos.y - origin.y,
+		z = s * dx + c * dz,
+	}
+end
+
 function RegionMath.regionSize(level: number): Vec3
 	local expansions = Config.Galaxy.EXPANSIONS
 	local def = expansions[math.clamp(level, 1, #expansions)]

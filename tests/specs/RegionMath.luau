@@ -13,6 +13,16 @@ return function(T, Loader)
 			T.near(yaw, 0)
 		end)
 
+		T.test("toLocal undoes toWorld for every slot", function()
+			local point = { x = 123, y = -45, z = 678 }
+			for slot = 1, Config.World.MAX_PLAYERS do
+				local back = RegionMath.toLocal(slot, RegionMath.toWorld(slot, point))
+				T.near(back.x, point.x, 1e-6, `slot {slot} x`)
+				T.near(back.y, point.y, 1e-6, `slot {slot} y`)
+				T.near(back.z, point.z, 1e-6, `slot {slot} z`)
+			end
+		end)
+
 		T.test("every slot's +Z points away from the ISS", function()
 			for slot = 1, Config.World.MAX_PLAYERS do
 				local origin = RegionMath.slotOrigin(slot)
@@ -52,16 +62,14 @@ return function(T, Loader)
 			end
 		end)
 
-		T.test("regions stay clear of the ISS, the Earth backdrop and the Outer Belt", function()
-			local field = Config.World.FIELDS.OuterBelt
+		T.test("regions stay clear of the ISS and the Earth backdrop", function()
+			-- Asteroids need open space between the ISS and the stations.
+			local open = Config.Asteroids.ISS_CLEARANCE + Config.Asteroids.REGION_CLEARANCE + 300
 			for slot = 1, Config.World.MAX_PLAYERS do
 				local station =
 					RegionMath.toWorld(slot, { x = 0, y = 0, z = -Config.World.STATION_DISTANCE })
 				local stationRadius = math.sqrt(station.x ^ 2 + station.z ^ 2)
-				T.truthy(
-					stationRadius > field.distance + field.radius + 300,
-					`slot {slot} station clear of belt`
-				)
+				T.truthy(stationRadius > open, `slot {slot} station leaves room for asteroids`)
 			end
 			local size = Config.Galaxy.EXPANSIONS[#Config.Galaxy.EXPANSIONS].size
 			local earthTop = Config.World.EARTH_CENTER.y + Config.World.EARTH_DIAMETER / 2

@@ -1,6 +1,8 @@
 --!strict
--- The client's copy of what the server has told it: its own profile view and
--- who owns which region. Display only; the server stays authoritative.
+-- The client's copy of what the server has told it (its profile view, who
+-- owns which region, its ship) plus local state shared by controllers
+-- (suit or ship mode, stabilizer, flight readout, route). Display only; the
+-- server stays authoritative.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -12,14 +14,45 @@ local Types = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Typ
 
 local MAX_ATTEMPTS = 30
 
+export type Mode = "suit" | "ship"
+export type DockStatus = "none" | "ready" | "tooFast"
+export type Route = "Station" | "ISS"
+
 local ClientState = {}
 
 ClientState.profile = nil :: Types.ProfileView?
 ClientState.regions = {} :: { Types.RegionInfo }
 
+-- The player's spawned ship, if any, and its effective stats.
+ClientState.ship = nil :: Model?
+ClientState.shipInfo = nil :: Types.ShipInfo?
+
+ClientState.mode = "suit" :: Mode
+ClientState.stabilization = true
+ClientState.route = "Station" :: Route
+-- Updated every frame while flying.
+ClientState.flight = {
+	speed = 0,
+	maxSpeed = 0,
+	throttle = 0, -- 0 to 1, forward thrust the pilot is asking for
+	dock = "none" :: DockStatus,
+}
+-- The local pilot's laser, drawn at once without waiting for the server.
+-- `direction` is in ship space (-Z is the nose).
+ClientState.beam = {
+	firing = false,
+	direction = Vector3.new(0, 0, -1),
+}
+
 -- Fires with the changed field name, or "*" after the initial load.
 ClientState.profileChanged = Signal.new() :: Signal.Signal<string>
 ClientState.regionsChanged = Signal.new() :: Signal.Signal<()>
+ClientState.shipChanged = Signal.new() :: Signal.Signal<()>
+ClientState.modeChanged = Signal.new() :: Signal.Signal<()>
+ClientState.stabilizationChanged = Signal.new() :: Signal.Signal<()>
+ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
+-- A short message to show the player (from the server or a controller).
+ClientState.notify = Signal.new() :: Signal.Signal<string>
 
 -- The local player's region slot, if they have one yet.
 function ClientState.mySlot(): number?
@@ -30,6 +63,23 @@ function ClientState.mySlot(): number?
 		end
 	end
 	return nil
+end
+
+function ClientState.setMode(mode: Mode)
+	if mode ~= ClientState.mode then
+		ClientState.mode = mode
+		ClientState.modeChanged:Fire()
+	end
+end
+
+function ClientState.setStabilization(on: boolean)
+	ClientState.stabilization = on
+	ClientState.stabilizationChanged:Fire()
+end
+
+function ClientState.setRoute(route: Route)
+	ClientState.route = route
+	ClientState.routeChanged:Fire()
 end
 
 -- Connects to server updates and fetches the starting state. Yields.
@@ -44,6 +94,16 @@ function ClientState.load()
 	Net.RegionsChanged.OnClientEvent:Connect(function(regions: { Types.RegionInfo })
 		ClientState.regions = regions
 		ClientState.regionsChanged:Fire()
+	end)
+	Net.ShipState.OnClientEvent:Connect(function(ship: Model?, info: Types.ShipInfo?)
+		ClientState.ship = ship
+		ClientState.shipInfo = info
+		ClientState.shipChanged:Fire()
+	end)
+	Net.Notify.OnClientEvent:Connect(function(text: string)
+		if type(text) == "string" then
+			ClientState.notify:Fire(text)
+		end
 	end)
 
 	for _ = 1, MAX_ATTEMPTS do

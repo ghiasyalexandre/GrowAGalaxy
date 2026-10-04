@@ -18,7 +18,8 @@ local BODY_KINDS = { star = true, planet = true, moon = true }
 
 local ProfileSchema = {}
 
-ProfileSchema.VERSION = 1
+-- 1: first release. 2: "credits" renamed to "stardust" (the one currency).
+ProfileSchema.VERSION = 2
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -34,7 +35,7 @@ function ProfileSchema.default(): Profile
 	local starter = Config.Ships.STARTER_SHIP
 	return {
 		schemaVersion = ProfileSchema.VERSION,
-		credits = Config.Economy.STARTING_CREDITS,
+		stardust = Config.Economy.STARTING_STARDUST,
 		uncollected = 0,
 		materials = {},
 		cargo = {},
@@ -232,14 +233,23 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	if version ~= nil and version > ProfileSchema.VERSION then
 		return false, "saved by a newer version of the game"
 	end
-	-- Migrations from older schema versions go here, oldest first, e.g.
-	-- if (version or 0) < 2 then ... end
+	-- Migrations from older schema versions, oldest first. A missing version
+	-- is a brand-new profile (ProfileStore fills in the defaults' fields).
+	if version ~= nil and version < 2 then
+		-- Credits became Stardust: carry the balance over, never reset it.
+		-- Version 1 had no stardust field, so a stardust value here could only
+		-- be a template default (e.g. from Reconcile) and credits wins.
+		if data.credits ~= nil then
+			data.stardust = data.credits
+		end
+		data.credits = nil
+	end
 
 	local defaults = ProfileSchema.default()
 	local starter = Config.Ships.STARTER_SHIP
 
 	data.schemaVersion = ProfileSchema.VERSION
-	data.credits = count(data.credits) or defaults.credits
+	data.stardust = count(data.stardust) or defaults.stardust
 	data.uncollected = amount(data.uncollected) or 0
 	data.materials = counts(data.materials)
 	data.cargo = counts(data.cargo)
@@ -342,7 +352,7 @@ end
 -- The slice of a profile its owner's client is allowed to see.
 function ProfileSchema.view(profile: Profile): Types.ProfileView
 	return {
-		credits = profile.credits,
+		stardust = profile.stardust,
 		uncollected = profile.uncollected,
 		materials = table.clone(profile.materials),
 		cargo = table.clone(profile.cargo),

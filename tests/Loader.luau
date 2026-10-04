@@ -9,6 +9,15 @@
 
 local fs = require("@lune/fs")
 local luau = require("@lune/luau")
+local roblox = require("@lune/roblox")
+
+-- Roblox datatypes available to loaded modules, as in the engine.
+local DATATYPES = {
+	Vector3 = roblox.Vector3,
+	Vector2 = roblox.Vector2,
+	CFrame = roblox.CFrame,
+	Color3 = roblox.Color3,
+}
 
 local Loader = {}
 
@@ -106,7 +115,11 @@ requireNode = function(node)
 		error(`circular require of {path}`)
 	end
 	loading[path] = true
-	local env = setmetatable({ script = node, require = requireNode }, { __index = getfenv() })
+	local globals = { script = node, require = requireNode }
+	for name, value in DATATYPES do
+		globals[name] = value
+	end
+	local env = setmetatable(globals, { __index = getfenv() })
 	local chunk = luau.load(fs.readFile(path), { debugName = path, environment = env })
 	local result = chunk()
 	loading[path] = nil
