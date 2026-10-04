@@ -1,7 +1,8 @@
 --!strict
 -- Heads-up display: Credits and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Station button (bottom left), and a reticle while flying.
+-- Station button (bottom left), and while flying a reticle and the laser's
+-- heat gauge.
 -- Display only; the server owns every value shown here.
 
 local Players = game:GetService("Players")
@@ -15,6 +16,8 @@ local Input = require(script.Parent.Parent.Input)
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 
 local READOUT_INTERVAL = 0.1
+local HEAT_COOL = Color3.fromRGB(255, 170, 70)
+local HEAT_HOT = Color3.fromRGB(255, 70, 50)
 
 local DOCK_HINTS: { [string]: string } = {
 	keyboard = "Docking area: press G to dock",
@@ -30,6 +33,9 @@ local hintLabel: TextLabel
 local readoutLabel: TextLabel
 local reticle: TextLabel
 local recoverButton: TextButton
+local heatPanel: Frame
+local heatFill: Frame
+local heatLabel: TextLabel
 
 local function makeLabel(parent: Instance, props: { [string]: any }): TextLabel
 	local label = Instance.new("TextLabel")
@@ -143,6 +149,37 @@ local function build()
 	padding.PaddingBottom = UDim.new(0, 8)
 	padding.Parent = recoverButton
 
+	heatPanel = Instance.new("Frame")
+	heatPanel.Name = "LaserHeat"
+	heatPanel.AnchorPoint = Vector2.new(0, 1)
+	heatPanel.Position = UDim2.new(0, 16, 1, -108)
+	heatPanel.Size = UDim2.new(0, 220, 0, 30)
+	heatPanel.BackgroundTransparency = 1
+	heatPanel.Visible = false
+	heatPanel.Parent = gui
+	heatLabel = makeLabel(heatPanel, {
+		Name = "Title",
+		Size = UDim2.new(1, 0, 0, 14),
+		Text = "LASER HEAT",
+		TextColor3 = HEAT_COOL,
+		TextStrokeTransparency = 0.5,
+	})
+	local track = Instance.new("Frame")
+	track.Name = "Track"
+	track.Position = UDim2.new(0, 0, 0, 18)
+	track.Size = UDim2.new(1, 0, 0, 10)
+	track.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+	track.BackgroundTransparency = 0.25
+	track.Parent = heatPanel
+	corner(track, 5)
+	heatFill = Instance.new("Frame")
+	heatFill.Name = "Fill"
+	heatFill.Size = UDim2.fromScale(0, 1)
+	heatFill.BackgroundColor3 = HEAT_COOL
+	heatFill.BorderSizePixel = 0
+	heatFill.Parent = track
+	corner(heatFill, 5)
+
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
 		AnchorPoint = Vector2.new(0.5, 0.5),
@@ -168,10 +205,24 @@ local function refreshSector()
 	sectorLabel.Text = if slot then `Your galaxy: Sector {slot}` else "Finding your galaxy..."
 end
 
+-- Heat comes from the server (BeamSystem's attributes on your ship).
+local function refreshHeat()
+	local ship = ClientState.ship
+	local heat = if ship then ship:GetAttribute("Heat") else nil
+	local share = if type(heat) == "number" then math.clamp(heat, 0, 1) else 0
+	local overheated = ship ~= nil and ship:GetAttribute("Overheated") == true
+	heatFill.Size = UDim2.fromScale(share, 1)
+	heatFill.BackgroundColor3 = if overheated then HEAT_HOT else HEAT_COOL:Lerp(HEAT_HOT, share)
+	heatLabel.Text = if overheated then "LASER OVERHEATED: COOLING" else "LASER HEAT"
+	heatLabel.TextColor3 = if overheated then HEAT_HOT else HEAT_COOL
+end
+
 local function refreshReadout()
 	local flying = ClientState.mode == "ship"
 	reticle.Visible = flying
+	heatPanel.Visible = flying
 	if flying then
+		refreshHeat()
 		local flight = ClientState.flight
 		readoutLabel.Text = `Speed {math.floor(flight.speed)} / {math.floor(flight.maxSpeed)}`
 		if flight.dock == "ready" then

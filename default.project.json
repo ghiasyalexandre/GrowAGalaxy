@@ -26,6 +26,9 @@
         "SuitRecover": {
           "$className": "RemoteEvent"
         },
+        "BeamInput": {
+          "$className": "RemoteEvent"
+        },
         "Notify": {
           "$className": "RemoteEvent"
         }

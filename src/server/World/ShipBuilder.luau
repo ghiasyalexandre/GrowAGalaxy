@@ -10,6 +10,12 @@
 --   Hull.Steer            AlignOrientation, one-attachment target orientation
 --   Hull.ExitLeft/ExitRight/ExitTop   where the pilot floats when leaving
 --   Hull.BoardPrompt      ProximityPrompt tagged "BoardPrompt"
+--   Hull.BeamOrigin       Attachment at the laser's muzzle, under the nose
+--   Hull.NozzleL/NozzleR  Attachments behind the engines (+Y points back),
+--                         each with an "Exhaust" ParticleEmitter (Rate 0)
+--   Hull.WingTrail        Two Trails off the wing tips (disabled)
+--   EngineGlow, BeamEmitter   neon parts; clients animate the glow
+-- Effects start idle: each client's ShipEffectsController drives them.
 -- Ship space: -Z is forward (the hull's LookVector), +Y is up.
 
 local CollectionService = game:GetService("CollectionService")
@@ -123,7 +129,71 @@ local function shuttle(accent: string): { PartSpec }
 			offset = CFrame.new(0, 3.5, 4),
 			color = accent,
 		},
+		{
+			-- Mining laser lens, poking out of the nose's lower front.
+			name = "BeamEmitter",
+			shape = Enum.PartType.Cylinder,
+			size = Vector3.new(1.6, 0.8, 0.8),
+			offset = CFrame.new(0, -1.6, -9.8) * CFrame.Angles(0, math.pi / 2, 0),
+			color = Config.Beam.COLOR,
+			material = Enum.Material.Neon,
+			collide = false,
+		},
 	}
+end
+
+local function sequence(from: number, to: number): NumberSequence
+	return NumberSequence.new({
+		NumberSequenceKeypoint.new(0, from),
+		NumberSequenceKeypoint.new(1, to),
+	})
+end
+
+-- Engine exhaust: particles left behind in space, so they stream into a
+-- tail at speed. Rate stays 0 here; clients set it from the throttle.
+local function exhaust(parent: Attachment)
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Name = "Exhaust"
+	emitter.Rate = 0
+	emitter.EmissionDirection = Enum.NormalId.Top
+	emitter.Speed = NumberRange.new(22, 30)
+	emitter.SpreadAngle = Vector2.new(6, 6)
+	emitter.Lifetime = NumberRange.new(0.18, 0.32)
+	emitter.Size = sequence(1.1, 0.15)
+	emitter.Transparency = sequence(0.1, 1)
+	emitter.Color = ColorSequence.new(Color3.fromHex("#D6F4FF"), Color3.fromHex("#3A7BFF"))
+	emitter.LightEmission = 1
+	emitter.LightInfluence = 0
+	emitter.VelocityInheritance = 0
+	emitter.LockedToPart = false
+	emitter.Parent = parent
+end
+
+-- A thin ribbon off a wing tip, between two attachments 0.6 studs apart.
+local function wingTrail(hull: BasePart, side: string, x: number, accent: string)
+	local top = Instance.new("Attachment")
+	top.Name = `Trail{side}Top`
+	top.CFrame = CFrame.new(x, -0.3, 4.5)
+	top.Parent = hull
+	local bottom = Instance.new("Attachment")
+	bottom.Name = `Trail{side}Bottom`
+	bottom.CFrame = CFrame.new(x, -0.9, 4.5)
+	bottom.Parent = hull
+
+	local trail = Instance.new("Trail")
+	trail.Name = "WingTrail"
+	trail.Attachment0 = top
+	trail.Attachment1 = bottom
+	trail.Color = ColorSequence.new(Color3.fromHex(accent))
+	trail.Transparency = sequence(0.35, 1)
+	trail.WidthScale = sequence(1, 0.2)
+	trail.Lifetime = 0.5
+	trail.MinLength = 0.2
+	trail.FaceCamera = true
+	trail.LightEmission = 0.7
+	trail.LightInfluence = 0
+	trail.Enabled = false
+	trail.Parent = hull
 end
 
 local function style(
@@ -208,6 +278,15 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 	attachment("ExitLeft", Vector3.new(-10, 2, -1), hull)
 	attachment("ExitRight", Vector3.new(10, 2, -1), hull)
 	attachment("ExitTop", Vector3.new(0, 8, 2), hull)
+	attachment("BeamOrigin", Vector3.new(0, -1.6, -10.7), hull)
+	for _, nozzle in { { name = "NozzleL", x = -1.8 }, { name = "NozzleR", x = 1.8 } } do
+		local att = attachment(nozzle.name, Vector3.new(nozzle.x, -0.2, 9.5), hull)
+		-- Particle emitters on an attachment emit along its +Y: point it back.
+		att.CFrame *= CFrame.Angles(math.rad(90), 0, 0)
+		exhaust(att)
+	end
+	wingTrail(hull, "L", -7.8, accent)
+	wingTrail(hull, "R", 7.8, accent)
 
 	local engine = Instance.new("LinearVelocity")
 	engine.Name = "Engine"

@@ -77,6 +77,18 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(broken), "spacesuit is not slower"))
 		end)
 
+		T.test("catches a beam that overheats almost at once", function()
+			local broken = T.deepCopy(Config)
+			broken.Beam.HEAT_PER_SECOND = 1000
+			T.truthy(hasProblem(ConfigCheck.run(broken), "overheats in under 2 seconds"))
+		end)
+
+		T.test("catches a camera field of view over the limit", function()
+			local broken = T.deepCopy(Config)
+			broken.Movement.CAMERA_FOV_BOOST = 80
+			T.truthy(hasProblem(ConfigCheck.run(broken), "limit of 120"))
+		end)
+
 		T.test("catches a flight area smaller than the regions", function()
 			local broken = T.deepCopy(Config)
 			broken.Movement.FLIGHT_BOUNDS_RADIUS = 3500

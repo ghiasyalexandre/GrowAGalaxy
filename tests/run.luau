@@ -12,6 +12,7 @@ local SPECS = {
 	"PlacementRules",
 	"ProfileSchema",
 	"FlightMath",
+	"BeamMath",
 	"ShipStats",
 }
 

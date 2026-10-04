@@ -4,7 +4,7 @@
 -- read devices directly.
 --
 --   moveVector()    x = right, y = up, z = forward, each in [-1, 1]
---   isHeld(name)    "Up", "Down", "Brake", "FreeCursor"
+--   isHeld(name)    "Up", "Down", "Brake", "Beam", "FreeCursor"
 --   lookDelta(dt)   steering in radians since the last call (x = yaw right,
 --                   y = pitch down). Ship mode only.
 --   pressed         Signal fired with "Stabilize", "Exit" or "Dock"
@@ -31,7 +31,7 @@ export type Mode = "suit" | "ship"
 export type Device = "keyboard" | "gamepad" | "touch"
 
 type Binding = {
-	keys: { Enum.KeyCode },
+	keys: { Enum.KeyCode | Enum.UserInputType },
 	title: string,
 	hold: boolean,
 	modes: { [Mode]: boolean },
@@ -60,6 +60,13 @@ local BINDINGS: { [string]: Binding } = {
 		title = "Brake",
 		hold = true,
 		modes = BOTH,
+		touch = true,
+	},
+	Beam = {
+		keys = { Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2 },
+		title = "Laser",
+		hold = true,
+		modes = { ship = true },
 		touch = true,
 	},
 	Stabilize = {
@@ -93,7 +100,7 @@ local BINDINGS: { [string]: Binding } = {
 }
 
 -- Bind order, so touch buttons always appear in the same places.
-local ORDER = { "Up", "Down", "Brake", "Stabilize", "Exit", "Dock", "FreeCursor" }
+local ORDER = { "Up", "Down", "Brake", "Beam", "Stabilize", "Exit", "Dock", "FreeCursor" }
 
 -- Above the default character controls, so Space and A don't also jump.
 local PRIORITY = Enum.ContextActionPriority.High.Value
@@ -107,9 +114,9 @@ local HINTS: { [Mode]: { [Device]: string } } = {
 		touch = "Thumbstick to float  ·  Up, Down and Brake buttons",
 	},
 	ship = {
-		keyboard = "Mouse steer  ·  W/S throttle  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt cursor",
-		gamepad = "Right stick steer  ·  Left stick throttle and strafe  ·  RB/LB up/down  ·  LT brake  ·  Y exit",
-		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Exit button to leave",
+		keyboard = "Mouse steer  ·  Click laser  ·  W/S throttle  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt cursor",
+		gamepad = "Right stick steer  ·  RT laser  ·  Left stick throttle and strafe  ·  RB/LB up/down  ·  LT brake  ·  Y exit",
+		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser button to fire  ·  Exit to leave",
 	},
 }
 

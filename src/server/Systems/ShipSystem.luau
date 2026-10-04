@@ -15,6 +15,9 @@
 --           own, below DOCK_MAX_SPEED, parks the ship at a free berth there.
 --   Stow    Leaving the game or Return to Station removes the ship.
 --
+-- Ship model attributes: OwnerUserId, ShipId, MaxSpeed, BeamRange, and
+-- Piloted (someone is flying it). BeamSystem adds the beam's state.
+--
 -- Cargo lives on the profile, never on the ship, so moving, stowing or
 -- respawning a ship can't lose or duplicate it.
 
@@ -93,6 +96,9 @@ local function infoFor(profile: Types.Profile): Types.ShipInfo
 		acceleration = stats.acceleration,
 		braking = stats.braking,
 		turnRate = stats.turnRate,
+		beamRange = stats.beamRange,
+		heatCapacity = stats.heatCapacity,
+		coolingRate = stats.coolingRate,
 		cargoCapacity = math.floor(stats.cargoCapacity),
 	}
 end
@@ -208,6 +214,7 @@ end
 -- Stops piloting: frees the seat and parks the ship, anchored, where it is.
 local function leaveSeat(ship: Ship)
 	ship.piloting = false
+	ship.model:SetAttribute("Piloted", false)
 	local weld = ship.seat:FindFirstChild("SeatWeld")
 	local occupant = ship.seat.Occupant
 	if weld then
@@ -263,6 +270,7 @@ local function board(ship: Ship, player: Player)
 		return
 	end
 	ship.piloting = true
+	ship.model:SetAttribute("Piloted", true)
 	humanoid.PlatformStand = false
 	ship.seat:Sit(humanoid)
 	FlightGuard.track(player, ship.hull, ship.info.maxSpeed)
@@ -286,6 +294,10 @@ local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): S
 	local model = ShipBuilder.build(info.shipId, berth, accent)
 	model.Name = `Ship_{player.UserId}`
 	model:SetAttribute("OwnerUserId", player.UserId)
+	-- Read by every client's ship effects (engine glow, beam reach).
+	model:SetAttribute("MaxSpeed", info.maxSpeed)
+	model:SetAttribute("BeamRange", info.beamRange)
+	model:SetAttribute("Piloted", false)
 	model.ModelStreamingMode = Enum.ModelStreamingMode.PersistentPerPlayer
 
 	local hull = model:FindFirstChild("Hull") :: BasePart
@@ -444,6 +456,15 @@ end
 function ShipSystem.isPiloting(player: Player): boolean
 	local ship = ships[player]
 	return ship ~= nil and ship.piloting
+end
+
+-- The ship the player is flying right now and its stats, or nil.
+function ShipSystem.getPiloted(player: Player): (Model?, Types.ShipInfo?)
+	local ship = ships[player]
+	if ship and ship.piloting then
+		return ship.model, ship.info
+	end
+	return nil, nil
 end
 
 local function onLaunchPrompt(prompt: ProximityPrompt, player: Player)

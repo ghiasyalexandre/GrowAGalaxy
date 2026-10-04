@@ -66,6 +66,48 @@ return function(T, Loader)
 			T.near(FlightMath.angleBetween(done, to), 0, 1e-3, "reaches the target")
 		end)
 
+		T.test("easeTowards slows as it arrives and respects the turn rate", function()
+			local from = FlightMath.aim(0, 0)
+			local to = FlightMath.aim(math.rad(90), 0)
+			-- Far away the turn rate is the limit.
+			local capped = FlightMath.easeTowards(from, to, math.rad(30), 50, 0.1)
+			T.near(FlightMath.angleBetween(from, capped), math.rad(3), 1e-3, "capped")
+			-- Close in, it covers a share of what's left.
+			local near = FlightMath.aim(math.rad(88), 0)
+			local eased = FlightMath.easeTowards(near, to, math.rad(360), 5, 0.1)
+			local share = 1 - math.exp(-0.5)
+			T.near(FlightMath.angleBetween(near, eased), math.rad(2) * share, 1e-4, "eased")
+			T.near(FlightMath.angleBetween(FlightMath.easeTowards(to, to, 1, 5, 0.1), to), 0)
+		end)
+
+		T.test("smooth is frame-rate independent", function()
+			local once = FlightMath.smooth(0, 10, 4, 0.2)
+			local twice = FlightMath.smooth(FlightMath.smooth(0, 10, 4, 0.1), 10, 4, 0.1)
+			T.near(once, twice, 1e-9)
+			T.truthy(once > 0 and once < 10)
+		end)
+
+		T.test("wrapAngle keeps angles within half a turn", function()
+			T.near(FlightMath.wrapAngle(math.rad(350)), math.rad(-10), 1e-9)
+			T.near(FlightMath.wrapAngle(math.rad(-190)), math.rad(170), 1e-9)
+			T.near(FlightMath.wrapAngle(0.5), 0.5, 1e-9)
+		end)
+
+		T.test("ships bank into turns and strafes, within the limit", function()
+			local maxBank = math.rad(35)
+			-- Turning left (positive yaw rate) lowers the left wing (positive roll).
+			T.truthy(FlightMath.bankAngle(1, 0, 0.45, 0.26, maxBank) > 0, "left turn")
+			T.truthy(FlightMath.bankAngle(-1, 0, 0.45, 0.26, maxBank) < 0, "right turn")
+			T.truthy(FlightMath.bankAngle(0, 1, 0.45, 0.26, maxBank) < 0, "strafe right")
+			T.near(FlightMath.bankAngle(10, -1, 0.45, 0.26, maxBank), maxBank, 1e-9, "clamped")
+			-- Positive roll really is left wing down in Roblox's axes.
+			local rolled = CFrame.Angles(0, 0, 0.3)
+			T.truthy(rolled.RightVector.Y > 0, "right wing up")
+			-- And a left turn really increases yaw.
+			local yaw = FlightMath.yawPitchOf(CFrame.lookAt(Vector3.zero, Vector3.new(-1, 0, -1)))
+			T.truthy(yaw > 0, "facing left of -Z is positive yaw")
+		end)
+
 		T.test("plausibleTravel allows top speed with tolerance and rejects teleports", function()
 			local m = Config.Movement
 			local function ok(distance)

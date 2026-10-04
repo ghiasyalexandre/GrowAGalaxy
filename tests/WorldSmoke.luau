@@ -67,6 +67,11 @@ local function requireModule(module)
 		Enum = roblox.Enum,
 		UDim = roblox.UDim,
 		UDim2 = roblox.UDim2,
+		NumberRange = roblox.NumberRange,
+		NumberSequence = roblox.NumberSequence,
+		NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
+		ColorSequence = roblox.ColorSequence,
+		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
 		warn = function(...)
 			table.insert(warnings, table.concat({ ... }, " "))
 		end,
@@ -346,6 +351,36 @@ check(engine ~= nil and engine:IsA("LinearVelocity"), "hull has the Engine Linea
 check(steer ~= nil and steer:IsA("AlignOrientation"), "hull has the Steer AlignOrientation")
 check(engine.Attachment0 == hull:FindFirstChild("Thrust"), "Engine uses the Thrust attachment")
 check(count(tagged.BoardPrompt) == 1 + 3 + 8, "every ship has a tagged Board prompt")
+local muzzle = hull:FindFirstChild("BeamOrigin")
+check(
+	muzzle ~= nil and muzzle:IsA("Attachment") and muzzle.CFrame.Position.Z < -hull.Size.Z / 2,
+	"hull has a BeamOrigin attachment ahead of the hull"
+)
+local emitter = sample:FindFirstChild("BeamEmitter")
+check(
+	emitter ~= nil and not emitter.CanCollide,
+	"the laser lens doesn't collide (berth fit ignores it)"
+)
+for _, name in { "NozzleL", "NozzleR" } do
+	local nozzle = hull:FindFirstChild(name)
+	local plume = nozzle and nozzle:FindFirstChild("Exhaust")
+	check(
+		plume ~= nil and plume:IsA("ParticleEmitter") and plume.Rate == 0,
+		`{name} has an idle Exhaust emitter`
+	)
+	-- Emitters on an attachment fire along its +Y, which must point back (+Z).
+	check(
+		nozzle ~= nil and nozzle.CFrame.UpVector.Z > 0.99,
+		`{name} points its exhaust out of the back`
+	)
+end
+local trails = 0
+for _, child in hull:GetChildren() do
+	if child:IsA("Trail") and child.Name == "WingTrail" then
+		trails += if child.Attachment0 and child.Attachment1 and not child.Enabled then 1 else 0
+	end
+end
+check(trails == 2, `two idle wing trails with attachments ({trails})`)
 local box = ShipBuilder.BERTH_BOX
 local own = shipBounds(sample)
 check(

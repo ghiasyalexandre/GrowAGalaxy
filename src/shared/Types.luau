@@ -102,6 +102,9 @@ export type ShipInfo = {
 	acceleration: number,
 	braking: number,
 	turnRate: number,
+	beamRange: number,
+	heatCapacity: number,
+	coolingRate: number,
 	cargoCapacity: number,
 }
 

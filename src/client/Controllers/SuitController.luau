@@ -8,6 +8,11 @@
 -- you to a stop when you let go. With the stabilizer off you keep drifting.
 -- This runs on the client because each client simulates its own character;
 -- the server checks the result (FlightGuard).
+--
+-- So floating doesn't look frozen, R15 characters play their avatar's own
+-- swim animations (a slow tread while still or drifting, the stroke while
+-- thrusting), and every character leans into the direction it's moving.
+-- Animations played on your own character replicate, so everyone sees them.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -31,6 +36,14 @@ local TURN_RESPONSIVENESS = 20
 local TELEPORT_DISTANCE = 30
 local SETTLE_TIME = 0.4
 local INPUT_DEADZONE = 0.05
+local LEAN = math.rad(M.SUIT_LEAN_DEGREES)
+local ROLL = math.rad(M.SUIT_ROLL_DEGREES)
+local BACK_LEAN_SHARE = 0.4 -- moving backwards leans back less far
+local ANIMATION_FADE = 0.35
+-- Roblox's default R15 swim animations, used when the avatar's Animate
+-- script doesn't name its own.
+local DEFAULT_SWIM = "rbxassetid://507784897"
+local DEFAULT_SWIM_IDLE = "rbxassetid://507785072"
 
 local SuitController = {}
 
@@ -39,6 +52,8 @@ type Suit = {
 	root: BasePart,
 	linear: LinearVelocity,
 	align: AlignOrientation,
+	swim: AnimationTrack?,
+	swimIdle: AnimationTrack?,
 }
 
 local suit: Suit? = nil
@@ -46,6 +61,65 @@ local active = false
 local lastPosition: Vector3? = nil
 local settleUntil = 0
 local facing = CFrame.new()
+local lean = 0
+local roll = 0
+local swimming: boolean? = nil -- which track is playing; nil = neither
+
+-- One of the avatar's swim animations (from its Animate script, so custom
+-- animation packs carry over), loaded as a looping Movement-priority track.
+local function loadTrack(
+	character: Model,
+	animator: Animator,
+	name: string,
+	fallback: string
+): AnimationTrack?
+	local animate = character:FindFirstChild("Animate")
+	local value = animate and animate:FindFirstChild(name)
+	local source = value and value:FindFirstChildOfClass("Animation")
+	local animation = Instance.new("Animation")
+	animation.AnimationId = if source and source.AnimationId ~= ""
+		then source.AnimationId
+		else fallback
+	local ok, track = pcall(function()
+		return animator:LoadAnimation(animation)
+	end)
+	if not ok then
+		warn(`[SuitController] Could not load the {name} animation: {track}`)
+		return nil
+	end
+	track.Priority = Enum.AnimationPriority.Movement
+	track.Looped = true
+	return track
+end
+
+local function stopAnimations(s: Suit)
+	if s.swim then
+		s.swim:Stop(ANIMATION_FADE)
+	end
+	if s.swimIdle then
+		s.swimIdle:Stop(ANIMATION_FADE)
+	end
+	swimming = nil
+end
+
+-- Stroke while thrusting, tread while still or drifting; the stroke speeds
+-- up with speed.
+local function animate(s: Suit, pushing: boolean, speed: number)
+	if pushing ~= swimming then
+		swimming = pushing
+		local play = if pushing then s.swim else s.swimIdle
+		local stop = if pushing then s.swimIdle else s.swim
+		if stop then
+			stop:Stop(ANIMATION_FADE)
+		end
+		if play then
+			play:Play(ANIMATION_FADE)
+		end
+	end
+	if pushing and s.swim then
+		s.swim:AdjustSpeed(0.6 + 0.8 * math.clamp(speed / M.SUIT_MAX_SPEED, 0, 1))
+	end
+end
 
 local function setup(character: Model)
 	suit = nil
@@ -54,6 +128,10 @@ local function setup(character: Model)
 	local humanoid = character:WaitForChild("Humanoid", 10)
 	local root = character:WaitForChild("HumanoidRootPart", 10)
 	if not (humanoid and humanoid:IsA("Humanoid") and root and root:IsA("BasePart")) then
+		return
+	end
+	-- A quick respawn can start a newer setup while this one waited.
+	if Players.LocalPlayer.Character ~= character then
 		return
 	end
 	-- No jumping in zero-g. This also stops Space from leaving a ship's seat
@@ -82,9 +160,29 @@ local function setup(character: Model)
 	align.Enabled = false
 	align.Parent = root
 
+	local swim: AnimationTrack? = nil
+	local swimIdle: AnimationTrack? = nil
+	local animator = humanoid:WaitForChild("Animator", 10)
+	if Players.LocalPlayer.Character ~= character then
+		return
+	end
+	if humanoid.RigType == Enum.HumanoidRigType.R15 and animator and animator:IsA("Animator") then
+		swim = loadTrack(character, animator, "swim", DEFAULT_SWIM)
+		swimIdle = loadTrack(character, animator, "swimidle", DEFAULT_SWIM_IDLE)
+	end
+
 	facing = root.CFrame.Rotation
+	lean, roll = 0, 0
+	swimming = nil
 	settleUntil = os.clock() + SETTLE_TIME
-	suit = { humanoid = humanoid, root = root, linear = linear, align = align }
+	suit = {
+		humanoid = humanoid,
+		root = root,
+		linear = linear,
+		align = align,
+		swim = swim,
+		swimIdle = swimIdle,
+	}
 end
 
 local function targetVelocity(current: Vector3, position: Vector3, dt: number): Vector3
@@ -130,6 +228,10 @@ local function step(dt: number)
 		if active then
 			settleUntil = os.clock() + SETTLE_TIME
 			facing = s.root.CFrame.Rotation
+			lean, roll = 0, 0
+		else
+			-- Seated (the ship's sit pose takes over) or dead.
+			stopAnimations(s)
 		end
 	end
 	if not active then
@@ -147,15 +249,28 @@ local function step(dt: number)
 	end
 	lastPosition = position
 
-	s.linear.VectorVelocity = targetVelocity(s.root.AssemblyLinearVelocity, position, dt)
+	local velocity = targetVelocity(s.root.AssemblyLinearVelocity, position, dt)
+	s.linear.VectorVelocity = velocity
 
-	-- Stay upright and face where the camera is looking.
+	-- Face where the camera is looking, leaning forwards (or back) and to the
+	-- side with the velocity relative to that heading.
 	local look = Workspace.CurrentCamera.CFrame.LookVector
 	local flat = Vector3.new(look.X, 0, look.Z)
 	if flat.Magnitude > 0.1 then
 		facing = CFrame.lookAt(Vector3.zero, flat.Unit)
 	end
-	s.align.CFrame = facing
+	local relative = facing:VectorToObjectSpace(velocity) / M.SUIT_MAX_SPEED
+	local ahead = math.clamp(-relative.Z, -1, 1)
+	local targetLean = if ahead >= 0 then ahead * LEAN else ahead * LEAN * BACK_LEAN_SHARE
+	local targetRoll = -math.clamp(relative.X, -1, 1) * ROLL
+	lean = FlightMath.smooth(lean, targetLean, M.SUIT_LEAN_SMOOTHING, dt)
+	roll = FlightMath.smooth(roll, targetRoll, M.SUIT_LEAN_SMOOTHING, dt)
+	s.align.CFrame = facing * CFrame.Angles(-lean, 0, roll)
+
+	local pushing = os.clock() >= settleUntil
+		and not Input.isHeld("Brake")
+		and Input.moveVector().Magnitude > INPUT_DEADZONE
+	animate(s, pushing, velocity.Magnitude)
 end
 
 function SuitController.init()

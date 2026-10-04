@@ -4,9 +4,15 @@
 -- drives the ship's Engine (LinearVelocity) and Steer (AlignOrientation).
 --
 -- Steering: the mouse, the right stick or a drag on the screen moves an aim
--- direction, and the ship turns towards it at its turn rate. A chase camera
--- follows the aim. Thrust is relative to the ship: throttle, strafe and
--- up/down. Letting go glides to a stop; Brake stops quickly.
+-- direction, and the nose eases towards it, never faster than the ship's
+-- turn rate. The hull banks into turns and strafes. A chase camera follows
+-- the aim, pulls back and widens its view with speed, and rolls a little with
+-- the bank. Thrust is relative to the ship: throttle, strafe and up/down.
+-- Letting go glides to a stop; Brake stops quickly.
+--
+-- The laser (hold click, RT or the Laser button) fires where the reticle
+-- points, within a cone around the nose. This client draws its own beam at
+-- once; the server decides heat and overheating (BeamSystem).
 --
 -- Also owns the suit/ship mode switch, hides Board prompts that aren't
 -- yours, and works out whether you can dock right now.
@@ -20,12 +26,15 @@ local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
+local BeamMath =
+	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("BeamMath"))
 local FlightMath = require(
 	ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("FlightMath")
 )
 local Input = require(script.Parent.Parent.Input)
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 
+local B = Config.Beam
 local M = Config.Movement
 
 local RENDER_STEP = "GaG_ShipFlight"
@@ -37,12 +46,21 @@ local INPUT_DEADZONE = 0.05
 -- When the ship hits something, the commanded speed drops to at most this
 -- much above the real speed, so it doesn't keep pushing at full throttle.
 local COLLISION_SLACK = 15
+local MAX_BANK = math.rad(M.SHIP_MAX_BANK_DEGREES)
+local STRAFE_BANK = math.rad(M.SHIP_STRAFE_BANK_DEGREES)
+local BEAM_CONE = math.rad(B.AIM_CONE_DEGREES)
+-- While firing, the aim is sent again once it has moved this much, and at
+-- least this often anyway (which also restarts a beam whose "start" the
+-- server dropped).
+local AIM_RESEND_COS = math.cos(math.rad(1))
+local AIM_KEEPALIVE = 0.5
 
 type Handling = {
 	maxSpeed: number,
 	acceleration: number,
 	braking: number,
 	turnRate: number,
+	beamRange: number,
 }
 
 type Flight = {
@@ -53,9 +71,16 @@ type Flight = {
 	handling: Handling,
 	yaw: number,
 	pitch: number,
-	orientation: CFrame, -- where the ship is told to point
+	orientation: CFrame, -- where the ship is told to point, without bank
+	heading: number, -- yaw of `orientation` last frame, for the turn rate
+	bank: number, -- roll in radians, positive lowers the left wing
 	localVelocity: Vector3, -- commanded velocity in ship space
 	cameraPosition: Vector3,
+	muzzle: Attachment?,
+	rayParams: RaycastParams,
+	beamSent: boolean, -- the server was told the beam is on
+	aimSent: Vector3,
+	aimTimer: number,
 }
 
 local ShipController = {}
@@ -111,9 +136,14 @@ local function leave()
 	flight = nil
 	RunService:UnbindFromRenderStep(RENDER_STEP)
 	setOwnPrompt(f.ship, true)
+	if f.beamSent then
+		Net.BeamInput:FireServer("stop")
+	end
+	ClientState.beam.firing = false
 
 	local camera = Workspace.CurrentCamera
 	camera.CameraType = Enum.CameraType.Custom
+	camera.FieldOfView = M.CAMERA_FOV
 	local character = Players.LocalPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	if humanoid then
@@ -123,9 +153,61 @@ local function leave()
 	UserInputService.MouseIconEnabled = true
 
 	ClientState.flight.speed = 0
+	ClientState.flight.throttle = 0
 	ClientState.flight.dock = "none"
 	Input.setMode("suit")
 	ClientState.setMode("suit")
+end
+
+-- Where the laser should point, in ship space: at whatever is under the
+-- reticle within beam range, kept inside the cone around the nose.
+local function beamAim(f: Flight, muzzle: Attachment): Vector3
+	local camera = Workspace.CurrentCamera.CFrame
+	local origin = muzzle.WorldPosition
+	-- Start the reticle ray level with the muzzle, so nothing between the
+	-- camera and the ship can catch it.
+	local depth = math.max(0, (origin - camera.Position):Dot(camera.LookVector))
+	local start = camera.Position + camera.LookVector * depth
+	local reach = camera.LookVector * f.handling.beamRange
+	local hit = Workspace:Raycast(start, reach, f.rayParams)
+	local point = if hit then hit.Position else start + reach
+	local toPoint = point - origin
+	if toPoint.Magnitude < 1 then
+		return BeamMath.FORWARD
+	end
+	local direction = f.hull.CFrame:VectorToObjectSpace(toPoint.Unit)
+	return BeamMath.clampToCone(BeamMath.FORWARD, direction, BEAM_CONE)
+end
+
+local function updateBeam(f: Flight, dt: number)
+	local beam = ClientState.beam
+	local muzzle = f.muzzle
+	local overheated = f.ship:GetAttribute("Overheated") == true
+	if muzzle == nil or overheated or not Input.isHeld("Beam") then
+		if f.beamSent then
+			Net.BeamInput:FireServer("stop")
+			f.beamSent = false
+		end
+		beam.firing = false
+		return
+	end
+	local direction = beamAim(f, muzzle)
+	beam.firing = true
+	beam.direction = direction
+	f.aimTimer += dt
+	if not f.beamSent then
+		Net.BeamInput:FireServer("start", direction)
+		f.beamSent = true
+		f.aimSent = direction
+		f.aimTimer = 0
+	elseif
+		f.aimTimer >= B.AIM_SEND_INTERVAL
+		and (direction:Dot(f.aimSent) < AIM_RESEND_COS or f.aimTimer >= AIM_KEEPALIVE)
+	then
+		Net.BeamInput:FireServer("aim", direction)
+		f.aimSent = direction
+		f.aimTimer = 0
+	end
 end
 
 local function update(dt: number)
@@ -145,13 +227,13 @@ local function update(dt: number)
 		else Enum.MouseBehavior.Default
 	UserInputService.MouseIconEnabled = not steerWithMouse
 
-	-- Aim, then turn the ship towards it no faster than its turn rate.
+	-- Aim, then ease the nose towards it, no faster than the turn rate.
 	local look = Input.lookDelta(dt)
 	f.yaw -= look.X
 	f.pitch = math.clamp(f.pitch - look.Y, -MAX_PITCH, MAX_PITCH)
 	local aim = FlightMath.aim(f.yaw, f.pitch)
-	f.orientation = FlightMath.turnTowards(f.orientation, aim, f.handling.turnRate * dt)
-	f.steer.CFrame = f.orientation
+	f.orientation =
+		FlightMath.easeTowards(f.orientation, aim, f.handling.turnRate, M.SHIP_TURN_RESPONSE, dt)
 
 	-- Thrust, worked out in ship space so the velocity follows the nose.
 	local input = Input.moveVector()
@@ -181,18 +263,37 @@ local function update(dt: number)
 		M.FLIGHT_BOUNDS_HEIGHT
 	)
 
-	-- Chase camera: behind and above the aim, smoothed, looking ahead.
+	-- Bank into turns and strafes. Only the hull rolls; thrust and the camera
+	-- work from the level orientation.
+	local heading, pitch = FlightMath.yawPitchOf(f.orientation)
+	-- Steeply nose-up or down, a change of heading is a smaller real turn.
+	local yawRate = if dt > 0
+		then FlightMath.wrapAngle(heading - f.heading) / dt * math.cos(pitch)
+		else 0
+	f.heading = heading
+	local strafe = if thrusting then input.X else 0
+	local bank = FlightMath.bankAngle(yawRate, strafe, M.SHIP_BANK_PER_TURN, STRAFE_BANK, MAX_BANK)
+	f.bank = FlightMath.smooth(f.bank, bank, M.SHIP_BANK_SMOOTHING, dt)
+	f.steer.CFrame = f.orientation * CFrame.Angles(0, 0, f.bank)
+
+	-- Chase camera: behind and above the aim, smoothed, looking ahead. It
+	-- pulls back and widens with forward speed and follows some of the bank.
+	local forward = math.clamp(-f.localVelocity.Z / f.handling.maxSpeed, 0, 1)
 	local position = f.hull.Position
-	local desired = position
-		+ aim:VectorToWorldSpace(Vector3.new(0, M.CAMERA_HEIGHT, M.CAMERA_DISTANCE))
+	local distance = M.CAMERA_DISTANCE + M.CAMERA_SPEED_PULLBACK * forward
+	local desired = position + aim:VectorToWorldSpace(Vector3.new(0, M.CAMERA_HEIGHT, distance))
 	f.cameraPosition = f.cameraPosition:Lerp(desired, 1 - math.exp(-M.CAMERA_SMOOTHING * dt))
+	local up = (aim * CFrame.Angles(0, 0, f.bank * M.CAMERA_ROLL_SHARE)).UpVector
 	local camera = Workspace.CurrentCamera
-	camera.CFrame =
-		CFrame.lookAt(f.cameraPosition, position + aim.LookVector * LOOK_AHEAD, aim.UpVector)
+	camera.CFrame = CFrame.lookAt(f.cameraPosition, position + aim.LookVector * LOOK_AHEAD, up)
+	camera.FieldOfView = M.CAMERA_FOV + M.CAMERA_FOV_BOOST * forward
+
+	updateBeam(f, dt)
 
 	local speed = actual.Magnitude
 	ClientState.flight.speed = speed
 	ClientState.flight.maxSpeed = f.handling.maxSpeed
+	ClientState.flight.throttle = if thrusting then math.max(input.Z, 0) else 0
 	ClientState.flight.dock = dockStatus(position, speed)
 end
 
@@ -219,6 +320,15 @@ local function enter(ship: Model)
 
 	local yaw, pitch = FlightMath.yawPitchOf(hull.CFrame)
 	local camera = Workspace.CurrentCamera
+	local muzzle = hull:FindFirstChild("BeamOrigin")
+	local exclude: { Instance } = { ship }
+	local character = Players.LocalPlayer.Character
+	if character then
+		table.insert(exclude, character)
+	end
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = exclude
 	local f: Flight = {
 		ship = ship,
 		hull = hull,
@@ -228,8 +338,15 @@ local function enter(ship: Model)
 		yaw = yaw,
 		pitch = math.clamp(pitch, -MAX_PITCH, MAX_PITCH),
 		orientation = hull.CFrame.Rotation,
+		heading = yaw,
+		bank = 0,
 		localVelocity = Vector3.zero,
 		cameraPosition = camera.CFrame.Position,
+		muzzle = if muzzle and muzzle:IsA("Attachment") then muzzle else nil,
+		rayParams = rayParams,
+		beamSent = false,
+		aimSent = BeamMath.FORWARD,
+		aimTimer = 0,
 	}
 	flight = f
 	setOwnPrompt(ship, false)

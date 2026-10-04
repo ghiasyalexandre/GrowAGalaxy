@@ -10,7 +10,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | Stage | Status |
 |---|---|
 | 1. Foundation: config, save data, ISS hub, galaxy regions | [Merged](docs/stage-1-foundation.md) |
-| 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking | [In review](docs/stage-2-movement-ships.md) |
+| 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking, mining laser | [In review](docs/stage-2-movement-ships.md) |
 | 3. Mining | Not started |
 | 4. Galaxy construction | Not started |
 | 5. Progression | Not started |

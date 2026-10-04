@@ -16,10 +16,29 @@ local Movement = {
 	SHIP_IDLE_BRAKE_FACTOR = 0.35,
 	SHIP_MAX_PITCH_DEGREES = 80,
 
+	-- Ship feel. Visual only: speed and turn rate still come from the ship's
+	-- stats. The nose eases onto the aim (higher TURN_RESPONSE is snappier,
+	-- never faster than the ship's turn rate), and the hull banks into turns
+	-- and strafes.
+	SHIP_TURN_RESPONSE = 5,
+	SHIP_MAX_BANK_DEGREES = 35,
+	SHIP_BANK_PER_TURN = 0.45, -- radians of bank per radian/second of turning
+	SHIP_STRAFE_BANK_DEGREES = 15, -- bank at full strafe
+	SHIP_BANK_SMOOTHING = 5,
+
+	-- Spacesuit body: leans into the direction of travel while floating.
+	SUIT_LEAN_DEGREES = 50, -- forward lean at full speed
+	SUIT_ROLL_DEGREES = 15, -- sideways tilt at full sideways speed
+	SUIT_LEAN_SMOOTHING = 5,
+
 	-- Chase camera
 	CAMERA_HEIGHT = 7,
 	CAMERA_DISTANCE = 26,
 	CAMERA_SMOOTHING = 12, -- higher follows more tightly
+	CAMERA_FOV = 70,
+	CAMERA_FOV_BOOST = 15, -- extra field of view at top speed
+	CAMERA_SPEED_PULLBACK = 6, -- extra studs behind the ship at top speed
+	CAMERA_ROLL_SHARE = 0.3, -- share of the ship's bank the camera follows
 	LOOK_SENSITIVITY_MOUSE = 0.0035, -- radians per pixel
 	LOOK_SENSITIVITY_TOUCH = 0.006,
 	LOOK_SPEED_GAMEPAD = 2.4, -- radians per second at full stick

@@ -162,6 +162,34 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	for _, name in { "SHIP_MAX_BANK_DEGREES", "SUIT_LEAN_DEGREES", "SUIT_ROLL_DEGREES" } do
+		local value = movement[name]
+		if type(value) ~= "number" or value < 0 or value >= 90 then
+			fail(`Movement: {name} must be from 0 up to 90`)
+		end
+	end
+	if movement.CAMERA_FOV + movement.CAMERA_FOV_BOOST > 120 then
+		fail("Movement: CAMERA_FOV plus CAMERA_FOV_BOOST is over Roblox's limit of 120")
+	end
+
+	-- Mining beam: every ship fires for a while before it overheats.
+	local beam = config.Beam
+	if type(beam.HEAT_PER_SECOND) ~= "number" or beam.HEAT_PER_SECOND <= 0 then
+		fail("Beam: HEAT_PER_SECOND must be a positive number")
+	else
+		for shipId, ship in config.Ships.BY_ID do
+			if ship.stats.heatCapacity / beam.HEAT_PER_SECOND < 2 then
+				fail(`Beam: ship {shipId} overheats in under 2 seconds`)
+			end
+		end
+	end
+	if beam.OVERHEAT_RESUME_SHARE <= 0 or beam.OVERHEAT_RESUME_SHARE >= 1 then
+		fail("Beam: OVERHEAT_RESUME_SHARE must be between 0 and 1")
+	end
+	if beam.AIM_CONE_DEGREES <= 0 or beam.AIM_CONE_DEGREES >= 90 then
+		fail("Beam: AIM_CONE_DEGREES must be between 0 and 90")
+	end
+
 	-- The flight area must hold every region at its largest and stay clear of
 	-- the Earth backdrop.
 	local world = config.World

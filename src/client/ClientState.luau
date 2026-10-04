@@ -34,7 +34,14 @@ ClientState.route = "Station" :: Route
 ClientState.flight = {
 	speed = 0,
 	maxSpeed = 0,
+	throttle = 0, -- 0 to 1, forward thrust the pilot is asking for
 	dock = "none" :: DockStatus,
+}
+-- The local pilot's laser, drawn at once without waiting for the server.
+-- `direction` is in ship space (-Z is the nose).
+ClientState.beam = {
+	firing = false,
+	direction = Vector3.new(0, 0, -1),
 }
 
 -- Fires with the changed field name, or "*" after the initial load.

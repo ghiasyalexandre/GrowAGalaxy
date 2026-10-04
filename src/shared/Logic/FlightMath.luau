@@ -86,6 +86,50 @@ function FlightMath.turnTowards(from: CFrame, to: CFrame, maxAngle: number): CFr
 	return from.Rotation:Lerp(to.Rotation, maxAngle / angle)
 end
 
+-- Eases `from` towards `to`: each frame covers a share of the remaining
+-- angle set by `response` (exponential smoothing, so turns start quickly and
+-- settle gently), but never more than `maxRate * dt` radians. Returns a
+-- rotation-only CFrame.
+function FlightMath.easeTowards(
+	from: CFrame,
+	to: CFrame,
+	maxRate: number,
+	response: number,
+	dt: number
+): CFrame
+	local angle = FlightMath.angleBetween(from, to)
+	if angle < 1e-6 then
+		return to.Rotation
+	end
+	local step = math.min(maxRate * dt, angle * (1 - math.exp(-response * dt)))
+	return from.Rotation:Lerp(to.Rotation, step / angle)
+end
+
+-- Moves a number towards `target` by a share of the gap set by `rate`, the
+-- same amount whatever the frame rate.
+function FlightMath.smooth(current: number, target: number, rate: number, dt: number): number
+	return current + (target - current) * (1 - math.exp(-rate * dt))
+end
+
+-- An angle in radians wrapped into [-pi, pi).
+function FlightMath.wrapAngle(angle: number): number
+	return (angle + math.pi) % (2 * math.pi) - math.pi
+end
+
+-- How far a ship rolls (radians) while turning at `yawRate` radians per
+-- second (positive = turning left) and strafing with `strafe` in [-1, 1]
+-- (positive = right). Positive roll lowers the left wing, so the ship leans
+-- into turns and towards the side it strafes to.
+function FlightMath.bankAngle(
+	yawRate: number,
+	strafe: number,
+	perTurn: number,
+	strafeBank: number,
+	maxBank: number
+): number
+	return math.clamp(yawRate * perTurn - strafe * strafeBank, -maxBank, maxBank)
+end
+
 -- Chase-camera / steering orientation from yaw and pitch (radians).
 function FlightMath.aim(yaw: number, pitch: number): CFrame
 	return CFrame.fromOrientation(pitch, yaw, 0)
