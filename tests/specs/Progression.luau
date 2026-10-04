@@ -34,6 +34,9 @@ return function(T, Loader)
 				collections = true,
 				starUpgrades = true,
 				planetsBought = true,
+				planetUpgrades = true,
+				starEvolutions = true,
+				blackHoles = true,
 			}
 			for id, def in Config.Achievements.BY_ID do
 				if def.enabled then

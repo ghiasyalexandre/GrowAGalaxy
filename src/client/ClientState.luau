@@ -63,6 +63,9 @@ ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 ClientState.notify = Signal.new() :: Signal.Signal<string>
 -- Ask the Star Shop panel to open (HUD button, shortcut, station console).
 ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
+-- A milestone of yours worth a banner (RewardController): header, title,
+-- details, accent colour, and whether to flash the screen.
+ClientState.celebrate = Signal.new() :: Signal.Signal<string, string, string, Color3, boolean>
 
 -- The local player's region slot, if they have one yet.
 function ClientState.mySlot(): number?

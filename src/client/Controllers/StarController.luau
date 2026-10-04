@@ -4,6 +4,10 @@
 -- stars the Manage panel: level up, evolve to the next star type, move, and
 -- buy or upgrade the planet in each orbit slot. Planets are local, drawn from
 -- the star's Planets attribute; the server (StarSystem) checks every action.
+--
+-- Watching the attributes also drives the spectacle (Fx/StarFx) for every
+-- star: birth (BornAt), level up, evolution (supernova) and new or upgraded
+-- planets. Your own stars' milestones also get a banner (ClientState.celebrate).
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -16,13 +20,16 @@ local Workspace = game:GetService("Workspace")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local PlacementController = require(script.Parent.PlacementController)
+local StarFx = require(script.Parent.Parent.Fx.StarFx)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local StarsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Stars"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
+local Types = require(Shared:WaitForChild("Types"))
 
 local S = Config.Stars
 local P = Config.Planets
@@ -31,6 +38,8 @@ local CURRENCY = Config.Economy.CURRENCY_NAME
 local RING_COLOR = Color3.fromRGB(150, 180, 255)
 -- Bezier handle length for a quarter circle of radius 1.
 local QUARTER = 0.5523
+-- Seconds after placement during which a newly seen star plays its birth.
+local BIRTH_WINDOW = 4
 
 type Planet = { part: Part, slot: number, phase: number }
 
@@ -41,6 +50,10 @@ type Visual = {
 	rings: { Instance },
 	label: BillboardGui,
 	connections: { RBXScriptConnection },
+	-- Last seen attributes, to tell what changed (and play its effect).
+	typeId: any,
+	level: number,
+	planetsText: string,
 }
 
 local StarController = {}
@@ -60,6 +73,11 @@ end
 
 local function fmt(n: number): string
 	return Format.abbreviate(n)
+end
+
+local function planetRing(def: { ring: string? }): Color3?
+	local ringColor = def.ring
+	return if ringColor then Color3.fromHex(ringColor) else nil
 end
 
 -- A faint circle of `radius` around `core`, tilted `tilt` degrees, drawn
@@ -148,10 +166,10 @@ local function buildPlanets(v: Visual)
 			part.CanTouch = false
 			part.CastShadow = false
 			part.Parent = v.model
-			local planetRing = def.ring
-			if planetRing then
+			local ringHex = def.ring
+			if ringHex then
 				for _, item in
-					ring(part, def.radius * 1.8, 20, Color3.fromHex(planetRing), def.radius * 0.5)
+					ring(part, def.radius * 1.8, 20, Color3.fromHex(ringHex), def.radius * 0.5)
 				do
 					table.insert(v.rings, item)
 				end
@@ -261,8 +279,8 @@ local function showPicker(model: Model, typeId: string)
 	for order, planetId in P.ORDER do
 		local def = P.BY_ID[planetId]
 		local row = Theme.row(list, 52, order)
-		local dot = Theme.swatch(row, Color3.fromHex(def.color), 28, true)
-		dot.Position = UDim2.fromOffset(10, 12)
+		local dot = Theme.planetIcon(row, Color3.fromHex(def.color), 34, planetRing(def))
+		dot.Position = UDim2.fromOffset(8, 9)
 		rowText(
 			row,
 			`{def.displayName}  ·  tier {def.tier}`,
@@ -362,8 +380,9 @@ refreshPanel = function()
 		local planetDef = if planetId then P.BY_ID[planetId] else nil
 		local button: TextButton
 		if planetDef and planetId then
-			local dot = Theme.swatch(row, Color3.fromHex(planetDef.color), 28, true)
-			dot.Position = UDim2.fromOffset(10, 12)
+			local dot =
+				Theme.planetIcon(row, Color3.fromHex(planetDef.color), 34, planetRing(planetDef))
+			dot.Position = UDim2.fromOffset(8, 9)
 			rowText(row, planetDef.displayName, `Orbit {slot}  ·  +{fmt(planetDef.income)}/s`, 48)
 			local nextId, cost = StarMath.planetUpgrade(planetId)
 			if nextId and cost and StarMath.planetAllowed(typeId, nextId) then
@@ -470,6 +489,91 @@ end
 
 -- Stars ------------------------------------------------------------------
 
+local animate: () -> ()
+
+local function starDef(v: Visual): StarsConfig.StarTypeDef?
+	local typeId = v.model:GetAttribute("TypeId")
+	return if type(typeId) == "string" then S.BY_ID[typeId] else nil
+end
+
+local function starColor(v: Visual): Color3
+	local def = starDef(v)
+	return if def then Color3.fromHex(def.light) else C.gold
+end
+
+-- A banner for your own star's milestones.
+local function celebrate(v: Visual, header: string, titleText: string, body: string, flash: boolean)
+	if isMine(v.model) then
+		ClientState.celebrate:Fire(header, titleText, body, starColor(v), flash)
+	end
+end
+
+local function onTypeChanged(v: Visual)
+	local typeId = v.model:GetAttribute("TypeId")
+	if typeId == v.typeId then
+		return
+	end
+	v.typeId = typeId
+	local def = starDef(v)
+	StarFx.supernova(v.core.Position, v.core.Size.X / 2, starColor(v))
+	if def then
+		local best = P.BY_ID[P.ORDER[math.min(def.tier, #P.ORDER)]]
+		celebrate(
+			v,
+			"STAR EVOLVED",
+			def.displayName,
+			`Tier {def.tier}  ·  now holds planets up to {best.displayName}`,
+			true
+		)
+	end
+end
+
+local function onLevelChanged(v: Visual)
+	local level = v.model:GetAttribute("Level")
+	if type(level) ~= "number" or level == v.level then
+		return
+	end
+	local raised = level > v.level
+	v.level = level
+	buildPlanets(v)
+	animate()
+	if raised then
+		StarFx.levelUp(v.core.Position, v.core.Size.X / 2, starColor(v))
+		local def = starDef(v)
+		celebrate(
+			v,
+			"LEVEL UP",
+			`{if def then def.displayName else "Star"}  ·  level {level}`,
+			`{StarMath.slots(level)} orbits open  ·  production x{StarMath.levelDef(level).incomeMultiplier}`,
+			false
+		)
+	end
+end
+
+local function onPlanetsChanged(v: Visual)
+	local text = v.model:GetAttribute("Planets")
+	local encoded = if type(text) == "string" then text else ""
+	local before = StarMath.decodePlanets(v.planetsText)
+	local after = StarMath.decodePlanets(encoded)
+	v.planetsText = encoded
+	buildPlanets(v)
+	animate()
+	for _, planet in v.planets do
+		local planetId = after[planet.slot]
+		local def = if planetId then P.BY_ID[planetId] else nil
+		if def and planetId ~= before[planet.slot] then
+			StarFx.materialize(planet.part, Color3.fromHex(def.color))
+			celebrate(
+				v,
+				if before[planet.slot] then "WORLD UPGRADED" else "NEW WORLD",
+				def.displayName,
+				`Orbit {planet.slot}  ·  +{fmt(def.income)} {CURRENCY}/s`,
+				false
+			)
+		end
+	end
+end
+
 local function add(model: Instance)
 	if not model:IsA("Model") or model:GetAttribute("StarId") == nil or visuals[model] then
 		return
@@ -483,6 +587,8 @@ local function add(model: Instance)
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = mine
 	end
+	local level = model:GetAttribute("Level")
+	local planetsText = model:GetAttribute("Planets")
 	local v: Visual = {
 		model = model,
 		core = core,
@@ -490,19 +596,49 @@ local function add(model: Instance)
 		rings = {},
 		label = makeLabel(core, mine),
 		connections = {},
+		typeId = model:GetAttribute("TypeId"),
+		level = if type(level) == "number" then level else 1,
+		planetsText = if type(planetsText) == "string" then planetsText else "",
 	}
 	visuals[model] = v
 	buildPlanets(v)
 	refreshLabel(v)
-	local function changed()
-		buildPlanets(v)
-		refreshLabel(v)
-		if panelStar == model then
-			refreshPanel()
+
+	-- A star placed moments ago ignites (BornAt is set by the server).
+	local function birth()
+		local born = model:GetAttribute("BornAt")
+		if type(born) == "number" and Workspace:GetServerTimeNow() - born < BIRTH_WINDOW then
+			StarFx.birth(core.Position, core.Size.X / 2, starColor(v))
+			local def = starDef(v)
+			celebrate(
+				v,
+				"NEW STAR",
+				if def then def.displayName else "Star",
+				"Manage it to add planets and level it up",
+				false
+			)
 		end
 	end
-	for _, attribute in { "Level", "Planets", "TypeId", "Income" } do
-		table.insert(v.connections, model:GetAttributeChangedSignal(attribute):Connect(changed))
+	birth()
+	table.insert(v.connections, model:GetAttributeChangedSignal("BornAt"):Connect(birth))
+
+	local handlers: { [string]: (Visual) -> () } = {
+		TypeId = onTypeChanged,
+		Level = onLevelChanged,
+		Planets = onPlanetsChanged,
+		Income = function() end,
+	}
+	for attribute, handler in handlers do
+		table.insert(
+			v.connections,
+			model:GetAttributeChangedSignal(attribute):Connect(function()
+				handler(v)
+				refreshLabel(v)
+				if panelStar == model then
+					refreshPanel()
+				end
+			end)
+		)
 	end
 	table.insert(
 		v.connections,
@@ -517,7 +653,7 @@ local function add(model: Instance)
 	)
 end
 
-local function animate()
+animate = function()
 	local now = Workspace:GetServerTimeNow()
 	for _, v in visuals do
 		local center = v.core.CFrame.Position
@@ -541,6 +677,22 @@ function StarController.myStars(): { [string]: Model }
 		end
 	end
 	return mine
+end
+
+-- My stars as save-like records (type only), for the tier rules in the shop
+-- and the HUD's next goal.
+function StarController.myRecords(): { [string]: Types.StarRecord }
+	local records: { [string]: Types.StarRecord } = {}
+	for id, model in StarController.myStars() do
+		local typeId = model:GetAttribute("TypeId")
+		records[id] = {
+			typeId = if type(typeId) == "string" then typeId else S.DEFAULT_TYPE,
+			level = 1,
+			pos = { x = 0, y = 0, z = 0 },
+			planets = {},
+		}
+	end
+	return records
 end
 
 function StarController.init()

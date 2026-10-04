@@ -26,6 +26,11 @@ local ORDER: { string } = {
 	"StarCluster",
 	"Cartographer",
 	"CoolHead",
+	"Planetfall",
+	"StellarEvolution",
+	"Terraformer",
+	"Worldbuilder",
+	"EventHorizon",
 }
 
 local BY_ID: { [string]: AchievementDef } = {
@@ -91,6 +96,51 @@ local BY_ID: { [string]: AchievementDef } = {
 		stat = "coolExtractions",
 		goal = 1,
 		reward = { stardust = 3000 },
+	},
+	Planetfall = {
+		id = "Planetfall",
+		displayName = "Planetfall",
+		description = "Put your first planet in orbit.",
+		enabled = true,
+		stat = "planetsBought",
+		goal = 1,
+		reward = { stardust = 300 },
+	},
+	StellarEvolution = {
+		id = "StellarEvolution",
+		displayName = "Stellar Evolution",
+		description = "Evolve a star into the next type.",
+		enabled = true,
+		stat = "starEvolutions",
+		goal = 1,
+		reward = { stardust = 1500 },
+	},
+	Terraformer = {
+		id = "Terraformer",
+		displayName = "Terraformer",
+		description = "Upgrade planets 5 times.",
+		enabled = true,
+		stat = "planetUpgrades",
+		goal = 5,
+		reward = { stardust = 8000 },
+	},
+	Worldbuilder = {
+		id = "Worldbuilder",
+		displayName = "Worldbuilder",
+		description = "Buy 10 planets.",
+		enabled = true,
+		stat = "planetsBought",
+		goal = 10,
+		reward = { stardust = 20000 },
+	},
+	EventHorizon = {
+		id = "EventHorizon",
+		displayName = "Event Horizon",
+		description = "Own a black hole.",
+		enabled = true,
+		stat = "blackHoles",
+		goal = 1,
+		reward = { stardust = 250000 },
 	},
 }
 

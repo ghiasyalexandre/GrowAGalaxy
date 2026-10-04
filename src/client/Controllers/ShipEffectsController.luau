@@ -193,6 +193,9 @@ local function makeBeamFx(color: string?): BeamFx
 	flashLight.Range = 18
 	flashLight.Enabled = false
 	flashLight.Parent = flash
+	local ring = flashPart("Shockwave", Enum.PartType.Cylinder, tint)
+	-- ForceField glows at its edges, so the flat disc reads as a ring.
+	ring.Material = Enum.Material.ForceField
 
 	return {
 		target = target,
@@ -206,7 +209,7 @@ local function makeBeamFx(color: string?): BeamFx
 		flash = flash,
 		flashLight = flashLight,
 		impact = flashPart("ImpactFlash", Enum.PartType.Ball, tint),
-		ring = flashPart("Shockwave", Enum.PartType.Cylinder, tint),
+		ring = ring,
 		impactAt = 0,
 		impactPos = nil,
 		impactFacing = FORWARD,

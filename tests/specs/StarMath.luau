@@ -29,6 +29,15 @@ return function(T, Loader)
 			T.truthy(StarMath.typeUnlocked("BlackHole", { a = star("RedSupergiant", 1) }))
 		end)
 
+		T.test("the next goal is the tier above your best star", function()
+			T.equal(StarMath.nextTier({}), first)
+			T.equal(
+				StarMath.nextTier({ a = star(first, 1), b = star("YellowDwarf", 2) }),
+				"WhiteDwarf"
+			)
+			T.equal(StarMath.nextTier({ a = star("BlackHole", 1) }), nil)
+		end)
+
 		T.test("stars evolve up the ladder and stop at the black hole", function()
 			T.equal(StarMath.evolveTarget("BrownDwarf"), "RedDwarf")
 			T.equal(StarMath.evolveTarget("RedSupergiant"), "BlackHole")

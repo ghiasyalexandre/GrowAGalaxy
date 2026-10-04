@@ -21,6 +21,7 @@ local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
 local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -38,6 +39,8 @@ local Types = require(ReplicatedStorage.Shared.Types)
 local S = Config.Stars
 local P = Config.Planets
 local CURRENCY = Config.Economy.CURRENCY_NAME
+-- The top of the star ladder; owning one counts for the "blackHoles" stat.
+local BLACK_HOLE = S.ORDER[#S.ORDER]
 
 local REJECTIONS: { [string]: string } = {
 	Invalid = "That isn't a valid spot.",
@@ -134,7 +137,16 @@ local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean
 		return false, REJECTIONS.Invalid
 	end
 	spawnStar(player, region, id, star)
+	-- Clients play the star-birth effect for stars born moments ago.
+	local mine = models[player]
+	local model = if mine then mine[id] else nil
+	if model then
+		model:SetAttribute("BornAt", Workspace:GetServerTimeNow())
+	end
 	DataSystem.addStat(player, "starsPlaced", 1)
+	if def.id == BLACK_HOLE then
+		DataSystem.addStat(player, "blackHoles", 1)
+	end
 	return true, `{def.displayName} placed! It makes {StarMath.income(star)} {CURRENCY}/s.`
 end
 
@@ -211,6 +223,9 @@ local function evolve(player: Player, starId: unknown): (boolean, string)
 	end
 	DataSystem.updateStar(player, starId :: string, { typeId = target })
 	DataSystem.addStat(player, "starEvolutions", 1)
+	if target == BLACK_HOLE then
+		DataSystem.addStat(player, "blackHoles", 1)
+	end
 	StarBuilder.apply(model, star)
 	return true, `Your star became a {def.displayName}! Now {StarMath.income(star)} {CURRENCY}/s.`
 end

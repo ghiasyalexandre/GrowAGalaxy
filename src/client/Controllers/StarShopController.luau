@@ -27,6 +27,7 @@ local S = Config.Stars
 local P = Config.Planets
 local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
+local TOP_STAR = S.ORDER[#S.ORDER] -- drawn as a black hole
 
 local StarShopController = {}
 
@@ -42,15 +43,6 @@ local function close()
 	end
 end
 
--- My stars as save-like records, for the tier rules.
-local function myRecords(): { [string]: any }
-	local records = {}
-	for id, model in StarController.myStars() do
-		records[id] = { typeId = model:GetAttribute("TypeId"), level = 1, planets = {} }
-	end
-	return records
-end
-
 local function count(t: { [string]: any }): number
 	local n = 0
 	for _ in t do
@@ -64,57 +56,92 @@ local function refresh()
 	if profile == nil or not gui.Enabled then
 		return
 	end
-	local records = myRecords()
+	local records = StarController.myRecords()
 	local owned = count(records)
 	local capacity = RegionMath.maxSystems(profile.expansion)
-	header.Text = `Your galaxy: {owned} / {capacity} stars`
+	header.Text = `Your galaxy: {owned} / {capacity} stars  ·  +{Format.abbreviate(
+		profile.incomeRate
+	)} {CURRENCY}/s`
 	Theme.clear(list)
 	local first: TextButton? = nil
+	local goal = StarMath.nextTier(records)
 	for order, typeId in S.ORDER do
 		local def = S.BY_ID[typeId]
 		if not def.enabled then
 			continue
 		end
-		local row = Theme.row(list, 64, order)
-		local dot = Theme.swatch(row, Color3.fromHex(def.color), 38, true)
-		dot.Position = UDim2.fromOffset(10, 13)
+		local unlocked = StarMath.typeUnlocked(typeId, records)
+		local cost = StarMath.placeCost(typeId, owned) or 0
+		local room = owned < capacity
+		local affordable = unlocked and room and profile.stardust >= cost
+
+		local row = Theme.row(list, 74, order)
+		local style: Theme.StarIconStyle = if not unlocked
+			then "locked"
+			elseif typeId == TOP_STAR then "blackHole"
+			else "star"
+		local icon =
+			Theme.starIcon(row, Color3.fromHex(def.color), Color3.fromHex(def.light), 46, style)
+		icon.Position = UDim2.fromOffset(12, 14)
+
 		local bestPlanet = P.BY_ID[P.ORDER[math.min(def.tier, #P.ORDER)]]
-		Theme.label(row, {
-			Position = UDim2.fromOffset(60, 6),
-			Size = UDim2.new(1, -250, 0, 20),
-			Text = `{def.displayName}  ·  tier {def.tier}`,
-			TextColor3 = Color3.fromHex(def.light),
+		local name = Theme.label(row, {
+			Position = UDim2.fromOffset(72, 7),
+			Size = UDim2.new(1, -262, 0, 20),
+			RichText = true,
+			Text = `{def.displayName}  ·  tier {def.tier}{if typeId == goal
+				then `  <font color="#FFCD5A">NEXT GOAL</font>`
+				else ""}`,
+			TextColor3 = if unlocked then Color3.fromHex(def.light) else C.subtle,
 		})
+		name.TextTruncate = Enum.TextTruncate.None
 		Theme.label(row, {
-			Position = UDim2.fromOffset(60, 26),
-			Size = UDim2.new(1, -250, 0, 16),
+			Position = UDim2.fromOffset(72, 28),
+			Size = UDim2.new(1, -262, 0, 16),
 			Text = `+{Format.abbreviate(def.income)} {CURRENCY}/s  ·  planets up to {bestPlanet.displayName}`,
 			Font = Enum.Font.Gotham,
 			TextSize = 13,
 			TextColor3 = C.subtle,
 		})
 		Theme.label(row, {
-			Position = UDim2.fromOffset(60, 43),
-			Size = UDim2.new(1, -250, 0, 16),
+			Position = UDim2.fromOffset(72, 45),
+			Size = UDim2.new(1, -262, 0, 16),
 			Text = def.description,
 			Font = Enum.Font.GothamMedium,
 			TextSize = 12,
 			TextColor3 = C.subtle,
 		})
-		local cost = StarMath.placeCost(typeId, owned) or 0
+
 		local button: TextButton
-		if not StarMath.typeUnlocked(typeId, records) then
+		if not unlocked then
 			local previous = S.BY_ID[S.ORDER[def.tier - 1]]
 			button = Theme.button(row, `Needs a {previous.displayName}`, "disabled", nil)
-		elseif owned >= capacity then
+		elseif not room then
 			button = Theme.button(row, "Galaxy full", "disabled", nil)
-		elseif profile.stardust < cost then
-			button = Theme.button(row, `{Format.abbreviate(cost)} {CURRENCY}`, "disabled", nil)
+		elseif not affordable then
+			-- Saving up: show how close you are.
+			local share = profile.stardust / math.max(cost, 1)
+			button = Theme.button(
+				row,
+				`{math.floor(share * 100)}%  ·  {Format.abbreviate(cost)}`,
+				"disabled",
+				nil
+			)
+			local fill = Theme.progress(row, share, C.gold, 5)
+			local track = fill.Parent :: Frame
+			track.Position = UDim2.new(0, 72, 1, -7)
+			track.Size = UDim2.new(1, -262, 0, 5)
 		else
 			button = Theme.button(row, `Buy · {Format.abbreviate(cost)}`, "buy", function()
 				close()
 				PlacementController.begin({ mode = "place", typeId = typeId })
 			end)
+			Theme.shine(button)
+			local edge = Instance.new("UIStroke")
+			edge.Color = C.gold
+			edge.Thickness = 2
+			edge.Parent = row
+			Theme.pulse(edge, 0.1, 0.75, 4)
 			first = first or button
 		end
 		button.AnchorPoint = Vector2.new(1, 0.5)
@@ -146,7 +173,7 @@ function StarShopController.init()
 	panel.Position = UDim2.fromScale(0.5, 0.5)
 	panel.Size = UDim2.new(0.9, 0, 0.8, 0)
 	local size = Instance.new("UISizeConstraint")
-	size.MaxSize = Vector2.new(600, 600)
+	size.MaxSize = Vector2.new(640, 700)
 	size.Parent = panel
 	Theme.label(panel, {
 		Position = UDim2.fromOffset(16, 10),

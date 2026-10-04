@@ -1,8 +1,14 @@
 --!strict
 -- Shared look and feel for every panel: colours, rounded panels with a soft
 -- gradient and glowing edge, buttons that grow on hover and squash on press,
--- and a springy pop-in when a panel opens. Plain helpers, no state.
+-- a springy pop-in when a panel opens, animated star and planet icons,
+-- progress bars and a shine that sweeps across buy buttons.
+--
+-- Looping animations (spin, pulse, shine) are driven by the clock from one
+-- Heartbeat connection, not by tweens, so a panel that rebuilds its rows
+-- (on every Stardust change) carries on smoothly instead of restarting.
 
+local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 local Theme = {}
@@ -199,6 +205,209 @@ function Theme.clear(list: Instance)
 			child:Destroy()
 		end
 	end
+end
+
+-- Clock-driven animations ------------------------------------------------
+
+local animated: { [Instance]: (number) -> () } = {}
+local animating: RBXScriptConnection? = nil
+
+-- Calls `step(clock)` every frame while `instance` is in the game.
+function Theme.animate(instance: Instance, step: (number) -> ())
+	animated[instance] = step
+	if animating == nil then
+		animating = RunService.Heartbeat:Connect(function()
+			local now = os.clock()
+			for item, fn in animated do
+				if item.Parent == nil then
+					animated[item] = nil
+				else
+					fn(now)
+				end
+			end
+		end)
+	end
+end
+
+-- Spins a gradient by `speed` degrees per second.
+function Theme.spin(target: UIGradient, speed: number)
+	Theme.animate(target, function(now)
+		target.Rotation = (now * speed) % 360
+	end)
+end
+
+-- Pulses a stroke's transparency between `low` and `high`.
+function Theme.pulse(stroke: UIStroke, low: number, high: number, speed: number)
+	Theme.animate(stroke, function(now)
+		stroke.Transparency = low + (high - low) * (0.5 + 0.5 * math.sin(now * speed))
+	end)
+end
+
+-- A bright band that sweeps across `target` every few seconds.
+function Theme.shine(target: GuiObject)
+	local overlay = Instance.new("Frame")
+	overlay.Name = "Shine"
+	overlay.Size = UDim2.fromScale(1, 1)
+	overlay.BackgroundColor3 = Color3.new(1, 1, 1)
+	overlay.BorderSizePixel = 0
+	overlay.ZIndex = target.ZIndex + 1
+	overlay.Active = false
+	overlay.Parent = target
+	corner(overlay, 8)
+	local band = Instance.new("UIGradient")
+	band.Rotation = 20
+	band.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1),
+		NumberSequenceKeypoint.new(0.4, 1),
+		NumberSequenceKeypoint.new(0.5, 0.45),
+		NumberSequenceKeypoint.new(0.6, 1),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	band.Parent = overlay
+	Theme.animate(band, function(now)
+		-- Sweep for 0.8 s out of every 2.5 s.
+		local t = (now % 2.5) / 0.8
+		band.Offset = Vector2.new(if t < 1 then -1 + 2 * t else 1, 0)
+	end)
+end
+
+local function circle(parent: Instance, size: number, color: Color3): Frame
+	local dot = Instance.new("Frame")
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(0.5, 0.5)
+	dot.Size = UDim2.fromOffset(size, size)
+	dot.BackgroundColor3 = color
+	dot.BorderSizePixel = 0
+	dot.Parent = parent
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(1, 0)
+	c.Parent = dot
+	return dot
+end
+
+export type StarIconStyle = "star" | "blackHole" | "locked"
+
+-- A living star icon `size` pixels across: a pulsing halo around a core
+-- whose gradient slowly turns. A black hole is a dark core in a swirling
+-- accretion ring; a locked star is a dim silhouette.
+function Theme.starIcon(
+	parent: Instance,
+	color: Color3,
+	light: Color3,
+	size: number,
+	style: StarIconStyle
+): Frame
+	local holder = Instance.new("Frame")
+	holder.Name = "StarIcon"
+	holder.BackgroundTransparency = 1
+	holder.Size = UDim2.fromOffset(size, size)
+	holder.Parent = parent
+	if style == "locked" then
+		local core = circle(holder, size * 0.8, Color3.fromRGB(40, 44, 66))
+		local edge = Instance.new("UIStroke")
+		edge.Color = Color3.fromRGB(90, 96, 130)
+		edge.Thickness = 2
+		edge.Parent = core
+		Theme.label(core, {
+			Size = UDim2.fromScale(1, 1),
+			Text = "?",
+			Font = Enum.Font.GothamBlack,
+			TextSize = math.floor(size * 0.45),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextColor3 = Color3.fromRGB(120, 128, 170),
+		})
+		return holder
+	end
+	local halo = circle(holder, size * 1.25, light)
+	halo.BackgroundTransparency = 1
+	local haloStroke = Instance.new("UIStroke")
+	haloStroke.Color = light
+	haloStroke.Thickness = math.max(2, size * 0.12)
+	haloStroke.Parent = halo
+	Theme.pulse(haloStroke, 0.45, 0.9, 3)
+	local core = circle(holder, size * 0.8, Color3.new(1, 1, 1))
+	local fill = Instance.new("UIGradient")
+	if style == "blackHole" then
+		fill.Color = ColorSequence.new(Color3.fromRGB(10, 4, 20), Color3.fromRGB(0, 0, 0))
+		local ring = Instance.new("UIStroke")
+		ring.Color = Color3.new(1, 1, 1)
+		ring.Thickness = math.max(3, size * 0.14)
+		ring.Parent = core
+		local swirl = Instance.new("UIGradient")
+		swirl.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, light),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 160, 90)),
+			ColorSequenceKeypoint.new(1, light),
+		})
+		swirl.Parent = ring
+		Theme.spin(swirl, 160)
+	else
+		fill.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.new(1, 1, 1)),
+			ColorSequenceKeypoint.new(0.35, light),
+			ColorSequenceKeypoint.new(1, color),
+		})
+		Theme.spin(fill, 40)
+	end
+	fill.Parent = core
+	return holder
+end
+
+-- A planet icon: a lit sphere, ringed for ringed planets.
+function Theme.planetIcon(parent: Instance, color: Color3, size: number, ring: Color3?): Frame
+	local holder = Instance.new("Frame")
+	holder.Name = "PlanetIcon"
+	holder.BackgroundTransparency = 1
+	holder.Size = UDim2.fromOffset(size, size)
+	holder.Parent = parent
+	local body = circle(holder, size * 0.72, Color3.new(1, 1, 1))
+	local shade = Instance.new("UIGradient")
+	shade.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, color:Lerp(Color3.new(1, 1, 1), 0.45)),
+		ColorSequenceKeypoint.new(0.6, color),
+		ColorSequenceKeypoint.new(1, color:Lerp(Color3.new(0, 0, 0), 0.55)),
+	})
+	shade.Rotation = 45
+	shade.Parent = body
+	if ring then
+		local band = Instance.new("Frame")
+		band.AnchorPoint = Vector2.new(0.5, 0.5)
+		band.Position = UDim2.fromScale(0.5, 0.5)
+		band.Size = UDim2.fromOffset(size * 1.15, size * 0.3)
+		band.Rotation = -18
+		band.BackgroundTransparency = 1
+		band.Parent = holder
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(1, 0)
+		c.Parent = band
+		local edge = Instance.new("UIStroke")
+		edge.Color = ring
+		edge.Thickness = 2
+		edge.Parent = band
+	end
+	return holder
+end
+
+-- A thin progress bar along the bottom of `parent`; returns its fill.
+function Theme.progress(parent: Instance, share: number, color: Color3, height: number?): Frame
+	local track = Instance.new("Frame")
+	track.Name = "Progress"
+	track.AnchorPoint = Vector2.new(0, 1)
+	track.Size = UDim2.new(1, 0, 0, height or 6)
+	track.BackgroundColor3 = Color3.fromRGB(10, 12, 26)
+	track.BackgroundTransparency = 0.2
+	track.BorderSizePixel = 0
+	track.Parent = parent
+	corner(track, 3)
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(math.clamp(share, 0, 1), 1)
+	fill.BackgroundColor3 = Color3.new(1, 1, 1)
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	corner(fill, 3)
+	gradient(fill, color:Lerp(Color3.new(1, 1, 1), 0.35), color)
+	return fill
 end
 
 return Theme

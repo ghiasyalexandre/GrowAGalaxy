@@ -84,6 +84,19 @@ function StarMath.typeUnlocked(typeId: string, stars: { [string]: Types.StarReco
 	return def ~= nil and def.enabled and StarMath.highestTier(stars) >= def.tier - 1
 end
 
+-- The next star type to aim for: the tier above the best star owned (the
+-- first tier for an empty galaxy), or nil once the top tier is owned.
+function StarMath.nextTier(stars: { [string]: Types.StarRecord }): string?
+	local wanted = StarMath.highestTier(stars) + 1
+	for _, id in S.ORDER do
+		local def = S.BY_ID[id]
+		if def.tier == wanted and def.enabled then
+			return id
+		end
+	end
+	return nil
+end
+
 -- Price of a new star when the player already owns `owned` stars.
 function StarMath.placeCost(typeId: string, owned: number): number?
 	local def = S.BY_ID[typeId]
