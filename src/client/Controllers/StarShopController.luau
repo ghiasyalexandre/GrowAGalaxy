@@ -1,5 +1,6 @@
 --!strict
--- The Star Shop panel, opened from your station's Star Shop console. Lists
+-- The Star Shop panel, opened from your station's Star Shop console, the
+-- HUD's Star Shop button or the B key (ClientState.openStarShop). Lists
 -- every star tier with its price (rising with each star you own), production
 -- and best planet tier. Unlocked, affordable stars start ghost placement
 -- (PlacementController); the server re-checks everything when you confirm.
@@ -126,8 +127,14 @@ local function refresh()
 end
 
 local function open()
+	if PlacementController.isActive() then
+		return
+	end
 	gui.Enabled = true
-	refresh()
+	local ok, problem = pcall(refresh :: any)
+	if not ok then
+		warn(`[StarShop] Could not list the stars: {problem}`)
+	end
 	Theme.popIn(panel)
 end
 
@@ -186,9 +193,21 @@ function StarShopController.start()
 			refresh()
 		end
 	end)
-	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and gui.Enabled and input.KeyCode == Enum.KeyCode.Backspace then
+	ClientState.openStarShop:Connect(function()
+		if gui.Enabled then
 			close()
+		else
+			open()
+		end
+	end)
+	UserInputService.InputBegan:Connect(function(input, processed)
+		if processed then
+			return
+		end
+		if gui.Enabled and input.KeyCode == Enum.KeyCode.Backspace then
+			close()
+		elseif input.KeyCode == Enum.KeyCode.B then
+			ClientState.openStarShop:Fire()
 		end
 	end)
 end

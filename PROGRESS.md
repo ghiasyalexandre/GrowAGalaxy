@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
+Last updated: 2026-10-04 (stage 9 merged into `main`).
 
 ## Status by stage
 
@@ -14,7 +14,8 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 | 6. Atmosphere and polish (sparkles, saved settings, ship paint, Golden Beam) | Merged | Passing | **Not yet** |
 | 7. Star and planet tiers | Merged | Passing (101 tests) | **Not yet** |
 | 8. UI juice and reward effects | Merged | Passing (101 tests) | **Not yet** |
-| 9+. Save hardening, tuning, monetization | Not started | | |
+| 9. Boost, laser feel, Star Shop button, isolated controller start-up | Merged | Passing (104 tests) | **Not yet** |
+| 10+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -46,7 +47,9 @@ Last updated: 2026-10-04 (branch `stage-2-movement-ships`).
 
 ## Next up
 
-**Playtest pass (needs the user).** Stages 2-8 are untested in Studio beyond loading without
+**Playtest pass (needs the user).** The user reported (2026-10-04) that the Star Shop console
+didn't open; the cause wasn't found by reading the code. Stage 9 adds a button and B key, and
+logs any controller failure in Output; check for `failed:` lines. Stages 2-9 are untested in Studio beyond loading without
 errors. Priorities: laser feel, mining pace, star/planet prices (Config/Stars, Config/Planets),
 placement controls, and whether the reward effects read well. Then save hardening on a published
 place, and the next content (more achievements for the new tiers, sounds once audio assets

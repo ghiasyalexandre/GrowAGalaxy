@@ -22,6 +22,37 @@ return function(T, Loader)
 			T.near(v.Magnitude, 65)
 		end)
 
+		T.test("boost drains while held and locks when empty", function()
+			local state, boosting =
+				FlightMath.boostStep({ energy = 1, locked = false }, true, 3, 6, 0.25, 0.5)
+			T.equal(boosting, true)
+			T.near(state.energy, 0.5)
+			state, boosting = FlightMath.boostStep(state, true, 3, 6, 0.25, 1)
+			T.equal(boosting, true)
+			T.equal(state.energy, 0)
+			T.equal(state.locked, true)
+			state, boosting = FlightMath.boostStep(state, true, 3, 6, 0.25, 0.1)
+			T.equal(boosting, false)
+		end)
+
+		T.test("boost refills over the recharge time and unlocks at the restart share", function()
+			local state = { energy = 0, locked = true }
+			state = FlightMath.boostStep(state, false, 3, 6, 0.25, 1) -- +0.5 s of boost
+			T.near(state.energy, 0.5)
+			T.equal(state.locked, true)
+			state = FlightMath.boostStep(state, false, 3, 6, 0.25, 1)
+			T.equal(state.locked, false)
+			state = FlightMath.boostStep(state, false, 3, 6, 0.25, 60)
+			T.equal(state.energy, 3)
+		end)
+
+		T.test("every ship's boost is faster than its top speed", function()
+			for _, def in Config.Ships.BY_ID do
+				T.truthy(def.stats.boostMultiplier > 1)
+				T.truthy(def.stats.boostDuration > 0 and def.stats.boostRecharge > 0)
+			end
+		end)
+
 		T.test("diagonal suit input is no faster than straight input", function()
 			local camera = CFrame.new()
 			local straight = FlightMath.suitTarget(Vector3.new(0, 0, 1), camera, 24)

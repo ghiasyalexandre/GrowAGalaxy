@@ -43,6 +43,15 @@ local Movement = {
 	LOOK_SENSITIVITY_TOUCH = 0.006,
 	LOOK_SPEED_GAMEPAD = 2.4, -- radians per second at full stick
 
+	-- Boost (per-ship amounts in Config.Ships). Acceleration is multiplied
+	-- while boosting so the surge is felt at once. An emptied tank can only
+	-- boost again once it has refilled to BOOST_RESTART_SHARE.
+	BOOST_ACCEL_FACTOR = 3,
+	BOOST_RESTART_SHARE = 0.25,
+	CAMERA_BOOST_FOV = 14, -- extra field of view while boosting
+	CAMERA_BOOST_PULLBACK = 5, -- extra studs behind the ship while boosting
+	CAMERA_BOOST_SHAKE = 0.35, -- studs of camera shake while boosting
+
 	-- Assisted docking: inside a docking zone and slower than this.
 	DOCK_MAX_SPEED = 25,
 

@@ -1,8 +1,9 @@
 --!strict
 -- Heads-up display: Stardust and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Station button (bottom left), and while flying a reticle, the laser's
--- heat gauge and, while the beam extracts an asteroid, the extraction bar.
+-- Station button (bottom left), the Star Shop button (under the wallet), and
+-- while flying a reticle, the laser's heat gauge, the boost tank and, while
+-- the beam extracts an asteroid, the extraction bar.
 -- Display only; the server owns every value shown here.
 
 local GuiService = game:GetService("GuiService")
@@ -51,6 +52,13 @@ local heatLabel: TextLabel
 local extractPanel: Frame
 local extractFill: Frame
 local extractLabel: TextLabel
+local boostPanel: Frame
+local boostFill: Frame
+local boostLabel: TextLabel
+local shopButton: TextButton
+local BOOST_READY = Color3.fromRGB(120, 230, 255)
+local BOOST_ON = Color3.fromRGB(255, 255, 255)
+local BOOST_EMPTY = Color3.fromRGB(110, 120, 150)
 
 local function makeLabel(parent: Instance, props: { [string]: any }): TextLabel
 	local label = Instance.new("TextLabel")
@@ -272,9 +280,38 @@ local function build()
 	effectsButton.Parent = gui
 	corner(effectsButton, 6)
 
+	-- Opens the Star Shop from anywhere (also the B key).
+	shopButton = Instance.new("TextButton")
+	shopButton.Name = "StarShop"
+	shopButton.Position = UDim2.new(0, 16, 0, 148)
+	shopButton.Size = UDim2.new(0, 150, 0, 32)
+	shopButton.BackgroundColor3 = Color3.new(1, 1, 1)
+	shopButton.AutoButtonColor = false
+	shopButton.Font = Enum.Font.GothamBlack
+	shopButton.TextSize = 15
+	shopButton.TextColor3 = Color3.new(1, 1, 1)
+	shopButton.TextStrokeTransparency = 0.6
+	shopButton.Text = "Star Shop  [B]"
+	shopButton.Parent = gui
+	corner(shopButton, 8)
+	local shopGradient = Instance.new("UIGradient")
+	shopGradient.Color =
+		ColorSequence.new(Color3.fromRGB(255, 176, 50), Color3.fromRGB(255, 120, 60))
+	shopGradient.Rotation = 90
+	shopGradient.Parent = shopButton
+	local shopScale = Instance.new("UIScale")
+	shopScale.Parent = shopButton
+	shopButton.MouseEnter:Connect(function()
+		TweenService:Create(shopScale, TweenInfo.new(0.1), { Scale = 1.06 }):Play()
+	end)
+	shopButton.MouseLeave:Connect(function()
+		TweenService:Create(shopScale, TweenInfo.new(0.1), { Scale = 1 }):Play()
+	end)
+
 	heatPanel, heatFill, heatLabel = makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL)
+	boostPanel, boostFill, boostLabel = makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY)
 	extractPanel, extractFill, extractLabel =
-		makeGauge(gui, "Extraction", -142, "EXTRACTING", EXTRACT_ROCK)
+		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK)
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -360,15 +397,36 @@ local function refreshExtraction(flying: boolean)
 		else "EXTRACTING: AIM AT THE GLOWING WEAK POINT"
 end
 
+-- Boost comes from this client's flight (ShipController).
+local function refreshBoost()
+	local flight = ClientState.flight
+	boostFill.Size = UDim2.fromScale(math.clamp(flight.boost, 0, 1), 1)
+	local color = if flight.boosting
+		then BOOST_ON
+		elseif flight.boostLocked then BOOST_EMPTY
+		else BOOST_READY
+	boostFill.BackgroundColor3 = color
+	boostLabel.TextColor3 = color
+	boostLabel.Text = if flight.boosting
+		then "BOOSTING"
+		elseif flight.boostLocked then "BOOST RECHARGING"
+		else `BOOST  [{if Input.device() == "gamepad" then "L3" else "Shift"}]`
+end
+
 local function refreshReadout()
 	local flying = ClientState.mode == "ship"
 	reticle.Visible = flying
 	heatPanel.Visible = flying
+	boostPanel.Visible = flying
 	refreshExtraction(flying)
 	if flying then
 		refreshHeat()
+		refreshBoost()
 		local flight = ClientState.flight
-		readoutLabel.Text = `Speed {math.floor(flight.speed)} / {math.floor(flight.maxSpeed)}`
+		readoutLabel.Text =
+			`Speed {math.floor(flight.speed)} / {math.floor(flight.maxSpeed)}{if flight.boosting
+				then "  ·  BOOST"
+				else ""}`
 		if flight.dock == "ready" then
 			hintLabel.Text = DOCK_HINTS[Input.device()]
 		elseif flight.dock == "tooFast" then
@@ -430,6 +488,9 @@ function HudController.init()
 	end)
 	recoverButton.Activated:Connect(function()
 		Net.SuitRecover:FireServer()
+	end)
+	shopButton.Activated:Connect(function()
+		ClientState.openStarShop:Fire()
 	end)
 	refreshReadout()
 end
