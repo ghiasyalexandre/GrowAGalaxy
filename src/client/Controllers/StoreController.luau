@@ -13,6 +13,10 @@
 -- This panel only opens Roblox's prompt. The server decides what's owned
 -- and grants every purchase (MonetizationSystem); nothing here grants
 -- anything.
+--
+-- Looks: a rotating rainbow border, a twinkling star field, a gradient
+-- header with a shimmering gold title, cards that glow in their
+-- category's colour, and shine sweeps across every Buy button.
 
 local GuiService = game:GetService("GuiService")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -36,6 +40,10 @@ local CURRENCY = Config.Economy.CURRENCY_NAME
 local CYAN = Color3.fromRGB(95, 227, 255)
 local VIOLET = Color3.fromRGB(176, 120, 255)
 local GOLD = Color3.fromRGB(255, 211, 107)
+local MAGENTA = Color3.fromRGB(255, 110, 200)
+local NAVY = Color3.fromRGB(14, 18, 44)
+local DEEP_VIOLET = Color3.fromRGB(46, 22, 86)
+local STAR_COUNT = 40
 
 type Tab = "pass" | "boost" | "pack" | "ship"
 type Price = { state: "loading" | "ok" | "failed", robux: number? }
@@ -183,6 +191,21 @@ end
 
 local function card(order: number, def: any)
 	local frame = Theme.row(list, 112, order)
+	-- Deep navy fading into violet, edged in the category's colour.
+	local accent = if def.kind == "GamePass"
+		then VIOLET
+		elseif def.category == "pack" then GOLD
+		else CYAN
+	local fill = Instance.new("UIGradient")
+	fill.Color = ColorSequence.new(NAVY, DEEP_VIOLET)
+	fill.Rotation = 0
+	fill.Parent = frame
+	frame.BackgroundColor3 = Color3.new(1, 1, 1)
+	local edge = Instance.new("UIStroke")
+	edge.Color = accent
+	edge.Thickness = 1.5
+	edge.Parent = frame
+	Theme.pulse(edge, 0.1, 0.7, 2 + (order % 3) * 0.4)
 	local isOwned = owned(def)
 	local icon = Theme.icon(frame, iconFor(def), 64)
 	local inset = 14
@@ -268,6 +291,9 @@ local function card(order: number, def: any)
 	button.AnchorPoint = Vector2.new(1, 0)
 	button.Position = UDim2.new(1, -12, 0, 46)
 	button.Size = UDim2.fromOffset(150, 38)
+	if action then
+		Theme.shine(button)
+	end
 	if action and firstButton == nil then
 		firstButton = button
 	end
@@ -331,6 +357,69 @@ local function buildTabs()
 	end
 end
 
+-- The flashy layer: rainbow border, star field and header banner.
+local function flair()
+	local border = Instance.new("UIStroke")
+	border.Thickness = 3
+	border.Color = Color3.new(1, 1, 1)
+	border.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	border.Parent = panel
+	local rainbow = Instance.new("UIGradient")
+	rainbow.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, CYAN),
+		ColorSequenceKeypoint.new(0.33, VIOLET),
+		ColorSequenceKeypoint.new(0.66, MAGENTA),
+		ColorSequenceKeypoint.new(1, GOLD),
+	})
+	rainbow.Parent = border
+	Theme.spin(rainbow, 90)
+
+	local sky = Instance.new("Frame")
+	sky.Name = "StarField"
+	sky.Size = UDim2.fromScale(1, 1)
+	sky.BackgroundTransparency = 1
+	sky.ClipsDescendants = true
+	sky.ZIndex = 1
+	sky.Parent = panel
+	for i = 1, STAR_COUNT do
+		local star = Instance.new("Frame")
+		local size = math.random(2, 4)
+		star.Size = UDim2.fromOffset(size, size)
+		star.Position = UDim2.fromScale(math.random(), math.random())
+		star.BackgroundColor3 = if i % 3 == 0
+			then CYAN
+			elseif i % 3 == 1 then Color3.new(1, 1, 1)
+			else VIOLET
+		star.BorderSizePixel = 0
+		star.ZIndex = 1
+		star.Parent = sky
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = star
+		local phase, speed = math.random() * 6, 1 + math.random() * 2
+		Theme.animate(star, function(now)
+			star.BackgroundTransparency = 0.25 + 0.7 * (0.5 + 0.5 * math.sin(now * speed + phase))
+		end)
+	end
+
+	local banner = Instance.new("Frame")
+	banner.Name = "Banner"
+	banner.Position = UDim2.fromOffset(8, 6)
+	banner.Size = UDim2.new(1, -110, 0, 38)
+	banner.BackgroundColor3 = Color3.new(1, 1, 1)
+	banner.BackgroundTransparency = 0.35
+	banner.BorderSizePixel = 0
+	banner.ZIndex = 2
+	banner.Parent = panel
+	local bannerCorner = Instance.new("UICorner")
+	bannerCorner.CornerRadius = UDim.new(0, 10)
+	bannerCorner.Parent = banner
+	local bannerFill = Instance.new("UIGradient")
+	bannerFill.Color = ColorSequence.new(Color3.fromRGB(40, 120, 200), Color3.fromRGB(110, 50, 200))
+	bannerFill.Parent = banner
+	Theme.shine(banner)
+end
+
 local function build()
 	gui = Theme.screen("Store", Players.LocalPlayer:WaitForChild("PlayerGui"))
 	gui.Enabled = false
@@ -343,21 +432,41 @@ local function build()
 	size.MaxSize = Vector2.new(680, 600)
 	size.Parent = panel
 
+	flair()
+
 	local titleX = 16
 	local icon = Theme.icon(panel, "Gift", 50)
 	if icon then
 		icon.Position = UDim2.fromOffset(10, 0)
-		icon.ZIndex = 2
+		icon.ZIndex = 3
 		titleX = 66
+		Theme.animate(icon, function(now)
+			icon.Rotation = math.sin(now * 2) * 8
+		end)
 	end
-	Theme.label(panel, {
-		Position = UDim2.fromOffset(titleX, 10),
-		Size = UDim2.new(1, -titleX - 104, 0, 30),
-		Text = "Galaxy Store",
-		TextSize = 24,
+	local title = Theme.label(panel, {
+		Position = UDim2.fromOffset(titleX, 8),
+		Size = UDim2.new(1, -titleX - 104, 0, 34),
+		Text = "PREMIUM GALAXY STORE",
+		TextSize = 26,
 		Font = Enum.Font.GothamBlack,
-		TextColor3 = CYAN,
+		TextColor3 = Color3.new(1, 1, 1),
+		TextStrokeTransparency = 0.5,
+		ZIndex = 3,
 	})
+	-- Gold text with a bright band sliding across it.
+	local shimmer = Instance.new("UIGradient")
+	shimmer.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, GOLD),
+		ColorSequenceKeypoint.new(0.45, GOLD),
+		ColorSequenceKeypoint.new(0.5, Color3.new(1, 1, 1)),
+		ColorSequenceKeypoint.new(0.55, GOLD),
+		ColorSequenceKeypoint.new(1, GOLD),
+	})
+	shimmer.Parent = title
+	Theme.animate(shimmer, function(now)
+		shimmer.Offset = Vector2.new(((now * 0.6) % 2) - 1, 0)
+	end)
 	Theme.closeButton(panel, close)
 
 	tabBar = Instance.new("Frame")
@@ -408,12 +517,25 @@ function StoreController.init()
 end
 
 function StoreController.start()
-	ClientState.openStore:Connect(function()
-		if gui.Enabled then
+	ClientState.openStore:Connect(function(which: string?)
+		local wanted: Tab? = nil
+		for _, entry in TABS do
+			if entry.id == which then
+				wanted = entry.id
+			end
+		end
+		if gui.Enabled and wanted == nil then
 			close()
-		else
-			gui.Enabled = true
-			refresh()
+			return
+		end
+		if wanted and wanted ~= tab then
+			tab = wanted
+			buildTabs()
+		end
+		local opening = not gui.Enabled
+		gui.Enabled = true
+		refresh()
+		if opening then
 			Theme.popIn(panel)
 		end
 	end)

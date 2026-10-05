@@ -229,6 +229,17 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	-- Daily prizes: each day gives exactly one positive prize.
+	for day, prize in config.Daily.PRIZES do
+		local stardust = prize.stardust and prize.stardust > 0
+		local boost = prize.boost
+			and prize.boost.seconds > 0
+			and (prize.boost.source == "mining" or prize.boost.source == "star")
+		if (stardust and 1 or 0) + (boost and 1 or 0) ~= 1 then
+			fail(`Daily day {day}: needs exactly one positive prize`)
+		end
+	end
+
 	-- Combat (opt-in PvP).
 	local combat = config.Combat
 	for _, name in

@@ -25,6 +25,7 @@
 --                                                       label: string?) celebrate earned Stardust
 --   ShipDestroyed    RemoteEvent     server -> all      (pivot: CFrame, size: Vector3, paint: string,
 --                                                       ownerUserId: number) draw the explosion
+--   DailyRequest     RemoteFunction  client -> server  ("claim") -> (ok: boolean, message: string)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -44,6 +45,7 @@ local Net = {
 	SettingChanged = folder:WaitForChild("SettingChanged") :: RemoteEvent,
 	Reward = folder:WaitForChild("Reward") :: RemoteEvent,
 	ShipDestroyed = folder:WaitForChild("ShipDestroyed") :: RemoteEvent,
+	DailyRequest = folder:WaitForChild("DailyRequest") :: RemoteFunction,
 }
 
 return Net

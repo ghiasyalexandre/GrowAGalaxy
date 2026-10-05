@@ -27,6 +27,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 15. Opt-in PvP, ship explosions and debris, over-the-shoulder camera, slower laser bolts | [Merged](docs/stage-15-pvp.md) |
 | 16. Hangar station with upgrade pads, HUD Shipyard and Launch Ship buttons | [Merged](docs/stage-16-hangar.md) |
 | 17. Optional Robux purchases (off until configured): passes, boosts, packs, ship passes, Galaxy Store | [Merged](docs/stage-17-monetization.md) |
+| 18. Daily prizes (14 days), flashier Galaxy Store, premium shortcut | [Merged](docs/stage-18-daily-premium.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

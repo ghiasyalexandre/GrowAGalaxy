@@ -31,7 +31,9 @@ local ProfileSchema = {}
 -- 8: optional purchases: boost time left per source and the passes Roblox
 --    last confirmed; receipts keep up to Config.Products.MAX_RECEIPTS ids.
 --    Older profiles start with no boosts (normalize fills them in).
-ProfileSchema.VERSION = 8
+-- 9: daily prizes: the next calendar day (1..14) and the day last claimed.
+--    Older profiles start at day 1, never claimed.
+ProfileSchema.VERSION = 9
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -68,6 +70,7 @@ function ProfileSchema.default(): Profile
 		hangar = {},
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
+		daily = { day = 1, lastClaim = 0 },
 		receipts = {},
 	}
 end
@@ -312,6 +315,11 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	data.ownedEquipment = flags(data.ownedEquipment)
 	data.hangar = flags(data.hangar)
 	data.verifiedPasses = flags(data.verifiedPasses)
+	local daily = if type(data.daily) == "table" then data.daily else {}
+	data.daily = {
+		day = math.clamp(count(daily.day) or 1, 1, #Config.Daily.PRIZES),
+		lastClaim = count(daily.lastClaim) or 0,
+	}
 	local boosts = if type(data.boosts) == "table" then data.boosts else {}
 	data.boosts = { mining = amount(boosts.mining) or 0, star = amount(boosts.star) or 0 }
 	data.ownedCosmetics = flags(data.ownedCosmetics)
@@ -423,6 +431,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		settings = table.clone(profile.settings),
 		boosts = table.clone(profile.boosts),
 		passes = table.clone(profile.verifiedPasses),
+		daily = table.clone(profile.daily),
 	}
 end
 

@@ -66,6 +66,9 @@ export type Profile = {
 	-- Passes Roblox last confirmed (key -> true): used only while a fresh
 	-- ownership check fails.
 	verifiedPasses: { [string]: boolean },
+	-- Daily prizes (Config.Daily): the next day to claim (1..14) and the UTC
+	-- day number of the last claim (0 = never).
+	daily: { day: number, lastClaim: number },
 	receipts: { string }, -- recent purchase ids for idempotent fulfilment (Stage 8)
 }
 
@@ -84,6 +87,7 @@ export type ProfileView = {
 	settings: Settings,
 	boosts: { mining: number, star: number },
 	passes: { [string]: boolean }, -- passes the server has verified
+	daily: { day: number, lastClaim: number },
 }
 
 export type RegionInfo = {
