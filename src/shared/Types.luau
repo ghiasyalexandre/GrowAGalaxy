@@ -59,6 +59,7 @@ export type Profile = {
 	tutorial: { step: number, done: boolean },
 	stats: { [string]: number },
 	settings: Settings,
+	hangar: { [string]: boolean }, -- hangar upgrades built (Config.Hangar)
 	receipts: { string }, -- recent purchase ids for idempotent fulfilment (Stage 8)
 }
 

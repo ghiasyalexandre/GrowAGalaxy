@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
@@ -131,7 +132,7 @@ function DataSystem.spendStardust(player: Player, amount: number): boolean
 end
 
 local function pushIncome(player: Player, profile: Profile)
-	push(player, "incomeRate", StarMath.totalIncome(profile.galaxy.stars))
+	push(player, "incomeRate", ProfileSchema.incomeRate(profile))
 end
 
 -- Adds a star to the player's galaxy and returns its new id. The caller has
@@ -185,11 +186,13 @@ function DataSystem.accrueIncome(player: Player, dt: number)
 	if profile == nil then
 		return
 	end
-	local rate = StarMath.totalIncome(profile.galaxy.stars)
+	local rate = ProfileSchema.incomeRate(profile)
 	if rate <= 0 then
 		return
 	end
-	local cap = rate * Config.Economy.UNCOLLECTED_CAP_SECONDS
+	local cap = rate
+		* Config.Economy.UNCOLLECTED_CAP_SECONDS
+		* HangarMath.storageMultiplier(profile.hangar)
 	local before = profile.uncollected
 	profile.uncollected = StarMath.accrue(before, rate, dt, cap)
 	if math.floor(profile.uncollected) ~= math.floor(before) then
@@ -238,6 +241,17 @@ function DataSystem.grantShip(player: Player, shipId: string)
 	end
 	profile.loadouts[shipId] = { equipment = equipment }
 	push(player, "ownedShips", table.clone(profile.ownedShips))
+end
+
+-- Records a hangar upgrade as built. The caller has already validated and
+-- paid for it.
+function DataSystem.grantHangar(player: Player, upgradeId: string)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return
+	end
+	profile.hangar[upgradeId] = true
+	pushIncome(player, profile)
 end
 
 -- Makes an owned ship the one the hangars launch.

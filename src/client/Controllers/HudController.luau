@@ -54,6 +54,8 @@ local readoutLabel: TextLabel
 local reticle: TextLabel
 local recoverButton: TextButton
 local effectsButton: TextButton
+local shipyardButton: TextButton
+local launchButton: TextButton
 local pvpButton: TextButton
 local setPvpText: (string) -> ()
 local hullPanel: Frame
@@ -437,6 +439,51 @@ local function build()
 	dressButton(shopButton, "ButtonGold", "Shop")
 	Theme.hover(shopButton)
 
+	-- Opens the Shipyard (ships and upgrades) from anywhere.
+	shipyardButton = Instance.new("TextButton")
+	shipyardButton.Name = "Shipyard"
+	shipyardButton.Position = UDim2.new(0, 192, 0, 152)
+	shipyardButton.Size = UDim2.new(0, 150, 0, 40)
+	shipyardButton.BackgroundColor3 = Color3.new(1, 1, 1)
+	shipyardButton.AutoButtonColor = false
+	shipyardButton.Font = Enum.Font.GothamBlack
+	shipyardButton.TextSize = 15
+	shipyardButton.TextColor3 = Color3.new(1, 1, 1)
+	shipyardButton.TextStrokeTransparency = 0.6
+	shipyardButton.Text = "Shipyard"
+	shipyardButton.Parent = gui
+	corner(shipyardButton, 8)
+	local shipyardGradient = Instance.new("UIGradient")
+	shipyardGradient.Color =
+		ColorSequence.new(Color3.fromRGB(200, 110, 255), Color3.fromRGB(120, 50, 220))
+	shipyardGradient.Rotation = 90
+	shipyardGradient.Parent = shipyardButton
+	dressButton(shipyardButton, "ButtonPurple", "Ship")
+	Theme.hover(shipyardButton)
+
+	-- Spawns your ship at your station's berth and seats you in it.
+	launchButton = Instance.new("TextButton")
+	launchButton.Name = "LaunchShip"
+	launchButton.AnchorPoint = Vector2.new(0, 1)
+	launchButton.Position = UDim2.new(0, 214, 1, -24)
+	launchButton.Size = UDim2.new(0, 190, 0, 40)
+	launchButton.BackgroundColor3 = Color3.new(1, 1, 1)
+	launchButton.AutoButtonColor = false
+	launchButton.Font = Enum.Font.GothamBlack
+	launchButton.TextSize = 16
+	launchButton.TextColor3 = Color3.new(1, 1, 1)
+	launchButton.TextStrokeTransparency = 0.6
+	launchButton.Text = "Launch Ship"
+	launchButton.Parent = gui
+	corner(launchButton, 8)
+	local launchGradient = Instance.new("UIGradient")
+	launchGradient.Color =
+		ColorSequence.new(Color3.fromRGB(90, 200, 255), Color3.fromRGB(60, 110, 255))
+	launchGradient.Rotation = 90
+	launchGradient.Parent = launchButton
+	dressButton(launchButton, "ButtonBlue", "Rocket")
+	Theme.hover(launchButton)
+
 	-- Next goal: the next star tier, with progress towards its price. Opens
 	-- the Star Shop when clicked.
 	goalButton = Instance.new("TextButton")
@@ -661,6 +708,7 @@ end
 local function refreshReadout()
 	local flying = ClientState.mode == "ship"
 	reticle.Visible = flying
+	launchButton.Visible = not flying
 	heatPanel.Visible = flying
 	boostPanel.Visible = flying
 	hullPanel.Visible = flying
@@ -754,6 +802,12 @@ function HudController.init()
 	end)
 	shopButton.Activated:Connect(function()
 		ClientState.openStarShop:Fire()
+	end)
+	shipyardButton.Activated:Connect(function()
+		ClientState.openShipyard:Fire()
+	end)
+	launchButton.Activated:Connect(function()
+		Net.ShipRequest:FireServer("launch")
 	end)
 	Theme.hover(goalButton)
 	goalButton.Activated:Connect(function()

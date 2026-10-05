@@ -3,6 +3,7 @@
 -- equipment fitted to that ship. Cosmetics never change stats.
 
 local Config = require(script.Parent.Parent.Config)
+local HangarMath = require(script.Parent.HangarMath)
 local Types = require(script.Parent.Parent.Types)
 
 type ShipStats = typeof(Config.Ships.BY_ID.MicroRecon.stats)
@@ -46,10 +47,12 @@ function ShipStats.forProfile(profile: Types.Profile): ShipStats
 		profile.loadouts[profile.activeShip],
 		profile.ownedEquipment
 	)
-	if stats then
-		return stats
+	local result = stats or table.clone(Config.Ships.BY_ID[Config.Ships.STARTER_SHIP].stats)
+	-- Hangar upgrades boost every ship.
+	for stat, value in result :: any do
+		(result :: any)[stat] = value * HangarMath.statMultiplier(profile.hangar or {}, stat)
 	end
-	return table.clone(Config.Ships.BY_ID[Config.Ships.STARTER_SHIP].stats)
+	return result
 end
 
 -- Total material units in a cargo hold.

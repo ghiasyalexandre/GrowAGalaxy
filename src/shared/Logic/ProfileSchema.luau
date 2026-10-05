@@ -7,6 +7,7 @@
 -- Pure module: no Roblox services, so the Lune unit tests run it directly.
 
 local Config = require(script.Parent.Parent.Config)
+local HangarMath = require(script.Parent.HangarMath)
 local Progression = require(script.Parent.Progression)
 local StarMath = require(script.Parent.StarMath)
 local Types = require(script.Parent.Parent.Types)
@@ -25,7 +26,9 @@ local ProfileSchema = {}
 --    lowered to it (normalize does this for every load).
 -- 6: the 11-ship ladder replaced the first five ships: their ids are renamed
 --    (Config.Ships.RENAMED) in owned ships, the active ship and loadouts.
-ProfileSchema.VERSION = 6
+-- 7: hangar upgrades (Config.Hangar), saved as built ids; older profiles start
+--    with none (normalize fills it in).
+ProfileSchema.VERSION = 7
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -59,6 +62,7 @@ function ProfileSchema.default(): Profile
 		tutorial = { step = 1, done = false },
 		stats = {},
 		settings = defaultSettings(),
+		hangar = {},
 		receipts = {},
 	}
 end
@@ -301,6 +305,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 
 	data.ownedEquipment = flags(data.ownedEquipment)
+	data.hangar = flags(data.hangar)
 	data.ownedCosmetics = flags(data.ownedCosmetics)
 
 	local loadouts: { [string]: Types.Loadout } = {}
@@ -388,6 +393,12 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	return true, nil
 end
 
+-- Stardust per second from the player's stars, with hangar upgrades.
+function ProfileSchema.incomeRate(profile: Profile): number
+	local rate = StarMath.totalIncome(profile.galaxy.stars)
+	return math.floor(rate * HangarMath.incomeMultiplier(profile.hangar) * 100 + 0.5) / 100
+end
+
 -- The slice of a profile its owner's client is allowed to see.
 function ProfileSchema.view(profile: Profile): Types.ProfileView
 	return {
@@ -397,7 +408,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		cargo = table.clone(profile.cargo),
 		activeShip = profile.activeShip,
 		expansion = profile.galaxy.expansion,
-		incomeRate = StarMath.totalIncome(profile.galaxy.stars),
+		incomeRate = ProfileSchema.incomeRate(profile),
 		ownedShips = table.clone(profile.ownedShips),
 		ownedEquipment = table.clone(profile.ownedEquipment),
 		tutorialStep = if profile.tutorial.done then 0 else Progression.tutorialStep(profile.stats),

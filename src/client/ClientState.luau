@@ -63,8 +63,10 @@ ClientState.effectsChanged = Signal.new() :: Signal.Signal<()>
 ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 -- A short message to show the player (from the server or a controller).
 ClientState.notify = Signal.new() :: Signal.Signal<string>
--- Ask the Star Shop panel to open (HUD button, shortcut, station console).
+-- Ask the Star Shop panel to open (HUD button, B key).
 ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
+-- Ask the Shipyard panel to open (HUD button).
+ClientState.openShipyard = Signal.new() :: Signal.Signal<()>
 -- Open the inspect view on a star's model (InspectController).
 ClientState.inspectStar = Signal.new() :: Signal.Signal<Model>
 -- True while a solar system is being inspected (the inspect camera is in

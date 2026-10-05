@@ -196,6 +196,39 @@ function ConfigCheck.run(config: any): { string }
 			)
 		end
 	end
+	-- Hangar upgrades: known requirements, positive costs and multipliers,
+	-- real ship stats, pads on the deck and apart from each other.
+	local hangar = config.Hangar
+	checkOrder("Hangar", hangar.ORDER, hangar.BY_ID)
+	for id, def in hangar.BY_ID do
+		if type(def.cost) ~= "number" or def.cost <= 0 then
+			fail(`Hangar {id}: cost must be positive`)
+		end
+		for _, need in def.requires do
+			if hangar.BY_ID[need] == nil or need == id then
+				fail(`Hangar {id}: bad requirement {need}`)
+			end
+		end
+		for stat, multiplier in def.stats or {} do
+			if statNames[stat] == nil or multiplier <= 0 then
+				fail(`Hangar {id}: bad stat modifier {stat}`)
+			end
+		end
+		if (def.income and def.income <= 0) or (def.storage and def.storage <= 0) then
+			fail(`Hangar {id}: multipliers must be positive`)
+		end
+		if math.abs(def.pad.x) > 26 or math.abs(def.pad.z) > 30 then
+			fail(`Hangar {id}: pad is off the deck`)
+		end
+		for otherId, other in hangar.BY_ID do
+			local gap =
+				math.max(math.abs(def.pad.x - other.pad.x), math.abs(def.pad.z - other.pad.z))
+			if otherId ~= id and gap < 14 then
+				fail(`Hangar {id}: pad too close to {otherId}`)
+			end
+		end
+	end
+
 	-- Combat (opt-in PvP).
 	local combat = config.Combat
 	for _, name in
