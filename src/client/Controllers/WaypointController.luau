@@ -46,13 +46,13 @@ local function build()
 end
 
 -- Waits for the target part to replicate: your station's beacon, or the
--- ISS docking zone.
+-- ISS raid beacon.
 local function findTarget(route: string, slot: number?): BasePart?
 	if route == "ISS" then
 		local world = Workspace:WaitForChild("World", 30)
 		local iss = world and world:WaitForChild("ISS", 30)
-		local zone = iss and iss:FindFirstChild("DockZone", true)
-		return if zone and zone:IsA("BasePart") then zone else nil
+		local beacon = iss and iss:FindFirstChild("RaidBeacon", true)
+		return if beacon and beacon:IsA("BasePart") then beacon else nil
 	end
 	if slot == nil then
 		return nil

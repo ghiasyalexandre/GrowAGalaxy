@@ -7,8 +7,7 @@
 -- To use a hand-built ISS instead of the greybox, put a Model named "ISS" in
 -- ServerStorage/Assets. It must contain every part listed in MARKERS, plus
 -- ProximityPrompts tagged "WarpPrompt" with a WarpTarget attribute for the
--- airlocks (NavigationSystem), one tagged "LaunchPrompt" with Hangar = "ISS"
--- (ShipSystem), and the DockZone part tagged "DockZone" with OwnerUserId = 0.
+-- airlocks (NavigationSystem), and a part tagged "SafeZone" around it (no PvP).
 
 local Lighting = game:GetService("Lighting")
 local ServerStorage = game:GetService("ServerStorage")
@@ -22,12 +21,9 @@ local WorldSystem = {}
 -- Named parts the rest of the game relies on.
 WorldSystem.MARKERS = {
 	"ArrivalSpawn", -- SpawnLocation where players appear
-	"AirlockInside", -- standing point inside the docking module
-	"DockingSpawn", -- standing point on the exterior docking platform
-	"Berth1", -- ship berths on the docking platform, facing the way ships leave
-	"Berth2",
-	"Berth3",
-	"DockZone", -- assisted docking volume around the berths
+	"AirlockInside", -- standing point inside the raid airlock module
+	"DockingSpawn", -- standing point on the exterior raid platform
+	"RaidBeacon", -- floor point where the Saturn V raid beacon stands
 }
 
 local iss: Model? = nil

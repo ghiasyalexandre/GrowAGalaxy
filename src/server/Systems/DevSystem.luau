@@ -4,7 +4,7 @@
 -- From the Studio command bar while playtesting (server view):
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "addStardust", 500)
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "printProfile")
---   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "launch")  -- ship at an ISS berth
+--   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "launch")  -- ship at your station berth
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "asteroids")  -- how many exist
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "grantCosmetic", "GoldenBeam")
 -- Mock purchases (no Robux; same server code paths, Config.Products keys):
@@ -64,8 +64,8 @@ local COMMANDS: { [string]: (player: Player, ...any) -> any } = {
 	asteroids = function()
 		return AsteroidSystem.count()
 	end,
-	launch = function(player, hangar)
-		ShipSystem.launch(player, if hangar == "Station" then "Station" else "ISS")
+	launch = function(player)
+		ShipSystem.launch(player, "Station")
 		return true
 	end,
 }

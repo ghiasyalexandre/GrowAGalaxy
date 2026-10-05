@@ -26,6 +26,9 @@
 --   ShipDestroyed    RemoteEvent     server -> all      (pivot: CFrame, size: Vector3, paint: string,
 --                                                       ownerUserId: number) draw the explosion
 --   DailyRequest     RemoteFunction  client -> server  ("claim") -> (ok: boolean, message: string)
+--   RaidRequest      RemoteEvent     client -> server  ("join", difficulty | "leave")
+--   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
+--                                                       "bossDown" | "result", ...) raid effects
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -46,6 +49,8 @@ local Net = {
 	Reward = folder:WaitForChild("Reward") :: RemoteEvent,
 	ShipDestroyed = folder:WaitForChild("ShipDestroyed") :: RemoteEvent,
 	DailyRequest = folder:WaitForChild("DailyRequest") :: RemoteFunction,
+	RaidRequest = folder:WaitForChild("RaidRequest") :: RemoteEvent,
+	RaidEvent = folder:WaitForChild("RaidEvent") :: RemoteEvent,
 }
 
 return Net

@@ -3,18 +3,18 @@
 -- the world. The server owns it; while its owner pilots it, their client
 -- drives it (network ownership) and FlightGuard checks the result.
 --
---   Launch  A hangar console at the ISS (prompt tagged "LaunchPrompt")
---           spawns the player's active ship at a free ISS berth; the HUD's
---           Launch Ship button (ShipRequest "launch") spawns it at their own
---           station's berth and seats them in it. Launching again brings the
---           ship back.
+--   Launch  The HUD's Launch Ship button (ShipRequest "launch") spawns the
+--           active ship at the player's own station berth and seats them in
+--           it (a station hangar console, prompt tagged "LaunchPrompt", does
+--           the same without seating). Raids use spawnAndBoard. The ISS has
+--           no berths. Launching again brings the ship back.
 --   Board   The ship's BoardPrompt seats its owner. Nobody else can board
 --           (clients also hide other players' prompts, and their own while
 --           flying).
 --   Exit    ShipRequest "exit" parks the ship where it is and floats the
 --           pilot out beside it.
---   Dock    ShipRequest "dock", inside the ISS docking zone or the player's
---           own, below DOCK_MAX_SPEED, parks the ship at a free berth there.
+--   Dock    ShipRequest "dock", inside the player's own docking zone below
+--           DOCK_MAX_SPEED, parks the ship at their berth.
 --   Stow    Leaving the game or Return to Station removes the ship.
 --   Destroy PvP (CombatSystem) blows the ship up: the pilot floats free,
 --           every client draws the explosion (ShipDestroyed), and the
@@ -45,11 +45,9 @@ local ShipStats = require(ReplicatedStorage.Shared.Logic.ShipStats)
 local StationSystem = require(script.Parent.StationSystem)
 local Teleport = require(script.Parent.Parent.Util.Teleport)
 local Types = require(ReplicatedStorage.Shared.Types)
-local WorldSystem = require(script.Parent.WorldSystem)
 
 local M = Config.Movement
 
-local ISS_BERTHS = { "Berth1", "Berth2", "Berth3" }
 -- Room a floating player needs when leaving a ship.
 local EXIT_BOX = Vector3.new(4, 6, 4)
 local EXIT_POINTS = { "ExitLeft", "ExitRight", "ExitTop" }
@@ -154,17 +152,6 @@ local function berthStatus(berth: CFrame, ignore: Ship?): (boolean, Ship?)
 		end
 	end
 	return parked == nil, parked
-end
-
-local function issBerths(): { CFrame }
-	local berths = {}
-	for _, name in ISS_BERTHS do
-		local marker = WorldSystem.getMarker(name)
-		if marker then
-			table.insert(berths, marker.CFrame)
-		end
-	end
-	return berths
 end
 
 local despawn: (ship: Ship) -> ()
@@ -399,9 +386,7 @@ function ShipSystem.launch(player: Player, hangar: string)
 	end
 
 	local berths: { CFrame } = {}
-	if hangar == "ISS" then
-		berths = issBerths()
-	elseif hangar == "Station" then
+	if hangar == "Station" then
 		local station = StationSystem.getStation(player)
 		if station then
 			berths = { station.berth }
@@ -451,17 +436,14 @@ local function dock(player: Player)
 	local position = ship.hull.Position
 
 	local berths: { CFrame }? = nil
-	local issZone = WorldSystem.getMarker("DockZone")
 	local station = StationSystem.getStation(player)
-	if issZone and FlightMath.insideBox(issZone.CFrame, issZone.Size, position) then
-		berths = issBerths()
-	elseif
+	if
 		station and FlightMath.insideBox(station.dockZone.CFrame, station.dockZone.Size, position)
 	then
 		berths = { station.berth }
 	end
 	if berths == nil then
-		Notify.send(player, "Fly into the docking area at the ISS or at your own station to dock.")
+		Notify.send(player, "Fly into the docking area at your own station to dock.")
 		return
 	end
 	if ship.hull.AssemblyLinearVelocity.Magnitude > M.DOCK_MAX_SPEED * DOCK_SPEED_SLACK then
@@ -563,6 +545,31 @@ launchAndBoard = function(player: Player)
 			board(ship, player)
 		end
 	end
+end
+
+-- Raids (RaidSystem): puts the player's active ship at `cframe` (no berth
+-- needed), moves them beside it and seats them. Any ship they had out is
+-- removed first. Yields; returns true once they're piloting it.
+function ShipSystem.spawnAndBoard(player: Player, cframe: CFrame): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or humanoidOf(player) == nil then
+		return false
+	end
+	local existing = ships[player]
+	if existing then
+		despawn(existing)
+	end
+	local ship = spawnShip(player, infoFor(profile), cframe)
+	sendState(player)
+	if not Teleport.character(player, ship.seat.CFrame * CFrame.new(0, 3, 0)) then
+		return false
+	end
+	FlightGuard.reset(player)
+	if ships[player] ~= ship then
+		return false
+	end
+	board(ship, player)
+	return ship.piloting
 end
 
 local function onLaunchPrompt(prompt: ProximityPrompt, player: Player)

@@ -57,6 +57,26 @@
         },
         "DailyRequest": {
           "$className": "RemoteFunction"
+        },
+        "RaidRequest": {
+          "$className": "RemoteEvent"
+        },
+        "RaidEvent": {
+          "$className": "RemoteEvent"
+        }
+      }
+    },
+    "ServerStorage": {
+      "Assets": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+        "Stuff": {
+          "$path": "assets/roblox/Stuff",
+          "$ignoreUnknownInstances": true
+        },
+        "Bosses": {
+          "$path": "assets/roblox/Bosses",
+          "$ignoreUnknownInstances": true
         }
       }
     },

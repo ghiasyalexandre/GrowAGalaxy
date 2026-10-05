@@ -1,47 +1,60 @@
 --!strict
--- Greybox International Space Station, built from parts at the world origin.
+-- The International Space Station hub, built from parts at the world origin.
 --
--- Exterior: a line of connected cylindrical modules, a long truss crossing
--- above them, four solar-array assemblies, two radiators, a docking platform
--- and a glass-walled observation cupola at the far end.
--- Interior: one module per hub area. Gravity is off everywhere, so players
--- float through the modules; the floors give them something to push along.
+-- Exterior: a line of roomy cylindrical modules with window bands down both
+-- sides, a long truss crossing above them, four solar-array assemblies, two
+-- radiators, a glass observation cupola at the -X end and, past the airlock
+-- at the +X end, the raid platform: a wide deck where RaidSystem stands the
+-- Saturn V beacon (at the "RaidBeacon" marker) and its difficulty pads.
+-- No ships dock at the ISS: ships launch from each player's own station.
 --
--- The parts named in WorldSystem.MARKERS are the contract with the rest of the
--- game: a hand-built replacement model must contain them too.
+-- Interior, one module per area: Observation Cupola, Arrival (spawn),
+-- Star Lounge (galaxy hologram, couches), Navigation (route to your
+-- station), Zero-G Playground (bouncy glowing balls to push around, floating
+-- hoops), Ship Showroom (ship models turning on pads) and the Raid Airlock.
+-- Gravity is off, so players float; floors give them something to push on.
+--
+-- Parts tagged "GaG_Spin" (with a SpinSpeed attribute, radians per second)
+-- are turned by every client (SpinController). The parts named in
+-- WorldSystem.MARKERS are the contract with the rest of the game.
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ShipModel = require(ReplicatedStorage.Shared.Util.ShipModel)
 local Build = require(script.Parent.Build)
 
 local COLORS = Config.World.COLORS
 
-local TUBE_RADIUS = 10
+local TUBE_RADIUS = 16
 local TUBE_SIDES = 12
-local FLOOR_Y = -5
-local FLOOR_WIDTH = 17
-local TRUSS_Y = 22
+local FLOOR_Y = -9
+local FLOOR_WIDTH = 28
+local TRUSS_Y = 30
 local TRUSS_LENGTH = 340
--- Ship berths float this high: clear of the deck and of the outer rail.
-local BERTH_Y = FLOOR_Y + 6
+local SPIN_TAG = "GaG_Spin"
+local SAFE_ZONE_TAG = "SafeZone"
+local PLATFORM_SIZE = 260 -- the raid platform, square
+local BALL_COLORS = { "#FF5AA0", "#5FE3FF", "#FFD36B", "#8CFF6B", "#B06BFF", "#FF8A3D" }
 
 type ModuleDef = {
 	id: string,
 	label: string,
 	length: number,
 	glass: boolean?,
+	trim: string, -- floor strip and light tint
 }
 
 -- From the -X end to the +X end. The Navigation module is centred on the origin.
 local MODULES: { ModuleDef } = {
-	{ id = "Cupola", label = "Observation Cupola", length = 20, glass = true },
-	{ id = "Arrival", label = "Arrival", length = 36 },
-	{ id = "Missions", label = "Mission Terminal", length = 28 },
-	{ id = "Navigation", label = "Navigation", length = 28 },
-	{ id = "Showroom", label = "Ship Showroom", length = 44 },
-	{ id = "Workshop", label = "Upgrade Workshop", length = 32 },
-	{ id = "Docking", label = "Docking Airlock", length = 24 },
+	{ id = "Cupola", label = "Observation Cupola", length = 30, glass = true, trim = "#9FD8FF" },
+	{ id = "Arrival", label = "Arrival", length = 44, trim = "#4FC3F7" },
+	{ id = "Lounge", label = "Star Lounge", length = 40, trim = "#B06BFF" },
+	{ id = "Navigation", label = "Navigation", length = 32, trim = "#4FC3F7" },
+	{ id = "Playground", label = "Zero-G Playground", length = 52, trim = "#FF5AA0" },
+	{ id = "Showroom", label = "Ship Showroom", length = 48, trim = "#FFD36B" },
+	{ id = "RaidAirlock", label = "Raid Airlock", length = 32, trim = "#FF4A4A" },
 }
 
 type Span = { from: number, to: number, center: number }
@@ -64,21 +77,55 @@ local function layout(): { [string]: Span }
 	return spans
 end
 
--- A hollow polygonal tube along X, open at both ends.
+local function spin(instance: Instance, speed: number)
+	instance:SetAttribute("SpinSpeed", speed)
+	CollectionService:AddTag(instance, SPIN_TAG)
+end
+
+local function neon(
+	name: string,
+	size: Vector3,
+	cframe: CFrame,
+	color: string,
+	parent: Instance
+): Part
+	return Build.part({
+		name = name,
+		size = size,
+		cframe = cframe,
+		color = color,
+		material = Enum.Material.Neon,
+		collide = false,
+		parent = parent,
+	})
+end
+
+local function lamp(part: BasePart, color: string, range: number, brightness: number)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromHex(color)
+	light.Range = range
+	light.Brightness = brightness
+	light.Shadows = false
+	light.Parent = part
+end
+
+-- A hollow polygonal tube along X, open at both ends. Its two side panels
+-- are windows; the cupola is glass underneath too.
 local function tube(parent: Instance, span: Span, color: string, glassBottom: boolean)
 	local width = 2 * (TUBE_RADIUS + 1) * math.tan(math.pi / TUBE_SIDES) + 0.2
 	for i = 0, TUBE_SIDES - 1 do
 		local angle = i / TUBE_SIDES * 2 * math.pi
-		local glass = glassBottom and math.cos(angle) < -0.4
+		local window = math.abs(math.sin(angle)) > 0.95
+		local glass = window or (glassBottom and math.cos(angle) < -0.4)
 		Build.part({
-			name = "Hull",
+			name = if glass then "Window" else "Hull",
 			size = Vector3.new(span.to - span.from, 1, width),
 			cframe = CFrame.new(span.center, 0, 0)
 				* CFrame.Angles(angle, 0, 0)
 				* CFrame.new(0, TUBE_RADIUS + 0.5, 0),
 			color = if glass then COLORS.glass else color,
 			material = if glass then Enum.Material.Glass else Enum.Material.SmoothPlastic,
-			transparency = if glass then 0.45 else 0,
+			transparency = if glass then 0.5 else 0,
 			parent = parent,
 		})
 	end
@@ -98,45 +145,213 @@ local function endCap(parent: Instance, x: number, glass: boolean)
 end
 
 local function interior(parent: Instance, def: ModuleDef, span: Span)
+	local length = span.to - span.from
 	Build.part({
 		name = "Floor",
-		size = Vector3.new(span.to - span.from, 1, FLOOR_WIDTH),
+		size = Vector3.new(length, 1, FLOOR_WIDTH),
 		cframe = CFrame.new(span.center, FLOOR_Y - 0.5, 0),
 		color = if def.glass then COLORS.glass else COLORS.deck,
 		material = if def.glass then Enum.Material.Glass else Enum.Material.DiamondPlate,
 		transparency = if def.glass then 0.35 else 0,
 		parent = parent,
 	})
-
-	local fixture = Build.part({
-		name = "Light",
-		size = Vector3.new(4, 0.4, 2),
-		cframe = CFrame.new(span.center, TUBE_RADIUS - 1, 0),
-		color = "#FFFFFF",
-		material = Enum.Material.Neon,
-		collide = false,
-		parent = parent,
-	})
-	local light = Instance.new("PointLight")
-	light.Range = 26
-	light.Brightness = 1.2
-	light.Shadows = false
-	light.Parent = fixture
-
+	-- Glowing strips along both edges of the floor in the module's colour.
+	for _, z in { -FLOOR_WIDTH / 2 + 1, FLOOR_WIDTH / 2 - 1 } do
+		neon(
+			"FloorStrip",
+			Vector3.new(length - 2, 0.15, 0.5),
+			CFrame.new(span.center, FLOOR_Y + 0.08, z),
+			def.trim,
+			parent
+		)
+	end
+	-- Two ceiling light panels.
+	for _, x in { span.center - length / 4, span.center + length / 4 } do
+		local panel = neon(
+			"Light",
+			Vector3.new(6, 0.4, 3),
+			CFrame.new(x, TUBE_RADIUS - 1.5, 0),
+			"#F2F8FF",
+			parent
+		)
+		lamp(panel, "#E8F2FF", 34, 1.3)
+	end
 	-- Hanging area sign, readable from both directions along the walkway.
 	Build.sign({
 		name = "AreaSign",
 		text = def.label,
-		size = Vector3.new(0.4, 2.6, 11),
-		cframe = CFrame.new(span.from + 2, 5.5, 0),
+		size = Vector3.new(0.4, 3.4, 15),
+		cframe = CFrame.new(span.from + 2.5, 8, 0),
 		faces = { Enum.NormalId.Left, Enum.NormalId.Right },
 		parent = parent,
+		textColor = def.trim,
 	})
 end
 
 -- Floor point against the -Z wall of a module, facing the walkway.
 local function wallSpot(x: number): CFrame
-	return CFrame.new(x, FLOOR_Y, -6) * CFrame.Angles(0, math.pi, 0)
+	return CFrame.new(x, FLOOR_Y, -10) * CFrame.Angles(0, math.pi, 0)
+end
+
+-- A ring of glowing segments (a hoop) facing along X.
+local function hoop(parent: Instance, center: Vector3, radius: number, color: string)
+	local model = Build.model("Hoop", parent)
+	local segments = 14
+	local length = 2 * radius * math.tan(math.pi / segments) + 0.3
+	for i = 0, segments - 1 do
+		local angle = i / segments * 2 * math.pi
+		neon(
+			"Segment",
+			Vector3.new(0.8, 0.8, length),
+			CFrame.new(center) * CFrame.Angles(angle, 0, 0) * CFrame.new(0, radius, 0),
+			color,
+			model
+		)
+	end
+end
+
+local function lounge(parent: Instance, span: Span)
+	-- The galaxy hologram over a round table.
+	Build.part({
+		name = "HoloTable",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(3, 9, 9),
+		cframe = CFrame.new(span.center, FLOOR_Y + 1.5, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		color = COLORS.hullAlt,
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local holo = Build.model("Hologram", parent)
+	local disc = neon(
+		"GalaxyDisc",
+		Vector3.new(0.2, 8, 8),
+		CFrame.new(span.center, FLOOR_Y + 6, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		"#B06BFF",
+		holo
+	)
+	disc.Transparency = 0.55
+	local core = neon(
+		"GalaxyCore",
+		Vector3.one * 1.6,
+		CFrame.new(span.center, FLOOR_Y + 6, 0),
+		"#FFE6A3",
+		holo
+	)
+	core.Shape = Enum.PartType.Ball
+	lamp(core, "#B06BFF", 20, 2)
+	for i = 1, 6 do
+		local angle = i / 6 * 2 * math.pi
+		local star = neon(
+			"HoloStar",
+			Vector3.one * 0.5,
+			CFrame.new(span.center + math.cos(angle) * 3, FLOOR_Y + 6.2, math.sin(angle) * 3),
+			"#5FE3FF",
+			holo
+		)
+		star.Shape = Enum.PartType.Ball
+	end
+	holo.PrimaryPart = core
+	spin(holo, 0.5)
+	-- Couches along both walls.
+	for _, z in { -10.5, 10.5 } do
+		for _, x in { span.center - 11, span.center + 11 } do
+			Build.part({
+				name = "Couch",
+				size = Vector3.new(10, 2, 4),
+				cframe = CFrame.new(x, FLOOR_Y + 1, z),
+				color = "#3B2A6B",
+				material = Enum.Material.Fabric,
+				parent = parent,
+			})
+			Build.part({
+				name = "CouchBack",
+				size = Vector3.new(10, 3, 1),
+				cframe = CFrame.new(x, FLOOR_Y + 3, z + (if z < 0 then -1.5 else 1.5)),
+				color = "#3B2A6B",
+				material = Enum.Material.Fabric,
+				parent = parent,
+			})
+		end
+	end
+end
+
+local function playground(parent: Instance, span: Span)
+	-- Floating hoops to fly through.
+	for i, x in { span.center - 16, span.center, span.center + 16 } do
+		hoop(parent, Vector3.new(x, 1 + (i % 2) * 4, (i - 2) * 5), 4.5, BALL_COLORS[i])
+	end
+	-- Bouncy glowing balls, free to drift and be pushed around (zero g).
+	for i = 1, 10 do
+		local ball = Instance.new("Part")
+		ball.Name = "BounceBall"
+		ball.Shape = Enum.PartType.Ball
+		ball.Size = Vector3.one * (2.5 + (i % 3))
+		ball.Material = Enum.Material.Neon
+		ball.Color = Color3.fromHex(BALL_COLORS[(i - 1) % #BALL_COLORS + 1])
+		ball.CFrame =
+			CFrame.new(span.center - 20 + i * 4, FLOOR_Y + 4 + (i % 4) * 2, ((i % 5) - 2) * 3)
+		ball.CustomPhysicalProperties = PhysicalProperties.new(0.15, 0.1, 0.95, 1, 1)
+		ball.CastShadow = false
+		ball.Anchored = false
+		ball.Parent = parent
+	end
+	Build.sign({
+		name = "PlaygroundSign",
+		text = "Zero-G Playground\nPush the balls, fly through the hoops!",
+		size = Vector3.new(18, 5, 0.4),
+		cframe = CFrame.new(span.center, 2, -13.5),
+		faces = { Enum.NormalId.Back },
+		parent = parent,
+		textColor = "#FF5AA0",
+	})
+end
+
+local function showroom(parent: Instance, span: Span)
+	for i, x in { span.center - 14, span.center + 14 } do
+		local pad = Build.part({
+			name = "DisplayPad",
+			shape = Enum.PartType.Cylinder,
+			size = Vector3.new(0.6, 14, 14),
+			cframe = CFrame.new(x, FLOOR_Y + 0.3, 2) * CFrame.Angles(0, 0, math.pi / 2),
+			color = "#FFD36B",
+			material = Enum.Material.Neon,
+			parent = parent,
+		})
+		lamp(pad, "#FFD36B", 18, 1.5)
+		-- A ship model turning above each pad, if the models are imported.
+		local shipId = if i == 1 then "RedFighter" else "UltravioletIntruder"
+		local def = Config.Ships.BY_ID[shipId]
+		local source = if def then ShipModel.find(def) else nil
+		if source and def then
+			local ok, model = pcall(function(): Model
+				return (ShipModel.fit(source, def, Vector3.new(12, 6, 12)))
+			end)
+			if ok and model then
+				model.Name = `Display_{shipId}`
+				model:PivotTo(CFrame.new(x, FLOOR_Y + 5, 2) * model:GetPivot())
+				for _, item in model:GetDescendants() do
+					if item:IsA("BasePart") then
+						item.Anchored = true
+						item.CanCollide = false
+						if not ShipModel.textured(item) then
+							item.Color = Color3.fromHex(def.paint)
+						end
+					end
+				end
+				model.Parent = parent
+				spin(model, 0.35)
+			end
+		end
+	end
+	Build.sign({
+		name = "ShowroomSign",
+		text = "Ship Showroom\nEvery ship is at the Shipyard (HUD button)",
+		size = Vector3.new(18, 5, 0.4),
+		cframe = CFrame.new(span.center, 2, -13.5),
+		faces = { Enum.NormalId.Back },
+		parent = parent,
+		textColor = "#FFD36B",
+	})
 end
 
 local function areaContents(parent: Instance, def: ModuleDef, span: Span)
@@ -146,7 +361,7 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 		spawn.Anchored = true
 		spawn.Neutral = true
 		spawn.Duration = 0
-		spawn.Size = Vector3.new(8, 0.2, 8)
+		spawn.Size = Vector3.new(10, 0.2, 10)
 		spawn.CFrame = CFrame.lookAt(
 			Vector3.new(span.center, FLOOR_Y + 0.1, 0),
 			Vector3.new(span.to, FLOOR_Y + 0.1, 0)
@@ -160,22 +375,16 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 		if decal then
 			decal:Destroy()
 		end
-
 		Build.sign({
 			name = "Welcome",
-			text = "Welcome to Grow a Galaxy!\nFloat to the Docking Airlock to launch your ship.",
-			size = Vector3.new(16, 5, 0.4),
-			cframe = CFrame.new(span.center, 0, -8.3),
+			text = "Welcome to Grow a Galaxy!\nPress Launch Ship to fly. Raid the Death Star through the Raid Airlock.",
+			size = Vector3.new(22, 6, 0.4),
+			cframe = CFrame.new(span.center, 2, -13.5),
 			faces = { Enum.NormalId.Back },
 			parent = parent,
 		})
-	elseif def.id == "Missions" then
-		Build.console(
-			"MissionTerminal",
-			"Mission Terminal\n(coming soon)",
-			wallSpot(span.center),
-			parent
-		)
+	elseif def.id == "Lounge" then
+		lounge(parent, span)
 	elseif def.id == "Navigation" then
 		local console = Build.console(
 			"NavigationConsole",
@@ -187,37 +396,37 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 			console,
 			{ action = "Show route to my station", object = "Navigation", route = "Station" }
 		)
+	elseif def.id == "Playground" then
+		playground(parent, span)
 	elseif def.id == "Showroom" then
-		Build.console("Showroom", "Ship Showroom\n(coming soon)", wallSpot(span.center), parent)
-		for _, x in { span.center - 12, span.center + 12 } do
-			Build.part({
-				name = "DisplayPad",
-				shape = Enum.PartType.Cylinder,
-				size = Vector3.new(0.6, 8, 8),
-				cframe = CFrame.new(x, FLOOR_Y + 0.3, 3) * CFrame.Angles(0, 0, math.pi / 2),
-				color = COLORS.accent,
-				material = Enum.Material.Neon,
-				parent = parent,
-			})
-		end
-	elseif def.id == "Workshop" then
-		Build.console("Workshop", "Upgrade Workshop\n(coming soon)", wallSpot(span.center), parent)
-	elseif def.id == "Docking" then
+		showroom(parent, span)
+	elseif def.id == "RaidAirlock" then
 		local console = Build.console(
 			"AirlockConsole",
-			"Airlock\nTo the docking area",
+			"Raid Airlock\nTo the Saturn V raid beacon",
 			wallSpot(span.center),
 			parent
 		)
-		Build.prompt(console, { action = "Go outside", object = "Airlock", warp = "DockingArea" })
+		Build.prompt(
+			console,
+			{ action = "Go outside", object = "Raid Airlock", warp = "DockingArea" }
+		)
 		Build.marker(
 			"AirlockInside",
 			CFrame.lookAt(
-				Vector3.new(span.center, FLOOR_Y + 3, 2),
-				Vector3.new(span.from, FLOOR_Y + 3, 2)
+				Vector3.new(span.center, FLOOR_Y + 3, 4),
+				Vector3.new(span.from, FLOOR_Y + 3, 4)
 			),
 			parent
 		)
+		local glow = neon(
+			"RaidGlow",
+			Vector3.new(0.4, 6, 10),
+			CFrame.new(span.to - 1, 0, 0),
+			"#FF4A4A",
+			parent
+		)
+		lamp(glow, "#FF4A4A", 30, 2)
 	end
 end
 
@@ -292,86 +501,89 @@ local function truss(parent: Instance)
 	end
 end
 
-local function dockingArea(parent: Instance, dockingSpan: Span)
-	local x0 = dockingSpan.to
+-- The raid platform past the airlock: a wide deck with a glowing rim, the
+-- RaidBeacon marker at its centre (RaidSystem stands the Saturn V there).
+local function raidPlatform(parent: Instance, airlockSpan: Span)
+	local x0 = airlockSpan.to
 	Build.part({
-		name = "DockingTunnel",
-		size = Vector3.new(6, 10, 10),
-		cframe = CFrame.new(x0 + 3, 0, 0),
+		name = "Tunnel",
+		size = Vector3.new(14, 16, 16),
+		cframe = CFrame.new(x0 + 7, 0, 0),
 		color = COLORS.hullAlt,
 		parent = parent,
 	})
-
-	local length, width = 80, 70
-	local cx = x0 + 6 + length / 2
+	local cx = x0 + 14 + PLATFORM_SIZE / 2
 	Build.part({
-		name = "DockingPlatform",
-		size = Vector3.new(length, 2, width),
+		name = "RaidPlatform",
+		size = Vector3.new(PLATFORM_SIZE, 2, PLATFORM_SIZE),
 		cframe = CFrame.new(cx, FLOOR_Y - 1, 0),
-		color = COLORS.deck,
+		color = "#1E2230",
 		material = Enum.Material.DiamondPlate,
 		parent = parent,
 	})
-	-- Railings on the three open sides.
-	Build.part({
-		name = "Rail",
-		size = Vector3.new(0.6, 3, width),
-		cframe = CFrame.new(cx + length / 2, FLOOR_Y + 1.5, 0),
-		color = COLORS.accent,
-		parent = parent,
-	})
-	for _, z in { -width / 2, width / 2 } do
-		Build.part({
-			name = "Rail",
-			size = Vector3.new(length, 3, 0.6),
-			cframe = CFrame.new(cx, FLOOR_Y + 1.5, z),
-			color = COLORS.accent,
-			parent = parent,
-		})
+	-- Glowing rim.
+	for _, edge in
+		{
+			{
+				size = Vector3.new(PLATFORM_SIZE, 0.6, 1),
+				offset = Vector3.new(0, 0, -PLATFORM_SIZE / 2),
+			},
+			{
+				size = Vector3.new(PLATFORM_SIZE, 0.6, 1),
+				offset = Vector3.new(0, 0, PLATFORM_SIZE / 2),
+			},
+			{
+				size = Vector3.new(1, 0.6, PLATFORM_SIZE),
+				offset = Vector3.new(-PLATFORM_SIZE / 2, 0, 0),
+			},
+			{
+				size = Vector3.new(1, 0.6, PLATFORM_SIZE),
+				offset = Vector3.new(PLATFORM_SIZE / 2, 0, 0),
+			},
+		}
+	do
+		neon(
+			"Rim",
+			edge.size,
+			CFrame.new(cx, FLOOR_Y + 0.3, 0) * CFrame.new(edge.offset),
+			"#FF4A4A",
+			parent
+		)
+	end
+	-- Walkway lights from the airlock to the beacon.
+	for x = x0 + 18, cx - 30, 8 do
+		for _, z in { -6, 6 } do
+			neon(
+				"WalkLight",
+				Vector3.new(1, 0.4, 1),
+				CFrame.new(x, FLOOR_Y + 0.2, z),
+				"#FF8A3D",
+				parent
+			)
+		end
 	end
 
-	-- Three berths, marked by glowing outlines on the deck. Ships sit above
-	-- them facing away from the station (+X), so they launch over the rail.
-	local berthX = cx + 12
-	for index, z in { -22, 0, 22 } do
-		local berth = Vector3.new(berthX, BERTH_Y, z)
-		Build.marker(`Berth{index}`, CFrame.lookAt(berth, berth + Vector3.xAxis), parent)
-		Build.berthOutline(CFrame.new(berthX, FLOOR_Y + 0.1, z), 16, parent)
-	end
-	-- The marked docking volume: the platform and the space above and beyond it.
-	Build.dockZone(
-		CFrame.new(cx + 20, FLOOR_Y + 14, 0),
-		Vector3.new(length + 60, 40, width + 30),
-		0,
-		parent
-	)
-
+	Build.marker("RaidBeacon", CFrame.new(cx, FLOOR_Y, 0), parent)
 	Build.marker(
 		"DockingSpawn",
-		CFrame.lookAt(Vector3.new(x0 + 12, FLOOR_Y + 3, 0), Vector3.new(x0 + 40, FLOOR_Y + 3, 0)),
+		CFrame.lookAt(Vector3.new(x0 + 22, FLOOR_Y + 3, 0), Vector3.new(cx, FLOOR_Y + 3, 0)),
 		parent
 	)
 	local console = Build.console(
 		"AirlockReturn",
 		"Airlock\nBack inside",
-		CFrame.new(x0 + 10, FLOOR_Y, -10) * CFrame.Angles(0, math.pi, 0),
+		CFrame.new(x0 + 20, FLOOR_Y, -12) * CFrame.Angles(0, math.pi, 0),
 		parent
 	)
 	Build.prompt(console, { action = "Go inside", object = "Airlock", warp = "Interior" })
-	local hangar = Build.console(
-		"HangarConsole",
-		"Hangar\nLaunch your ship",
-		CFrame.new(x0 + 10, FLOOR_Y, 10),
-		parent
-	)
-	Build.prompt(hangar, { action = "Launch ship", object = "Hangar", launch = "ISS" })
 	Build.sign({
-		name = "DockingSign",
-		text = "Docking Area\nLaunch at the hangar console. Fly in slowly to dock.",
-		size = Vector3.new(24, 6, 0.4),
-		cframe = CFrame.new(cx, FLOOR_Y + 8, -width / 2),
+		name = "RaidSign",
+		text = "DEATH STAR RAIDS\nStep on a glowing pad to join a raid queue",
+		size = Vector3.new(30, 7, 0.4),
+		cframe = CFrame.new(x0 + 40, FLOOR_Y + 9, -24),
 		faces = { Enum.NormalId.Back },
 		parent = parent,
+		textColor = "#FF8A3D",
 	})
 end
 
@@ -394,7 +606,21 @@ function IssBuilder.build(): Model
 	endCap(hull, spans[MODULES[#MODULES].id].to + 0.5, false)
 
 	truss(Build.model("Truss", model))
-	dockingArea(Build.model("DockingArea", model), spans.Docking)
+	raidPlatform(Build.model("RaidArea", model), spans.RaidAirlock)
+
+	-- No PvP around the hub and its raid platform (CombatSystem).
+	local first, last =
+		spans[MODULES[1].id].from, spans[MODULES[#MODULES].id].to + 14 + PLATFORM_SIZE
+	local safe = Build.part({
+		name = "SafeZone",
+		size = Vector3.new(last - first + 200, 500, 500),
+		cframe = CFrame.new((first + last) / 2, 120, 0),
+		transparency = 1,
+		collide = false,
+		parent = model,
+	})
+	safe.CanQuery = false
+	CollectionService:AddTag(safe, SAFE_ZONE_TAG)
 
 	model.WorldPivot = CFrame.new()
 	return model
