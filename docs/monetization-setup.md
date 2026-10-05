@@ -19,7 +19,7 @@ admission or starts sales.
 | 2x Star Production | Pass | 2006121509 | Stars make 2x Stardust |
 | Automatic Collection | Pass | 2005767573 | Star income goes straight to the wallet |
 | Mining Boost (15 min) | Developer product | 3716697618 | 2x mining Stardust for 15 min of play, stacking time |
-| Stardust Pouch | Developer product | 3716697789 | Exactly 2,500 Stardust |
+| Small Stardust Pack | Developer product | 3716697789 | Exactly 25,000 Stardust, as often as you like |
 
 - **Hidden offers:** every other offer has id 0, so it's disabled: hidden from the Store and never
   fulfilled. To add one, put its id in `Config/Products.luau`; a product is on exactly when it has

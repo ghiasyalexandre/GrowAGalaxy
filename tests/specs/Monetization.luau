@@ -92,6 +92,13 @@ return function(T, Loader)
 			T.equal(data.stardust, 100 + grants.stardust, "not multiplied")
 			T.equal(ReceiptFlow.applyTo(data, "p1", grants), "duplicate")
 			T.equal(data.stardust, 100 + grants.stardust, "repeat grants nothing")
+			-- A new purchase (new PurchaseId) of the same pack grants again.
+			T.equal(ReceiptFlow.applyTo(data, "p2", grants), "granted")
+			T.equal(data.stardust, 100 + grants.stardust * 2, "buy as often as you like")
+		end)
+
+		T.test("the Small Stardust Pack adds 25,000", function()
+			T.equal(P.BY_KEY.StardustSmall.grants.stardust, 25000)
 		end)
 
 		T.test("boost receipts add time", function()
