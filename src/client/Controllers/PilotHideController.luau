@@ -14,10 +14,8 @@ local hidden: { [Model]: boolean } = {}
 local function setHidden(character: Model, hide: boolean)
 	local modifier = if hide then 1 else 0
 	for _, item in character:GetDescendants() do
-		if item:IsA("BasePart") then
-			item.LocalTransparencyModifier = modifier
-		elseif item:IsA("Decal") then
-			item.LocalTransparencyModifier = modifier
+		if item:IsA("BasePart") or item:IsA("Decal") then
+			(item :: any).LocalTransparencyModifier = modifier
 		end
 	end
 end

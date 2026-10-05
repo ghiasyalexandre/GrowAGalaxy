@@ -15,6 +15,8 @@ export type StarRecord = {
 	level: number,
 	pos: Vec3, -- position relative to the region origin
 	planets: { [string]: string }, -- orbit slot ("1".."4") -> Config.Planets id
+	-- orbit slot -> planet level (2..Config.Planets.MAX_LEVEL); missing = 1
+	planetLevels: { [string]: number }?,
 	appearance: string?,
 }
 

@@ -146,5 +146,32 @@ return function(T, Loader)
 			end
 			T.equal(StarMath.levelMultiplier(1), 1)
 		end)
+
+		T.test("planets level up to MAX_LEVEL: more income, a bit bigger, pricier", function()
+			local lastIncome, lastCost, lastRadius = 0, 0, 0
+			for level = 1, P.MAX_LEVEL do
+				local income = StarMath.planetIncome("Molten", level)
+				T.truthy(income > lastIncome and income == math.floor(income), `L{level} income`)
+				local radius = StarMath.planetRadius("Molten", level)
+				T.truthy(radius > lastRadius, `L{level} radius`)
+				local cost = StarMath.planetLevelCost("Molten", level)
+				if level < P.MAX_LEVEL then
+					T.truthy(cost ~= nil and (cost :: number) > lastCost, `L{level} cost`)
+					lastCost = cost :: number
+				else
+					T.equal(cost, nil)
+				end
+				lastIncome, lastRadius = income, radius
+			end
+			T.equal(StarMath.planetIncome("Molten", P.MAX_LEVEL), P.BY_ID.Molten.income * 3)
+			local s = star(first, 1, { ["1"] = "Barren" })
+			s.planetLevels = { ["1"] = 3 }
+			T.equal(
+				StarMath.income(s),
+				StarMath.starIncome(first, 1) + StarMath.planetIncome("Barren", 3)
+			)
+			T.equal(StarMath.encodePlanetLevels(s), "3,,,,,,,,,,")
+			T.equal(StarMath.decodePlanetLevels("3,,2,")[3], 2)
+		end)
 	end)
 end

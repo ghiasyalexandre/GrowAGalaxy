@@ -245,7 +245,7 @@ return function(T, Loader)
 					{ equipment = {}, laserColor = "#123456", boostColor = 7 } :: any
 				data.trail = "CometDust"
 				T.truthy(ProfileSchema.normalize(data))
-				T.equal(data.schemaVersion, 11)
+				T.equal(data.schemaVersion, ProfileSchema.VERSION)
 				T.equal(#data.showcase, 0)
 				T.equal(data.settings.showBounds, true)
 				T.equal(data.settings.showControls, true)
@@ -276,5 +276,23 @@ return function(T, Loader)
 				T.equal(data.showcase[1], "RedFighter")
 			end
 		)
+
+		T.test("v12: planet levels are kept for planets that exist, within 2..MAX_LEVEL", function()
+			local data = ProfileSchema.default()
+			data.schemaVersion = 11
+			data.galaxy.stars.s1 = {
+				typeId = Config.Stars.DEFAULT_TYPE,
+				level = 1,
+				pos = { x = 0, y = 0, z = 0 },
+				planets = { ["1"] = "Barren", ["2"] = "Barren" },
+				planetLevels = { ["1"] = 3, ["2"] = 99, ["3"] = 4, ["4"] = "x" },
+			} :: any
+			T.truthy(ProfileSchema.normalize(data))
+			local levels = data.galaxy.stars.s1.planetLevels :: { [string]: number }
+			T.equal(levels["1"], 3)
+			T.equal(levels["2"], Config.Planets.MAX_LEVEL)
+			T.equal(levels["3"], nil, "no planet in slot 3")
+			T.equal(levels["4"], nil)
+		end)
 	end)
 end

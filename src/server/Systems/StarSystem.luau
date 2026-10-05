@@ -13,6 +13,7 @@
 --                                               planets, with one more orbit
 --   "buyPlanet", starId: string, planetId       buy a planet into the first free slot
 --   "upgradePlanet", starId: string, slot: string  planet in that slot -> next tier
+--   "levelPlanet", starId: string, slot: string    planet in that slot -> next level
 -- Every request is validated here: ownership, Config.Stars, the region's
 -- bounds and star spacing (Logic/PlacementRules), capacity and cost. The
 -- client's ghost preview runs the same rules but is never trusted.
@@ -290,6 +291,34 @@ local function upgradePlanet(player: Player, starId: unknown, slot: unknown): (b
 		`Your planet became a {P.BY_ID[target].displayName}! Now {StarMath.income(star)} {CURRENCY}/s.`
 end
 
+local function levelPlanet(player: Player, starId: unknown, slot: unknown): (boolean, string)
+	local star, model = ownStar(player, starId)
+	local planetId = if star and type(slot) == "string" then star.planets[slot] else nil
+	if star == nil or model == nil or planetId == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local level = StarMath.planetLevel(star, slot :: string)
+	local cost = StarMath.planetLevelCost(planetId, level)
+	if cost == nil then
+		return false, "That planet is at its top level. Upgrade it to the next tier."
+	end
+	if not DataSystem.spendStardust(player, cost) then
+		return false, `You need {cost} {CURRENCY} to level this planet.`
+	end
+	DataSystem.updateStar(
+		player,
+		starId :: string,
+		{ slot = slot :: string, planetLevel = level + 1 }
+	)
+	DataSystem.addStat(player, "planetLevels", 1)
+	StarBuilder.apply(model, star)
+	return true,
+		`{P.BY_ID[planetId].displayName} reached level {level + 1}! +{StarMath.planetIncome(
+			planetId,
+			level + 1
+		)} {CURRENCY}/s.`
+end
+
 local function onRequest(player: Player, action: unknown, a: unknown, b: unknown): (boolean, string)
 	if not requestLimit.allow(player) then
 		return false, "Slow down a little."
@@ -306,6 +335,8 @@ local function onRequest(player: Player, action: unknown, a: unknown, b: unknown
 		return buyPlanet(player, a, b)
 	elseif action == "upgradePlanet" then
 		return upgradePlanet(player, a, b)
+	elseif action == "levelPlanet" then
+		return levelPlanet(player, a, b)
 	end
 	return false, REJECTIONS.Invalid
 end

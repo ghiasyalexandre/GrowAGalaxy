@@ -4,6 +4,12 @@
 -- tier, so better stars unlock better planets. A planet can be upgraded in
 -- its slot to the next tier for that tier's price minus half the current
 -- one's. Every planet adds its income to its star's.
+--
+-- Levels: each planet also levels up in its slot, 1 to MAX_LEVEL. Every
+-- level adds LEVEL_INCOME_STEP of its base income (x3 at level 5) and grows
+-- it by LEVEL_SIZE_STEP; level L -> L + 1 costs its price x LEVEL_COST_SHARE
+-- x LEVEL_COST_GROWTH^(L - 1). Upgrading to the next tier starts again at
+-- level 1. Each level past the first adds a little moon circling it.
 -- Logic/ConfigCheck validates this table.
 
 export type PlanetTypeDef = {
@@ -91,4 +97,9 @@ return {
 	BY_ID = BY_ID,
 	-- Upgrading a planet credits this share of its current tier's price.
 	UPGRADE_CREDIT = 0.5,
+	MAX_LEVEL = 5,
+	LEVEL_INCOME_STEP = 0.5, -- share of base income added per level
+	LEVEL_SIZE_STEP = 0.035, -- share of radius added per level (+14% at level 5)
+	LEVEL_COST_SHARE = 0.5,
+	LEVEL_COST_GROWTH = 1.8,
 }

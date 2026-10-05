@@ -25,6 +25,7 @@ local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local PlanetsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Planets"))
 local StarsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Stars"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
@@ -42,7 +43,14 @@ local QUARTER = 0.5523
 -- Seconds after placement during which a newly seen star plays its birth.
 local BIRTH_WINDOW = 4
 
-type Planet = { part: Part, slot: number, phase: number, id: string }
+type Planet = {
+	part: Part,
+	slot: number,
+	phase: number,
+	id: string,
+	level: number,
+	moons: { Part }, -- one per level past the first
+}
 
 type Visual = {
 	model: Model,
@@ -55,6 +63,7 @@ type Visual = {
 	typeId: any,
 	level: number,
 	planetsText: string,
+	levelsText: string,
 }
 
 local StarController = {}
@@ -129,12 +138,63 @@ end
 local function clearPlanets(v: Visual)
 	for _, planet in v.planets do
 		planet.part:Destroy()
+		for _, moon in planet.moons do
+			moon:Destroy()
+		end
 	end
 	for _, item in v.rings do
 		item:Destroy()
 	end
 	v.planets = {}
 	v.rings = {}
+end
+
+-- Makes a planet look its part: a shimmering atmosphere in a lighter shade,
+-- embers off molten worlds, glints off crystal ones, swirling storms on gas
+-- giants.
+local function dress(part: Part, def: PlanetsConfig.PlanetTypeDef, radius: number)
+	local color = Color3.fromHex(def.color)
+	local air = Instance.new("Part")
+	air.Name = "Atmosphere"
+	air.Shape = Enum.PartType.Ball
+	air.Size = Vector3.one * radius * 2.36
+	air.Color = color:Lerp(Color3.new(1, 1, 1), 0.45)
+	air.Material = Enum.Material.ForceField
+	air.Anchored = true
+	air.CanCollide = false
+	air.CanQuery = false
+	air.CanTouch = false
+	air.CastShadow = false
+	air.Parent = part
+	if ClientState.reducedEffects then
+		return
+	end
+	if def.id == "Molten" then
+		local embers = Instance.new("ParticleEmitter")
+		embers.Rate = 6
+		embers.Speed = NumberRange.new(radius * 0.4, radius * 0.9)
+		embers.SpreadAngle = Vector2.new(180, 180)
+		embers.Lifetime = NumberRange.new(0.8, 1.4)
+		embers.Size = NumberSequence.new(radius * 0.18, 0)
+		embers.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 70, 30))
+		embers.LightEmission = 1
+		embers.Parent = part
+	elseif def.id == "Crystal" then
+		local glints = Instance.new("Sparkles")
+		glints.SparkleColor = color:Lerp(Color3.new(1, 1, 1), 0.5)
+		glints.Parent = part
+	elseif def.id == "GasGiant" or def.id == "IceGiant" then
+		local storm = Instance.new("ParticleEmitter")
+		storm.Rate = 3
+		storm.Speed = NumberRange.new(0)
+		storm.Lifetime = NumberRange.new(2, 3)
+		storm.Size = NumberSequence.new(radius * 0.7, radius * 1.1)
+		storm.Transparency = NumberSequence.new(0.6, 1)
+		storm.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.3))
+		storm.RotSpeed = NumberRange.new(40, 80)
+		storm.LockedToPart = true
+		storm.Parent = part
+	end
 end
 
 local function buildPlanets(v: Visual)
@@ -145,6 +205,9 @@ local function buildPlanets(v: Visual)
 		return
 	end
 	local planets = StarMath.decodePlanets(encoded)
+	local levelsText = v.model:GetAttribute("PlanetLevels")
+	local levels =
+		StarMath.decodePlanetLevels(if type(levelsText) == "string" then levelsText else "")
 	local typeId = v.model:GetAttribute("TypeId")
 	local starDefNow = if type(typeId) == "string" then S.BY_ID[typeId] else nil
 	local sunlight = if starDefNow then Color3.fromHex(starDefNow.light) else Color3.new(1, 1, 1)
@@ -159,10 +222,12 @@ local function buildPlanets(v: Visual)
 			table.insert(v.rings, item)
 		end
 		if def then
+			local planetLevel = levels[slot] or 1
+			local radius = StarMath.planetRadius(def.id, planetLevel)
 			local part = Instance.new("Part")
 			part.Name = `GaG_Planet_{def.id}`
 			part.Shape = Enum.PartType.Ball
-			part.Size = Vector3.one * def.radius * 2
+			part.Size = Vector3.one * radius * 2
 			part.Color = Color3.fromHex(def.color)
 			part.Material = (Enum.Material :: any)[def.material] or Enum.Material.SmoothPlastic
 			part.Anchored = true
@@ -211,7 +276,32 @@ local function buildPlanets(v: Visual)
 				end
 			end
 			-- Start planets spread around their orbits, same on every client.
-			table.insert(v.planets, { part = part, slot = slot, phase = slot * 2.1, id = def.id })
+			dress(part, def, radius)
+			-- A little moon for every level past the first.
+			local moons: { Part } = {}
+			for _ = 2, planetLevel do
+				local moon = Instance.new("Part")
+				moon.Name = "GaG_Moon"
+				moon.Shape = Enum.PartType.Ball
+				moon.Size = Vector3.one * math.max(radius * 0.26, 0.8)
+				moon.Color = Color3.fromHex(def.color):Lerp(Color3.fromRGB(220, 222, 230), 0.7)
+				moon.Material = Enum.Material.Slate
+				moon.Anchored = true
+				moon.CanCollide = false
+				moon.CanQuery = false
+				moon.CanTouch = false
+				moon.CastShadow = false
+				moon.Parent = v.model
+				table.insert(moons, moon)
+			end
+			table.insert(v.planets, {
+				part = part,
+				slot = slot,
+				phase = slot * 2.1,
+				id = def.id,
+				level = planetLevel,
+				moons = moons,
+			})
 		end
 	end
 end
@@ -290,17 +380,24 @@ local function placeRight(button: TextButton, width: number)
 	button.Size = UDim2.fromOffset(width, 34)
 end
 
-local function rowText(row: Frame, titleText: string, detail: string?, indent: number)
+local function rowText(
+	row: Frame,
+	titleText: string,
+	detail: string?,
+	indent: number,
+	right: number?
+)
+	local margin = right or 186
 	Theme.label(row, {
 		Position = UDim2.fromOffset(indent, if detail then 6 else 0),
-		Size = UDim2.new(1, -indent - 186, 0, if detail then 20 else 52),
+		Size = UDim2.new(1, -indent - margin, 0, if detail then 20 else 52),
 		Text = titleText,
 		TextColor3 = if detail then C.text else C.subtle,
 	})
 	if detail then
 		Theme.label(row, {
 			Position = UDim2.fromOffset(indent, 27),
-			Size = UDim2.new(1, -indent - 186, 0, 18),
+			Size = UDim2.new(1, -indent - margin, 0, 18),
 			Text = detail,
 			Font = Enum.Font.Gotham,
 			TextSize = 13,
@@ -365,6 +462,9 @@ refreshPanel = function()
 	local level = model:GetAttribute("Level") :: number
 	local encoded = model:GetAttribute("Planets")
 	local planets = StarMath.decodePlanets(if type(encoded) == "string" then encoded else "")
+	local levelsAttr = model:GetAttribute("PlanetLevels")
+	local planetLevels =
+		StarMath.decodePlanetLevels(if type(levelsAttr) == "string" then levelsAttr else "")
 	local def = S.BY_ID[typeId]
 	local income = model:GetAttribute("Income")
 	local starId = model:GetAttribute("StarId")
@@ -454,7 +554,30 @@ refreshPanel = function()
 			local dot =
 				Theme.planetIcon(row, Color3.fromHex(planetDef.color), 34, planetRing(planetDef))
 			dot.Position = UDim2.fromOffset(8, 9)
-			rowText(row, planetDef.displayName, `Orbit {slot}  ·  +{fmt(planetDef.income)}/s`, 48)
+			local record: Types.StarRecord = {
+				typeId = typeId,
+				level = level,
+				pos = { x = 0, y = 0, z = 0 },
+				planets = { [tostring(slot)] = planetId },
+				planetLevels = { [tostring(slot)] = planetLevels[slot] or 1 },
+			}
+			local planetLevel = StarMath.planetLevel(record, tostring(slot))
+			rowText(
+				row,
+				`{planetDef.displayName}  ·  Lv {planetLevel}/{P.MAX_LEVEL}`,
+				`Orbit {slot}  ·  +{fmt(StarMath.planetIncome(planetId, planetLevel))}/s`,
+				48,
+				300
+			)
+			local levelCost = StarMath.planetLevelCost(planetId, planetLevel)
+			if levelCost then
+				local levelButton = priceButton(row, "Level", levelCost, function()
+					request("levelPlanet", starId, tostring(slot))
+				end)
+				levelButton.AnchorPoint = Vector2.new(1, 0.5)
+				levelButton.Position = UDim2.new(1, -184, 0.5, 0)
+				levelButton.Size = UDim2.fromOffset(110, 34)
+			end
 			local nextId, cost = StarMath.planetUpgrade(planetId)
 			if nextId and cost and StarMath.planetAllowed(typeId, nextId) then
 				button = priceButton(row, `To {P.BY_ID[nextId].displayName}`, cost, function()
@@ -639,6 +762,30 @@ local function onLevelChanged(v: Visual)
 	end
 end
 
+local function onPlanetLevelsChanged(v: Visual)
+	local text = v.model:GetAttribute("PlanetLevels")
+	local encoded = if type(text) == "string" then text else ""
+	local before = StarMath.decodePlanetLevels(v.levelsText)
+	local after = StarMath.decodePlanetLevels(encoded)
+	v.levelsText = encoded
+	buildPlanets(v)
+	animate()
+	for _, planet in v.planets do
+		local def = P.BY_ID[planet.id]
+		local was, now = before[planet.slot] or 1, after[planet.slot] or 1
+		if def and now > was then
+			StarFx.materialize(planet.part, Color3.fromHex(def.color))
+			celebrate(
+				v,
+				"PLANET LEVEL UP",
+				`{def.displayName}  ·  level {now}/{P.MAX_LEVEL}`,
+				`+{fmt(StarMath.planetIncome(def.id, now))} {CURRENCY}/s  ·  a new moon joins it`,
+				false
+			)
+		end
+	end
+end
+
 local function onPlanetsChanged(v: Visual)
 	local text = v.model:GetAttribute("Planets")
 	local encoded = if type(text) == "string" then text else ""
@@ -712,6 +859,9 @@ local function add(model: Instance)
 		typeId = model:GetAttribute("TypeId"),
 		level = if type(level) == "number" then level else 1,
 		planetsText = if type(planetsText) == "string" then planetsText else "",
+		levelsText = if type(model:GetAttribute("PlanetLevels")) == "string"
+			then model:GetAttribute("PlanetLevels") :: string
+			else "",
 	}
 	visuals[model] = v
 	buildPlanets(v)
@@ -739,6 +889,7 @@ local function add(model: Instance)
 		TypeId = onTypeChanged,
 		Level = onLevelChanged,
 		Planets = onPlanetsChanged,
+		PlanetLevels = onPlanetLevelsChanged,
 		Income = function() end,
 	}
 	for attribute, handler in handlers do
@@ -794,7 +945,22 @@ animate = function(dt: number?)
 				local offset = CFrame.Angles(math.rad(slot.tilt), 0, 0)
 					* Vector3.new(math.cos(angle) * slot.orbit, 0, math.sin(angle) * slot.orbit)
 				-- Facing the star, so the sunward light sits on the day side.
-				planet.part.CFrame = CFrame.lookAt(center + offset, center)
+				local at = center + offset
+				planet.part.CFrame = CFrame.lookAt(at, center)
+				local air = planet.part:FindFirstChild("Atmosphere")
+				if air and air:IsA("BasePart") then
+					air.CFrame = planet.part.CFrame
+				end
+				-- Moons circle the planet, faster the closer they are.
+				local size = planet.part.Size.X / 2
+				for index, moon in planet.moons do
+					local reach = size * (1.7 + index * 0.45)
+					local turn = clock.time / (86400 * (2 + index * 1.5)) * 2 * math.pi
+						+ index * 1.9
+					moon.CFrame = CFrame.new(at)
+						* CFrame.Angles(math.rad(15 * index), 0, 0)
+						* CFrame.new(math.cos(turn) * reach, 0, math.sin(turn) * reach)
+				end
 			end
 		end)
 		if not ok and not orbitWarned then
