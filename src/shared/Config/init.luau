@@ -23,4 +23,5 @@ return {
 	Achievements = require(script.Achievements),
 	Tutorial = require(script.Tutorial),
 	Products = require(script.Products),
+	Sprites = require(script.Sprites),
 }

@@ -229,13 +229,14 @@ local function priceButton(
 	parent: Instance,
 	verb: string,
 	cost: number,
-	onClick: () -> ()
+	onClick: () -> (),
+	style: Theme.ButtonStyle?
 ): TextButton
 	local affordable = stardust() >= cost
 	return Theme.button(
 		parent,
 		`{verb} · {fmt(cost)}`,
-		if affordable then "buy" else "disabled",
+		if affordable then style or "buy" else "disabled",
 		if affordable then onClick else nil
 	)
 end
@@ -348,7 +349,7 @@ refreshPanel = function()
 			buttons,
 			priceButton(actions, `Evolve: {targetDef.displayName}`, targetDef.cost, function()
 				request("evolve", starId)
-			end)
+			end, "special")
 		)
 	end
 	table.insert(
@@ -395,7 +396,11 @@ refreshPanel = function()
 				button = Theme.button(row, "Finest planet", "disabled", nil)
 			end
 		elseif slot <= open then
-			rowText(row, `Orbit {slot}: empty`, nil, 14)
+			local icon = Theme.icon(row, "PlanetUp", 40)
+			if icon then
+				icon.Position = UDim2.fromOffset(6, 6)
+			end
+			rowText(row, `Orbit {slot}: empty`, nil, if icon then 52 else 14)
 			button = Theme.button(row, "Buy a planet", "buy", function()
 				picking = true
 				refreshPanel()

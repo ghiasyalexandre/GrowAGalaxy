@@ -19,6 +19,7 @@ local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local HudController = require(script.Parent.HudController)
+local Sprites = require(script.Parent.Parent.UI.Sprites)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -44,6 +45,7 @@ local bannerHeader: TextLabel
 local bannerTitle: TextLabel
 local bannerBody: TextLabel
 local bannerEdge: UIStroke
+local bannerIcon: ImageLabel? = nil
 local CONFETTI = 28
 local CONFETTI_COLORS = {
 	Color3.fromRGB(255, 210, 90),
@@ -92,7 +94,17 @@ local function worldBurst(position: Vector3, amount: number)
 end
 
 -- One glowing orb: bursts out from `from`, then streams into the wallet.
-local function orb(from: Vector2, delay: number)
+-- With the sprite sheet the orb is the Stardust icon, tumbling as it flies.
+local function makeOrb(from: Vector2): (GuiObject, number)
+	local size = math.floor(ORB_SIZE * 1.8)
+	local sprite = Sprites.icon(gui, "Stardust", size)
+	if sprite then
+		sprite.AnchorPoint = Vector2.new(0.5, 0.5)
+		sprite.Position = UDim2.fromOffset(from.X, from.Y)
+		sprite.Rotation = math.random(-30, 30)
+		sprite.ZIndex = 5
+		return sprite, size
+	end
 	local dot = Instance.new("Frame")
 	dot.AnchorPoint = Vector2.new(0.5, 0.5)
 	dot.Size = UDim2.fromOffset(ORB_SIZE, ORB_SIZE)
@@ -113,6 +125,11 @@ local function orb(from: Vector2, delay: number)
 	glow.Thickness = 3
 	glow.Transparency = 0.35
 	glow.Parent = dot
+	return dot, ORB_SIZE
+end
+
+local function orb(from: Vector2, delay: number)
+	local dot, size = makeOrb(from)
 
 	local angle = math.random() * math.pi * 2
 	local reach = 40 + math.random() * 70
@@ -124,7 +141,8 @@ local function orb(from: Vector2, delay: number)
 		local target = HudController.walletTarget()
 		local fly = TweenService:Create(dot, FLY, {
 			Position = UDim2.fromOffset(target.X, target.Y),
-			Size = UDim2.fromOffset(ORB_SIZE * 0.5, ORB_SIZE * 0.5),
+			Size = UDim2.fromOffset(size * 0.5, size * 0.5),
+			Rotation = dot.Rotation + 180,
 		})
 		fly:Play()
 		fly.Completed:Wait()
@@ -234,7 +252,7 @@ local function screenFlash(color: Color3)
 	Debris:AddItem(cover, 0.9)
 end
 
-type BannerItem = { header: string, name: string, details: string, color: Color3 }
+type BannerItem = { header: string, name: string, details: string, color: Color3, icon: string }
 local bannerQueue: { BannerItem } = {}
 local bannerBusy = false
 
@@ -252,6 +270,14 @@ local function runBanners()
 			bannerTitle.Text = item.name
 			bannerBody.Text = item.details
 			bannerEdge.Color = item.color
+			-- Sprite sheet: the icon for this kind of banner, the frame tinted.
+			local icon = bannerIcon
+			if icon then
+				Sprites.set(icon, item.icon)
+				icon.Rotation = -20
+				TweenService:Create(icon, POP, { Rotation = 0 }):Play()
+			end
+			Sprites.tint(banner, Color3.new(1, 1, 1):Lerp(item.color, 0.25))
 			banner.Visible = true
 			banner.Position = UDim2.new(0.5, 0, 0, -120)
 			TweenService:Create(banner, POP, { Position = UDim2.new(0.5, 0, 0, 70) }):Play()
@@ -273,8 +299,17 @@ local function runBanners()
 	end)
 end
 
-local function showBanner(header: string, name: string, details: string, color: Color3)
-	table.insert(bannerQueue, { header = header, name = name, details = details, color = color })
+local function showBanner(
+	header: string,
+	name: string,
+	details: string,
+	color: Color3,
+	icon: string
+)
+	table.insert(
+		bannerQueue,
+		{ header = header, name = name, details = details, color = color, icon = icon }
+	)
 	runBanners()
 end
 
@@ -286,7 +321,13 @@ local function onReward(kind: unknown, amount: unknown, position: unknown, label
 	local caption = if type(label) == "string" then label else nil
 	if kind == "achievement" then
 		local name, details = string.match(caption or "", "^(.-)|(.*)$")
-		showBanner("ACHIEVEMENT UNLOCKED", name or "Achievement unlocked", details or "", GOLD)
+		showBanner(
+			"ACHIEVEMENT UNLOCKED",
+			name or "Achievement unlocked",
+			details or "",
+			GOLD,
+			"Medal"
+		)
 		if amount <= 0 then
 			return
 		end
@@ -341,6 +382,11 @@ local function findCollector()
 	})
 	local scale = Instance.new("UIScale")
 	scale.Parent = text
+	local icon = Sprites.icon(billboard, "Stardust", 40)
+	if icon then
+		text.Position = UDim2.fromOffset(42, 0)
+		text.Size = UDim2.new(1, -42, 1, 0)
+	end
 	collectLabel = billboard
 	collectText = text
 end
@@ -380,16 +426,25 @@ function RewardController.init()
 		TextXAlignment = Enum.TextXAlignment.Center,
 		TextColor3 = GOLD,
 	})
+	-- Sprite sheet: an icon on the left (medal, star or planet).
+	local inset = 12
+	bannerIcon = Sprites.icon(banner, "Medal", 76)
+	if bannerIcon then
+		bannerIcon.AnchorPoint = Vector2.new(0, 0.5)
+		bannerIcon.Position = UDim2.new(0, 4, 0.5, 0)
+		bannerIcon.ZIndex = 3
+		inset = 80
+	end
 	bannerTitle = Theme.label(banner, {
-		Position = UDim2.fromOffset(12, 28),
-		Size = UDim2.new(1, -24, 0, 28),
+		Position = UDim2.fromOffset(inset, 28),
+		Size = UDim2.new(1, -inset - 12, 0, 28),
 		TextSize = 24,
 		Font = Enum.Font.GothamBlack,
 		TextXAlignment = Enum.TextXAlignment.Center,
 	})
 	bannerBody = Theme.label(banner, {
-		Position = UDim2.fromOffset(12, 56),
-		Size = UDim2.new(1, -24, 0, 20),
+		Position = UDim2.fromOffset(inset, 56),
+		Size = UDim2.new(1, -inset - 12, 0, 20),
 		TextSize = 15,
 		Font = Enum.Font.GothamBold,
 		TextXAlignment = Enum.TextXAlignment.Center,
@@ -403,7 +458,8 @@ function RewardController.start()
 		if flash then
 			screenFlash(color)
 		end
-		showBanner(header, name, details, color)
+		local icon = if string.find(header, "WORLD") then "PlanetUp" else "StarPlus"
+		showBanner(header, name, details, color, icon)
 	end)
 	ClientState.profileChanged:Connect(function(field)
 		if field == "uncollected" or field == "*" then

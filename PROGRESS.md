@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-04 (stage 10 merged into `main`).
+Last updated: 2026-10-04 (stage 11 merged into `main`).
 
 ## Status by stage
 
@@ -16,7 +16,8 @@ Last updated: 2026-10-04 (stage 10 merged into `main`).
 | 8. UI juice and reward effects | Merged | Passing (101 tests) | **Not yet** |
 | 9. Boost, laser feel, Star Shop button, isolated controller start-up | Merged | Passing (104 tests) | **Not yet** |
 | 10. Stellar spectacle (star/planet effects, celebrations, shop icons, Next Goal, achievements) | Merged | Passing (105 tests) | **Not yet** |
-| 11+. Save hardening, tuning, monetization | Not started | | |
+| 11. Sprite sheet UI (needs the sheet uploaded and its id in Config/Sprites) | Merged | Passing (107 tests) | **Not yet** |
+| 12+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -38,6 +39,9 @@ Last updated: 2026-10-04 (stage 10 merged into `main`).
   `[Config]` warnings. ProfileStore runs in mock mode (API services off), so nothing saves.
 
 ## Needs the user
+
+0. Upload `assets/ui/GaG_SpriteSheet_1024.png` to Roblox and put its id in
+   `src/shared/Config/Sprites.luau` (`IMAGE`); see [stage 11](docs/stage-11-sprite-ui.md).
 
 1. Studio playtest of stages 2 and 3 (test tables in the stage docs): how flying and mining
    feel. Report anything that feels wrong.

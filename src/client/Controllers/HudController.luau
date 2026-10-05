@@ -13,6 +13,7 @@ local TweenService = game:GetService("TweenService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local StarController = require(script.Parent.StarController)
+local Sprites = require(script.Parent.Parent.UI.Sprites)
 local Theme = require(script.Parent.Parent.UI.Theme)
 local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 local RegionMath = require(
@@ -63,6 +64,7 @@ local boostPanel: Frame
 local boostFill: Frame
 local boostLabel: TextLabel
 local shopButton: TextButton
+local setEffectsText: (string) -> ()
 local goalButton: TextButton
 local goalEdge: UIStroke
 local goalTitle: TextLabel
@@ -130,16 +132,32 @@ local function buildWallet(gui: ScreenGui)
 	padding.PaddingBottom = UDim.new(0, 6)
 	padding.Parent = panel
 
+	-- Sprite sheet: the wide panel frame and the Stardust icon on the left.
+	local inset = 0
+	if Sprites.enabled() then
+		padding.PaddingLeft = UDim.new(0, 18) -- clear of the frame art
+	end
+	if Sprites.skin(panel, "PanelWide", 0.45) then
+		local icon = Sprites.icon(panel, "Stardust", 48)
+		if icon then
+			icon.AnchorPoint = Vector2.new(0, 0.5)
+			icon.Position = UDim2.fromScale(0, 0.5)
+			icon.ZIndex = 2
+			inset = 52
+		end
+	end
+
 	makeLabel(panel, {
 		Name = "StardustTitle",
-		Size = UDim2.fromScale(1, 0.25),
+		Position = UDim2.fromOffset(inset, 0),
+		Size = UDim2.new(1, -inset, 0.25, 0),
 		Text = Config.Economy.CURRENCY_NAME:upper(),
 		TextColor3 = Color3.fromRGB(255, 196, 92),
 	})
 	stardustLabel = makeLabel(panel, {
 		Name = "Stardust",
-		Position = UDim2.fromScale(0, 0.25),
-		Size = UDim2.fromScale(1, 0.48),
+		Position = UDim2.new(0, inset, 0.25, 0),
+		Size = UDim2.new(1, -inset, 0.48, 0),
 		Text = "...",
 		Font = Enum.Font.GothamBlack,
 	})
@@ -167,21 +185,74 @@ local function buildWallet(gui: ScreenGui)
 	end)
 	sectorLabel = makeLabel(panel, {
 		Name = "Sector",
-		Position = UDim2.fromScale(0, 0.75),
-		Size = UDim2.fromScale(1, 0.25),
+		Position = UDim2.new(0, inset, 0.75, 0),
+		Size = UDim2.new(1, -inset, 0.25, 0),
 		Text = "Finding your galaxy...",
 		Font = Enum.Font.Gotham,
 		TextColor3 = Color3.fromRGB(180, 190, 220),
 	})
 end
 
--- A titled bar: the laser heat gauge and the extraction bar.
+-- Gives a HUD button the sprite sheet's art and an icon, moving its text to
+-- a label above the art. Returns a function that sets the button's text.
+local function dressButton(
+	button: TextButton,
+	spriteName: string,
+	iconName: string?
+): (string) -> ()
+	if not Sprites.enabled() then
+		return function(text: string)
+			button.Text = text
+		end
+	end
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.ZIndex = 2
+	label.Font = button.Font
+	label.TextSize = button.TextSize
+	label.TextScaled = button.TextScaled
+	label.TextColor3 = button.TextColor3
+	label.TextStrokeTransparency = 0.4
+	label.Text = button.Text
+	label.Parent = button
+	-- Text padding belongs to the label now, not the art.
+	local padding = button:FindFirstChildOfClass("UIPadding")
+	if padding then
+		padding.Parent = label
+	end
+	Sprites.skin(button, spriteName)
+	local height = button.Size.Y.Offset
+	local icon = if iconName then Sprites.icon(button, iconName, math.floor(height * 1.1)) else nil
+	if icon then
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.new(0, 2, 0.5, 0)
+		icon.ZIndex = 3
+		label.Position = UDim2.fromOffset(height, 0)
+		label.Size = UDim2.new(1, -height - 10, 1, 0)
+	end
+	button.Text = ""
+	return function(text: string)
+		label.Text = text
+	end
+end
+
+-- Recolours a gauge fill: its background, or its sprite art.
+local function paintFill(fill: Frame, color: Color3)
+	fill.BackgroundColor3 = color
+	Sprites.tint(fill, Color3.new(1, 1, 1):Lerp(color, 0.4))
+end
+
+-- A titled bar: the laser heat gauge, the boost tank and the extraction bar.
 local function makeGauge(
 	gui: ScreenGui,
 	name: string,
 	y: number,
 	title: string,
-	color: Color3
+	color: Color3,
+	style: Theme.BarStyle,
+	iconName: string?
 ): (Frame, Frame, TextLabel)
 	local panel = Instance.new("Frame")
 	panel.Name = name
@@ -201,7 +272,7 @@ local function makeGauge(
 	local track = Instance.new("Frame")
 	track.Name = "Track"
 	track.Position = UDim2.new(0, 0, 0, 18)
-	track.Size = UDim2.new(1, 0, 0, 10)
+	track.Size = UDim2.new(1, 0, 0, Theme.barHeight(10))
 	track.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	track.BackgroundTransparency = 0.25
 	track.Parent = panel
@@ -213,6 +284,17 @@ local function makeGauge(
 	fill.BorderSizePixel = 0
 	fill.Parent = track
 	corner(fill, 5)
+	local cyan = style == "cyan"
+	Sprites.skin(track, if cyan then "TrackGrey" else "TrackOrange")
+	Sprites.skin(fill, if cyan then "FillCyan" else "FillOrange")
+	local icon = if iconName then Sprites.icon(panel, iconName, 30) else nil
+	if icon then
+		-- The icon sits left of the gauge, which moves over to make room.
+		icon.AnchorPoint = Vector2.new(1, 0.5)
+		icon.Position = UDim2.new(0, -4, 0.5, 2)
+		panel.Position = UDim2.new(0, 50, 1, y)
+		panel.Size = UDim2.new(0, 186, 0, 30)
+	end
 	return panel, fill, label
 end
 
@@ -281,12 +363,13 @@ local function build()
 	padding.PaddingTop = UDim.new(0, 8)
 	padding.PaddingBottom = UDim.new(0, 8)
 	padding.Parent = recoverButton
+	dressButton(recoverButton, "ButtonBlue", "Ship")
 
 	-- Settings toggle under the wallet.
 	effectsButton = Instance.new("TextButton")
 	effectsButton.Name = "Effects"
 	effectsButton.Position = UDim2.new(0, 16, 0, 116)
-	effectsButton.Size = UDim2.new(0, 150, 0, 26)
+	effectsButton.Size = UDim2.new(0, 150, 0, 30)
 	effectsButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	effectsButton.BackgroundTransparency = 0.3
 	effectsButton.Font = Enum.Font.Gotham
@@ -294,12 +377,13 @@ local function build()
 	effectsButton.TextColor3 = Color3.fromRGB(180, 190, 220)
 	effectsButton.Parent = gui
 	corner(effectsButton, 6)
+	setEffectsText = dressButton(effectsButton, "ButtonDark", "Gear")
 
 	-- Opens the Star Shop from anywhere (also the B key).
 	shopButton = Instance.new("TextButton")
 	shopButton.Name = "StarShop"
-	shopButton.Position = UDim2.new(0, 16, 0, 148)
-	shopButton.Size = UDim2.new(0, 150, 0, 32)
+	shopButton.Position = UDim2.new(0, 16, 0, 152)
+	shopButton.Size = UDim2.new(0, 170, 0, 40)
 	shopButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	shopButton.AutoButtonColor = false
 	shopButton.Font = Enum.Font.GothamBlack
@@ -314,6 +398,7 @@ local function build()
 		ColorSequence.new(Color3.fromRGB(255, 176, 50), Color3.fromRGB(255, 120, 60))
 	shopGradient.Rotation = 90
 	shopGradient.Parent = shopButton
+	dressButton(shopButton, "ButtonGold", "StarPlus")
 	local shopScale = Instance.new("UIScale")
 	shopScale.Parent = shopButton
 	shopButton.MouseEnter:Connect(function()
@@ -329,7 +414,7 @@ local function build()
 	goalButton.Name = "NextGoal"
 	goalButton.Text = ""
 	goalButton.AutoButtonColor = false
-	goalButton.Position = UDim2.new(0, 16, 0, 188)
+	goalButton.Position = UDim2.new(0, 16, 0, 200)
 	goalButton.Size = UDim2.new(0, 220, 0, 52)
 	goalButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	goalButton.BackgroundTransparency = 0.2
@@ -341,17 +426,27 @@ local function build()
 	goalEdge.Thickness = 2
 	goalEdge.Transparency = 1
 	goalEdge.Parent = goalButton
+	-- Sprite sheet: a wide panel frame with the Stardust icon.
+	local goalInset = 10
+	if Sprites.skin(goalButton, "PanelWide", 0.4) then
+		local icon = Sprites.icon(goalButton, "Stardust", 34)
+		if icon then
+			icon.Position = UDim2.fromOffset(8, 4)
+			icon.ZIndex = 2
+			goalInset = 46
+		end
+	end
 	goalTitle = makeLabel(goalButton, {
-		Position = UDim2.fromOffset(10, 6),
-		Size = UDim2.new(1, -20, 0, 16),
+		Position = UDim2.fromOffset(goalInset, 6),
+		Size = UDim2.new(1, -goalInset - 10, 0, 16),
 		TextScaled = false,
 		TextSize = 14,
 		TextColor3 = WALLET_GOLD,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
 	goalAmount = makeLabel(goalButton, {
-		Position = UDim2.fromOffset(10, 22),
-		Size = UDim2.new(1, -20, 0, 14),
+		Position = UDim2.fromOffset(goalInset, 22),
+		Size = UDim2.new(1, -goalInset - 10, 0, 14),
 		TextScaled = false,
 		TextSize = 12,
 		Font = Enum.Font.Gotham,
@@ -359,16 +454,18 @@ local function build()
 	})
 	goalFill = Theme.progress(goalButton, 0, WALLET_GOLD, 6)
 	local goalTrack = goalFill.Parent :: Frame
-	goalTrack.Position = UDim2.new(0, 10, 1, -8)
-	goalTrack.Size = UDim2.new(1, -20, 0, 6)
+	goalTrack.Position = UDim2.new(0, goalInset, 1, -4)
+	goalTrack.Size = UDim2.new(1, -goalInset - 10, 0, Theme.barHeight(6))
 	Theme.shine(goalButton)
 	goalShine = goalButton:FindFirstChild("Shine") :: Frame
 	goalShine.Visible = false
 
-	heatPanel, heatFill, heatLabel = makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL)
-	boostPanel, boostFill, boostLabel = makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY)
+	heatPanel, heatFill, heatLabel =
+		makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL, "orange")
+	boostPanel, boostFill, boostLabel =
+		makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY, "cyan", "Ship")
 	extractPanel, extractFill, extractLabel =
-		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK)
+		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Laser")
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -475,7 +572,7 @@ local function refreshHeat()
 	local share = if type(heat) == "number" then math.clamp(heat, 0, 1) else 0
 	local overheated = ship ~= nil and ship:GetAttribute("Overheated") == true
 	heatFill.Size = UDim2.fromScale(share, 1)
-	heatFill.BackgroundColor3 = if overheated then HEAT_HOT else HEAT_COOL:Lerp(HEAT_HOT, share)
+	paintFill(heatFill, if overheated then HEAT_HOT else HEAT_COOL:Lerp(HEAT_HOT, share))
 	heatLabel.Text = if overheated then "LASER OVERHEATED: COOLING" else "LASER HEAT"
 	heatLabel.TextColor3 = if overheated then HEAT_HOT else HEAT_COOL
 end
@@ -494,7 +591,7 @@ local function refreshExtraction(flying: boolean)
 	local weak = ship:GetAttribute("MiningWeak") == true
 	local color = if weak then EXTRACT_WEAK else EXTRACT_ROCK
 	extractFill.Size = UDim2.fromScale(share, 1)
-	extractFill.BackgroundColor3 = color
+	paintFill(extractFill, color)
 	extractLabel.TextColor3 = color
 	extractLabel.Text = if weak
 		then "EXTRACTING: WEAK POINT"
@@ -509,7 +606,7 @@ local function refreshBoost()
 		then BOOST_ON
 		elseif flight.boostLocked then BOOST_EMPTY
 		else BOOST_READY
-	boostFill.BackgroundColor3 = color
+	paintFill(boostFill, color)
 	boostLabel.TextColor3 = color
 	boostLabel.Text = if flight.boosting
 		then "BOOSTING"
@@ -584,9 +681,7 @@ function HudController.init()
 	ClientState.stabilizationChanged:Connect(refreshReadout)
 	Input.deviceChanged:Connect(refreshReadout)
 	local function refreshEffects()
-		effectsButton.Text = if ClientState.reducedEffects
-			then "Effects: reduced"
-			else "Effects: full"
+		setEffectsText(if ClientState.reducedEffects then "Effects: reduced" else "Effects: full")
 	end
 	ClientState.effectsChanged:Connect(refreshEffects)
 	refreshEffects()

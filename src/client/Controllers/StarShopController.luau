@@ -75,7 +75,7 @@ local function refresh()
 		local room = owned < capacity
 		local affordable = unlocked and room and profile.stardust >= cost
 
-		local row = Theme.row(list, 74, order)
+		local row = Theme.row(list, 80, order)
 		local style: Theme.StarIconStyle = if not unlocked
 			then "locked"
 			elseif typeId == TOP_STAR then "blackHole"
@@ -129,8 +129,8 @@ local function refresh()
 			)
 			local fill = Theme.progress(row, share, C.gold, 5)
 			local track = fill.Parent :: Frame
-			track.Position = UDim2.new(0, 72, 1, -7)
-			track.Size = UDim2.new(1, -262, 0, 5)
+			track.Position = UDim2.new(0, 72, 1, -4)
+			track.Size = UDim2.new(1, -262, 0, Theme.barHeight(5))
 		else
 			button = Theme.button(row, `Buy · {Format.abbreviate(cost)}`, "buy", function()
 				close()
@@ -175,9 +175,17 @@ function StarShopController.init()
 	local size = Instance.new("UISizeConstraint")
 	size.MaxSize = Vector2.new(640, 700)
 	size.Parent = panel
+	-- Sprite sheet: the star icon before the title.
+	local titleX = 16
+	local icon = Theme.icon(panel, "StarPlus", 44)
+	if icon then
+		icon.Position = UDim2.fromOffset(12, 2)
+		icon.ZIndex = 2
+		titleX = 60
+	end
 	Theme.label(panel, {
-		Position = UDim2.fromOffset(16, 10),
-		Size = UDim2.new(1, -120, 0, 28),
+		Position = UDim2.fromOffset(titleX, 10),
+		Size = UDim2.new(1, -titleX - 104, 0, 28),
 		Text = "Star Shop",
 		TextSize = 24,
 		Font = Enum.Font.GothamBlack,

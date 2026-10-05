@@ -646,6 +646,37 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	-- Sprites: every rect inside the sheet, every slice inside its sprite,
+	-- and the image id (when set) in rbxassetid form.
+	local sprites = config.Sprites
+	if sprites.IMAGE ~= nil and not string.match(sprites.IMAGE, "^rbxassetid://%d+$") then
+		fail(`Sprites: IMAGE must look like "rbxassetid://123", not "{sprites.IMAGE}"`)
+	end
+	for name, def in sprites.SPRITES do
+		if
+			def.x < 0
+			or def.y < 0
+			or def.x + def.w > sprites.SHEET_WIDTH
+			or def.y + def.h > sprites.SHEET_HEIGHT
+		then
+			fail(`Sprite {name} is outside the sheet`)
+		end
+		local cut = def.slice
+		if
+			cut
+			and not (
+				0 <= cut.x0
+				and cut.x0 < cut.x1
+				and cut.x1 <= def.w
+				and 0 <= cut.y0
+				and cut.y0 < cut.y1
+				and cut.y1 <= def.h
+			)
+		then
+			fail(`Sprite {name}: slice centre is outside the sprite`)
+		end
+	end
+
 	return problems
 end
 
