@@ -10,15 +10,22 @@ return function(T, Loader)
 	end
 
 	T.describe("RewardMath", function()
-		T.test("mining: 1x, pass 2x, boost 2x, both 4x", function()
-			T.equal(RewardMath.multiplier("mining", entitlements()), 1)
-			T.equal(RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true })), 2)
-			T.equal(RewardMath.multiplier("mining", entitlements({}, 60)), 2)
+		T.test("stars: 1x, pass 2x, boost 2x, both 4x", function()
+			T.equal(RewardMath.multiplier("star", entitlements()), 1)
+			T.equal(RewardMath.multiplier("star", entitlements({ StarMultiplier = true })), 2)
+			T.equal(RewardMath.multiplier("star", entitlements({}, 0, 60)), 2)
 			T.equal(
-				RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true }, 60)),
+				RewardMath.multiplier("star", entitlements({ StarMultiplier = true }, 0, 60)),
 				4
 			)
-			T.equal(RewardMath.miningReward(30, entitlements({ MiningMultiplier = true }, 60)), 120)
+			T.equal(RewardMath.multiplier("mining", entitlements({}, 60)), 2)
+			T.equal(RewardMath.miningReward(30, entitlements({}, 60)), 60)
+		end)
+
+		T.test("a pass that isn't set up (no id) grants nothing", function()
+			T.equal(P.BY_KEY.MiningMultiplier.enabled, false)
+			T.equal(RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true })), 1)
+			T.equal(RewardMath.beamPower({ EnhancedBeam = true }), 1)
 		end)
 
 		T.test("each pass only affects its own source", function()
@@ -39,7 +46,6 @@ return function(T, Loader)
 				1,
 				"beam is not a reward"
 			)
-			T.equal(RewardMath.beamPower({ EnhancedBeam = true }), 1.25)
 			T.equal(RewardMath.beamPower({ MiningMultiplier = true }), 1)
 			T.truthy(RewardMath.autoCollect({ AutoCollect = true }))
 			T.equal(RewardMath.autoCollect({ StarMultiplier = true }), false)

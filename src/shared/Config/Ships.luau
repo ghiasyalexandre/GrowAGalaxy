@@ -183,6 +183,7 @@ local SPECS: { [string]: Spec } = {
 		paint = "#C9C2B8",
 		size = 20,
 		cost = 2800000,
+		productKey = "MeteorSlicerShip",
 		stats = { 240, 135, 160, 3.0, 70, 220, 260, 60, 2.5, 6, 4 },
 	},
 }

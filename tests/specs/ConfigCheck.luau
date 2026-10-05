@@ -68,6 +68,8 @@ return function(T, Loader)
 		T.test("catches enabled purchases without product ids", function()
 			local broken = T.deepCopy(Config)
 			broken.Products.PURCHASES_ENABLED = true
+			broken.Products.BY_KEY.MiningMultiplier.id = 0
+			broken.Products.BY_KEY.MiningMultiplier.enabled = true
 			T.truthy(hasProblem(ConfigCheck.run(broken), "has no id"))
 		end)
 
@@ -80,11 +82,21 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(doubled), "exactly one thing"))
 		end)
 
-		T.test("purchases are switched off and no product has an id yet", function()
-			T.equal(Config.Products.PURCHASES_ENABLED, false)
-			for key, def in Config.Products.BY_KEY do
-				T.equal(def.id, 0, key)
+		T.test("the connected products carry their Creator Hub ids; the rest are off", function()
+			local P = Config.Products
+			T.equal(P.BY_KEY.MeteorSlicerShip.id, 2005413560)
+			T.equal(P.BY_KEY.StarMultiplier.id, 2006121509)
+			T.equal(P.BY_KEY.AutoCollect.id, 2005767573)
+			T.equal(P.BY_KEY.MiningBoost.id, 3716697618)
+			T.equal(P.BY_KEY.StardustSmall.id, 3716697789)
+			T.equal(P.BY_KEY.MeteorSlicerShip.kind, "GamePass")
+			T.equal(P.BY_KEY.MiningBoost.kind, "DeveloperProduct")
+			T.equal(P.BY_KEY.StardustSmall.kind, "DeveloperProduct")
+			for key, def in P.BY_KEY do
+				T.equal(def.enabled, def.id > 0, `{key}: on exactly when it has an id`)
 			end
+			T.equal(Config.Ships.BY_ID.MeteorSlicer.productKey, "MeteorSlicerShip")
+			T.equal(Config.Badges.BY_KEY.BlackHole.id, 748713779889083)
 		end)
 
 		T.test("catches a spacesuit faster than a ship", function()

@@ -31,5 +31,6 @@ return {
 	Achievements = require(script.Achievements),
 	Tutorial = require(script.Tutorial),
 	Products = require(script.Products),
+	Badges = require(script.Badges),
 	Sprites = require(script.Sprites),
 }

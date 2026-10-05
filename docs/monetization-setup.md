@@ -9,6 +9,29 @@ ConfigCheck refuses step 3 while any enabled product still has id 0. To launch w
 of the catalog, set `enabled = false` on the rest. Nothing here publishes the game, changes
 admission or starts sales.
 
+## 0. Connected now (2026-10-05)
+
+`PURCHASES_ENABLED = true`, with these Creator Hub ids:
+
+| Offer | Kind | Id | Grants |
+|---|---|---|---|
+| Meteor Slicer (ship) | Pass | 2005413560 | The Meteor Slicer, same as the Stardust version |
+| 2x Star Production | Pass | 2006121509 | Stars make 2x Stardust |
+| Automatic Collection | Pass | 2005767573 | Star income goes straight to the wallet |
+| Mining Boost (15 min) | Developer product | 3716697618 | 2x mining Stardust for 15 min of play, stacking time |
+| Stardust Pouch | Developer product | 3716697789 | Exactly 2,500 Stardust |
+
+- **Hidden offers:** every other offer has id 0, so it's disabled: hidden from the Store and never
+  fulfilled. To add one, put its id in `Config/Products.luau`; a product is on exactly when it has
+  an id.
+- **Prices** come from Roblox at runtime. The Store cards and the premium shortcut's gold tag
+  show them.
+- **Badge** "Black Hole" (748713779889083) is awarded by `BadgeSystem` the first time a star
+  evolves into a Black Hole. Players who already did get it on their next join.
+- **The listed names** "2× Meteor Slicer Spaceship Unlock" and "2× Stardust Production" are
+  mapped to the Meteor Slicer ship unlock and the 2x Star Production pass. A pass grants only
+  what `Config/Products` says, whatever its Creator Hub name.
+
 ## 1. Create the passes (Creator Hub → your experience → Monetization → Passes)
 
 Create one **Pass** per row. Use the description text as written (it matches the in-game
