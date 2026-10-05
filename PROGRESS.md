@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 15 merged into `main`).
+Last updated: 2026-10-05 (stage 16 merged into `main`).
 
 ## Status by stage
 
@@ -21,7 +21,8 @@ Last updated: 2026-10-05 (stage 15 merged into `main`).
 | 13. Evolution ladder (max level per tier, reset on evolve), orbits per tier, lit planets, inspector | Merged | Passing (118 tests) | **Not yet** |
 | 14. 11-ship ladder in unlock order, imported ship models, Shipyard Ships tab with previews | Merged | Passing (120 tests) | **Not yet** |
 | 15. Opt-in PvP, hull points, ship explosions with debris, over-the-shoulder camera (Alt), slower laser bolts | Merged | Passing (125 tests) | **Not yet** |
-| 16+. Save hardening, tuning, monetization | Not started | | |
+| 16. Hangar station rebuild, hangar upgrade pads, HUD Shipyard and Launch Ship buttons | Merged | Passing (129 tests) | **Not yet** |
+| 17+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 

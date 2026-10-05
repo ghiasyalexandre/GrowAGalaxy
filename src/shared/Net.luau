@@ -6,7 +6,7 @@
 --   GetInitialState  RemoteFunction  client -> server  () -> Types.InitialState?
 --   ProfileChanged   RemoteEvent     server -> client  (field: string, value: any)
 --   RegionsChanged   RemoteEvent     server -> client  ({ Types.RegionInfo })
---   ShipRequest      RemoteEvent     client -> server  (action: "exit" | "dock")
+--   ShipRequest      RemoteEvent     client -> server  (action: "exit" | "dock" | "launch")
 --   ShipState        RemoteEvent     server -> client  (ship: Model?, info: Types.ShipInfo?)
 --   SuitRecover      RemoteEvent     client -> server  () "Return to Station"
 --   BeamInput        RemoteEvent     client -> server  (action: "start" | "aim" | "stop",

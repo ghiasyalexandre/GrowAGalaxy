@@ -1,11 +1,17 @@
 --!strict
 -- Builds each player's personal station inside their region when the region
 -- is assigned. The station is destroyed with the region when they leave.
+-- stationAdded fires once it's built (HangarSystem adds its upgrades).
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local RegionSystem = require(script.Parent.RegionSystem)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local StationBuilder = require(script.Parent.Parent.World.StationBuilder)
 
 local StationSystem = {}
+
+StationSystem.stationAdded = Signal.new() :: Signal.Signal<Player>
 
 local stations: { [Player]: StationBuilder.Station } = {}
 
@@ -29,6 +35,7 @@ function StationSystem.start()
 			region.owner.UserId,
 			region.color
 		)
+		StationSystem.stationAdded:Fire(region.owner)
 	end)
 	RegionSystem.regionRemoved:Connect(function(region)
 		stations[region.owner] = nil

@@ -1,5 +1,5 @@
 --!strict
--- The Star Shop panel, opened from your station's Star Shop console, the
+-- The Star Shop panel, opened from a Star Shop console (if any), the
 -- HUD's Star Shop button or the B key (ClientState.openStarShop). Lists
 -- every star tier with its price (rising with each star you own), production
 -- and best planet tier. Unlocked, affordable stars start ghost placement

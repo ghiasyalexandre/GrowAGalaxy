@@ -81,6 +81,16 @@ return function(T, Loader)
 			T.equal(data.loadouts[starter].equipment.Cargo, nil)
 		end)
 
+		T.test("v7: hangar upgrades start empty and keep only true flags", function()
+			local fresh = { schemaVersion = 6 }
+			T.truthy(ProfileSchema.normalize(fresh))
+			T.equal(next(fresh.hangar), nil)
+			local data = { hangar = { StardustSilo = true, Junk = "yes" } }
+			T.truthy(ProfileSchema.normalize(data))
+			T.truthy(data.hangar.StardustSilo)
+			T.equal(data.hangar.Junk, nil)
+		end)
+
 		T.test("v6: old ship ids become their ladder replacements", function()
 			local data = {
 				schemaVersion = 5,

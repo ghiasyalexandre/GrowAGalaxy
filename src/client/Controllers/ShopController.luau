@@ -1,5 +1,6 @@
 --!strict
--- The Shipyard panel, opened from your station's Shipyard console. Two tabs:
+-- The Shipyard panel, opened from the HUD's Shipyard button (or a Shipyard
+-- console, if a place has one). Two tabs:
 --   Ships     the 11-ship ladder as cards with a spinning preview of each
 --             ship's model, its stats, and Buy / Select. A ship can be bought
 --             once you own the one before it (Progression.shipUnlocked).
@@ -610,6 +611,13 @@ function ShopController.start()
 			return
 		end
 		open(nil)
+	end)
+	ClientState.openShipyard:Connect(function()
+		if gui.Enabled then
+			close()
+		else
+			open(nil)
+		end
 	end)
 	ClientState.profileChanged:Connect(function(field)
 		if

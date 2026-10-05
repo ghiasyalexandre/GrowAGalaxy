@@ -18,7 +18,8 @@ local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 
 local ISS_PART_BUDGET = 400
-local REGION_PART_BUDGET = 60
+local REGION_PART_BUDGET = 110 -- the station before any hangar upgrades
+local HANGAR_PART_BUDGET = 30 -- per hangar building
 local SHIP_PART_BUDGET = 20
 -- How far a ship's launch path (straight out of its berth) must be clear.
 local LAUNCH_PATH = 150
@@ -232,8 +233,32 @@ for slot = 1, requireModule(shared.Config).World.MAX_PLAYERS do
 	table.insert(stations, { slot = slot, region = region, station = station })
 end
 check(count(tagged.WarpPrompt) == 2, "stations have no warp prompts (ships replace them)")
-check(count(tagged.LaunchPrompt) == 1 + 8, "every station has a hangar launch prompt")
-check(count(tagged.RoutePrompt) == 1 + 8, "every station has a navigation route prompt")
+check(count(tagged.LaunchPrompt) == 1, "stations have no launch consoles (HUD button)")
+check(count(tagged.RoutePrompt) == 1, "stations have no navigation consoles")
+check(count(tagged.TycoonPrompt) == 8, "every station has exactly one console (Collect)")
+
+-- Hangar upgrades: every pad and building builds on the first station's deck.
+print("Hangar")
+local HangarBuilder = requireModule(server.World.HangarBuilder)
+local HangarConfig = requireModule(shared.Config).Hangar
+for _, id in HangarConfig.ORDER do
+	local def = HangarConfig.BY_ID[id]
+	local floor = stations[1].station.floor * roblox.CFrame.new(def.pad.x, 0, def.pad.z)
+	local pad = HangarBuilder.pad(def, floor)
+	local circle = pad:FindFirstChild("Circle")
+	check(
+		circle ~= nil and circle:FindFirstChild("BuildPrompt") ~= nil,
+		`{id}: pad has a circle with a Build prompt`
+	)
+	local building = HangarBuilder.structure(def, floor)
+	local n = countParts(building)
+	check(
+		n > 3 and n <= HANGAR_PART_BUDGET,
+		`{id}: building has {n} parts (budget {HANGAR_PART_BUDGET})`
+	)
+	pad:Destroy()
+	building:Destroy()
+end
 check(count(tagged.DockZone) == 1 + 8, "every station has a docking zone")
 
 -- Ships

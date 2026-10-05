@@ -3,9 +3,11 @@
 -- the world. The server owns it; while its owner pilots it, their client
 -- drives it (network ownership) and FlightGuard checks the result.
 --
---   Launch  A hangar console (prompt tagged "LaunchPrompt") spawns the
---           player's active ship at a free berth: one of the ISS berths, or
---           their own station's berth. Launching again brings the ship back.
+--   Launch  A hangar console at the ISS (prompt tagged "LaunchPrompt")
+--           spawns the player's active ship at a free ISS berth; the HUD's
+--           Launch Ship button (ShipRequest "launch") spawns it at their own
+--           station's berth and seats them in it. Launching again brings the
+--           ship back.
 --   Board   The ship's BoardPrompt seats its owner. Nobody else can board
 --           (clients also hide other players' prompts, and their own while
 --           flying).
@@ -166,6 +168,7 @@ local function issBerths(): { CFrame }
 end
 
 local despawn: (ship: Ship) -> ()
+local launchAndBoard: (player: Player) -> ()
 
 -- First free berth. If none is free, a berth holding someone else's ship
 -- that has sat there unpiloted for BERTH_IDLE_STOW seconds is cleared.
@@ -545,6 +548,23 @@ function ShipSystem.getPiloted(player: Player): (Model?, Types.ShipInfo?)
 	return nil, nil
 end
 
+-- The HUD's Launch Ship button: spawns the active ship at the player's own
+-- station berth, moves them beside it and seats them, wherever they were.
+launchAndBoard = function(player: Player)
+	local before = ships[player]
+	ShipSystem.launch(player, "Station")
+	local ship = ships[player]
+	if ship == nil or ship == before or ship.piloting then
+		return
+	end
+	if Teleport.character(player, ship.seat.CFrame * CFrame.new(0, 3, 0)) then
+		FlightGuard.reset(player)
+		if ships[player] == ship then
+			board(ship, player)
+		end
+	end
+end
+
 local function onLaunchPrompt(prompt: ProximityPrompt, player: Player)
 	local hangar = prompt:GetAttribute("Hangar")
 	local anchor = prompt.Parent
@@ -599,6 +619,8 @@ function ShipSystem.start()
 			exit(player)
 		elseif action == "dock" then
 			dock(player)
+		elseif action == "launch" then
+			task.spawn(launchAndBoard, player)
 		end
 	end)
 
