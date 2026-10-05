@@ -57,11 +57,18 @@ local function request(action: string, id: string?)
 	)
 end
 
-local function heading(text: string, order: number)
+local function heading(text: string, order: number, iconName: string?)
 	local holder = Theme.row(list, 28, order)
 	holder.BackgroundTransparency = 1
+	local icon = if iconName then Theme.icon(holder, iconName, 30) else nil
+	local inset = 0
+	if icon then
+		icon.Position = UDim2.fromOffset(0, -1)
+		inset = 36
+	end
 	Theme.label(holder, {
-		Size = UDim2.fromScale(1, 1),
+		Position = UDim2.fromOffset(inset, 0),
+		Size = UDim2.new(1, -inset, 1, 0),
 		Text = text,
 		TextSize = 18,
 		Font = Enum.Font.GothamBlack,
@@ -123,7 +130,7 @@ local function refresh()
 		return order
 	end
 
-	heading("Ships", nextOrder())
+	heading("Ships", nextOrder(), "Ship")
 	for _, shipId in Config.Ships.ORDER do
 		local def = Config.Ships.BY_ID[shipId]
 		if not def.enabled then
@@ -154,7 +161,7 @@ local function refresh()
 		end
 	end
 
-	heading("Equipment (fitted to every ship you own)", nextOrder())
+	heading("Equipment (fitted to every ship you own)", nextOrder(), "Laser")
 	for _, itemId in Config.Equipment.ORDER do
 		local def = Config.Equipment.BY_ID[itemId]
 		local cost = Progression.equipmentCost(itemId)
@@ -178,7 +185,7 @@ local function refresh()
 		end
 	end
 
-	heading("Galaxy", nextOrder())
+	heading("Galaxy", nextOrder(), "Galaxy")
 	local level = profile.expansion
 	local current = Config.Galaxy.EXPANSIONS[level]
 	local cost = Progression.expansionCost(level)
@@ -222,9 +229,17 @@ local function build()
 	size.MaxSize = Vector2.new(580, 540)
 	size.Parent = panel
 
+	-- Sprite sheet: the ship icon before the title.
+	local titleX = 16
+	local icon = Theme.icon(panel, "Ship", 50)
+	if icon then
+		icon.Position = UDim2.fromOffset(10, 0)
+		icon.ZIndex = 2
+		titleX = 66
+	end
 	Theme.label(panel, {
-		Position = UDim2.fromOffset(16, 10),
-		Size = UDim2.new(1, -120, 0, 30),
+		Position = UDim2.fromOffset(titleX, 10),
+		Size = UDim2.new(1, -titleX - 104, 0, 30),
 		Text = "Shipyard",
 		TextSize = 24,
 		Font = Enum.Font.GothamBlack,

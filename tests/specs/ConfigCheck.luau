@@ -89,6 +89,21 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(broken), "limit of 120"))
 		end)
 
+		T.test("catches a bad sprite image id and a sprite outside the sheet", function()
+			local broken = T.deepCopy(Config)
+			broken.Sprites.IMAGE = "https://example.com/sheet.png"
+			broken.Sprites.SPRITES.Gear.x = 1000
+			local problems = ConfigCheck.run(broken)
+			T.truthy(hasProblem(problems, "rbxassetid"))
+			T.truthy(hasProblem(problems, "Sprite Gear is outside the sheet"))
+		end)
+
+		T.test("accepts an uploaded sprite sheet id", function()
+			local fixed = T.deepCopy(Config)
+			fixed.Sprites.IMAGE = "rbxassetid://123456"
+			T.falsy(hasProblem(ConfigCheck.run(fixed), "Sprite"))
+		end)
+
 		T.test("catches a flight area smaller than the regions", function()
 			local broken = T.deepCopy(Config)
 			broken.Movement.FLIGHT_BOUNDS_RADIUS = 3500

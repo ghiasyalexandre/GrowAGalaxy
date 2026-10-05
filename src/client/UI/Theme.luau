@@ -4,12 +4,18 @@
 -- a springy pop-in when a panel opens, animated star and planet icons,
 -- progress bars and a shine that sweeps across buy buttons.
 --
+-- Once the UI sprite sheet is uploaded (Config.Sprites.IMAGE), panels,
+-- buttons and progress bars wear its art (UI/Sprites) and Theme.icon gives
+-- its icons; until then everything keeps the plain look below.
+--
 -- Looping animations (spin, pulse, shine) are driven by the clock from one
 -- Heartbeat connection, not by tweens, so a panel that rebuilds its rows
 -- (on every Stardust change) carries on smoothly instead of restarting.
 
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
+
+local Sprites = require(script.Parent.Sprites)
 
 local Theme = {}
 
@@ -30,7 +36,15 @@ Theme.COLORS = {
 	disabled = Color3.fromRGB(56, 60, 82),
 }
 
-export type ButtonStyle = "primary" | "buy" | "disabled"
+-- primary: blue, buy: gold, special: purple (big moves like Evolve), disabled.
+export type ButtonStyle = "primary" | "buy" | "special" | "disabled"
+
+local BUTTON_SPRITES: { [ButtonStyle]: string } = {
+	primary = "ButtonBlue",
+	buy = "ButtonGold",
+	special = "ButtonPurple",
+	disabled = "ButtonDark",
+}
 
 local POP = TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local QUICK = TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
@@ -57,7 +71,9 @@ function Theme.screen(name: string, parent: Instance): ScreenGui
 	return gui
 end
 
--- A rounded panel with a gradient and a glowing edge.
+-- A rounded panel with a gradient and a glowing edge, or the sprite sheet's
+-- panel frame once it's uploaded (the stroke stays, switched off, so callers
+-- may still find it).
 function Theme.panel(parent: Instance, name: string): Frame
 	local frame = Instance.new("Frame")
 	frame.Name = name
@@ -71,7 +87,13 @@ function Theme.panel(parent: Instance, name: string): Frame
 	stroke.Transparency = 0.45
 	stroke.Thickness = 2
 	stroke.Parent = frame
+	Sprites.panelSkin(frame)
 	return frame
+end
+
+-- A sprite-sheet icon (Config.Sprites), or nil while the sheet isn't set up.
+function Theme.icon(parent: Instance, name: string, size: number): ImageLabel?
+	return Sprites.icon(parent, name, size)
 end
 
 -- A row background inside a panel.
@@ -146,8 +168,31 @@ function Theme.button(
 		gradient(button, Theme.COLORS.primaryTop, Theme.COLORS.primary)
 	elseif style == "buy" then
 		gradient(button, Theme.COLORS.buy, Theme.COLORS.buyTop)
+	elseif style == "special" then
+		gradient(button, Color3.fromRGB(200, 110, 255), Color3.fromRGB(120, 50, 220))
 	else
 		button.BackgroundColor3 = Theme.COLORS.disabled
+	end
+	if Sprites.skin(button, BUTTON_SPRITES[style]) then
+		-- A skin is a child, so it would cover the button's own text: the
+		-- text moves to a label above the skin.
+		local label = Instance.new("TextLabel")
+		label.Name = "Label"
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.ZIndex = 2
+		label.Font = button.Font
+		label.TextSize = button.TextSize
+		label.TextColor3 = button.TextColor3
+		label.TextStrokeTransparency = if style == "disabled" then 1 else 0.3
+		label.TextTruncate = Enum.TextTruncate.AtEnd
+		label.Text = text
+		label.Parent = button
+		local padding = Instance.new("UIPadding")
+		padding.PaddingLeft = UDim.new(0.1, 0)
+		padding.PaddingRight = UDim.new(0.1, 0)
+		padding.Parent = label
+		button.Text = ""
 	end
 	local scale = Instance.new("UIScale")
 	scale.Parent = button
@@ -252,6 +297,12 @@ function Theme.shine(target: GuiObject)
 	overlay.BorderSizePixel = 0
 	overlay.ZIndex = target.ZIndex + 1
 	overlay.Active = false
+	if target:FindFirstChild("Skin") then
+		-- Sprite art has a glow margin: keep the band on the body.
+		overlay.AnchorPoint = Vector2.new(0.5, 0.5)
+		overlay.Position = UDim2.fromScale(0.5, 0.5)
+		overlay.Size = UDim2.fromScale(0.82, 0.6)
+	end
 	overlay.Parent = target
 	corner(overlay, 8)
 	local band = Instance.new("UIGradient")
@@ -388,12 +439,26 @@ function Theme.planetIcon(parent: Instance, color: Color3, size: number, ring: C
 	return holder
 end
 
--- A thin progress bar along the bottom of `parent`; returns its fill.
-function Theme.progress(parent: Instance, share: number, color: Color3, height: number?): Frame
+-- Height for a progress bar: sprite bars need more room than plain ones.
+function Theme.barHeight(plain: number): number
+	return if Sprites.enabled() then math.max(plain, 14) else plain
+end
+
+export type BarStyle = "orange" | "cyan"
+
+-- A thin progress bar along the bottom of `parent`; returns its fill. With
+-- the sprite sheet: a dark track with an orange or cyan glowing fill.
+function Theme.progress(
+	parent: Instance,
+	share: number,
+	color: Color3,
+	height: number?,
+	style: BarStyle?
+): Frame
 	local track = Instance.new("Frame")
 	track.Name = "Progress"
 	track.AnchorPoint = Vector2.new(0, 1)
-	track.Size = UDim2.new(1, 0, 0, height or 6)
+	track.Size = UDim2.new(1, 0, 0, Theme.barHeight(height or 6))
 	track.BackgroundColor3 = Color3.fromRGB(10, 12, 26)
 	track.BackgroundTransparency = 0.2
 	track.BorderSizePixel = 0
@@ -407,6 +472,9 @@ function Theme.progress(parent: Instance, share: number, color: Color3, height: 
 	fill.Parent = track
 	corner(fill, 3)
 	gradient(fill, color:Lerp(Color3.new(1, 1, 1), 0.35), color)
+	local cyan = style == "cyan"
+	Sprites.skin(track, if cyan then "TrackGrey" else "TrackOrange")
+	Sprites.skin(fill, if cyan then "FillCyan" else "FillOrange")
 	return fill
 end
 

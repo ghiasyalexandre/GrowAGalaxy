@@ -20,6 +20,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 8. UI juice: reward orbs, wallet count-up, achievement banner, themed panels | [Merged](docs/stage-8-ui-juice.md) |
 | 9. Boost, heavier laser shots, Star Shop button and sturdier client start-up | [Merged](docs/stage-9-boost-laser-feel.md) |
 | 10. Stellar spectacle: star birth, level-up, supernova and planet effects, celebrations, shop and goal polish | [Merged](docs/stage-10-stellar-spectacle.md) |
+| 11. Sprite sheet UI: icons, button and panel skins, progress bars (needs the sheet uploaded) | [Merged](docs/stage-11-sprite-ui.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |
