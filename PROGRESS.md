@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-04 (stage 12 merged into `main`).
+Last updated: 2026-10-05 (stage 13 merged into `main`).
 
 ## Status by stage
 
@@ -18,7 +18,8 @@ Last updated: 2026-10-04 (stage 12 merged into `main`).
 | 10. Stellar spectacle (star/planet effects, celebrations, shop icons, Next Goal, achievements) | Merged | Passing (105 tests) | **Not yet** |
 | 11. Sprite sheet UI (needs the sheet uploaded and its id in Config/Sprites) | Merged | Passing (107 tests) | **Not yet** |
 | 12. UI kit atlas (replaces the stage 11 sheet), hover animations, vivid sparkles | Merged | Passing (107 tests) | **Not yet** |
-| 13+. Save hardening, tuning, monetization | Not started | | |
+| 13. Evolution ladder (max level per tier, reset on evolve), orbits per tier, lit planets, inspector | Merged | Passing (118 tests) | **Not yet** |
+| 14+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 

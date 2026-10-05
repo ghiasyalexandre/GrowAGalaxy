@@ -7,7 +7,6 @@
 -- slot number as a string (plain data for the save).
 
 local Config = require(script.Parent.Parent.Config)
-local StarsConfig = require(script.Parent.Parent.Config.Stars)
 local Types = require(script.Parent.Parent.Types)
 
 local S = Config.Stars
@@ -15,23 +14,32 @@ local P = Config.Planets
 
 local StarMath = {}
 
-function StarMath.levelDef(level: number): StarsConfig.LevelDef
-	return S.LEVELS[math.clamp(level, 1, #S.LEVELS)]
+local function tierOf(typeId: string): number
+	local def = S.BY_ID[typeId]
+	return if def then def.tier else 1
 end
 
-function StarMath.maxLevel(): number
-	return #S.LEVELS
+-- The highest level a star of this type reaches (4, 6, 8 ... by tier).
+function StarMath.maxLevel(typeId: string): number
+	return S.MAX_LEVEL_BASE + S.MAX_LEVEL_STEP * (tierOf(typeId) - 1)
 end
 
--- Open orbit slots at a level.
-function StarMath.slots(level: number): number
-	return math.min(StarMath.levelDef(level).slots, #S.SLOTS)
+-- Planet orbits of a star of this type (4 at tier 1, one more per tier).
+function StarMath.slots(typeId: string): number
+	return math.min(S.ORBITS_BASE + tierOf(typeId) - 1, #S.SLOTS)
 end
 
--- Visual radius of a star.
+-- Production multiplier at a level.
+function StarMath.levelMultiplier(level: number): number
+	return 1 + S.LEVEL_INCOME_STEP * (math.max(level, 1) - 1)
+end
+
+-- Visual radius of a star: grows to MAX_RADIUS_SCALE at max level.
 function StarMath.radius(typeId: string, level: number): number
 	local def = S.BY_ID[typeId]
-	return (if def then def.radius else 12) * StarMath.levelDef(level).radiusScale
+	local top = StarMath.maxLevel(typeId)
+	local progress = if top > 1 then (math.clamp(level, 1, top) - 1) / (top - 1) else 0
+	return (if def then def.radius else 12) * (1 + (S.MAX_RADIUS_SCALE - 1) * progress)
 end
 
 -- Stardust per second from the star itself (planets not included).
@@ -40,7 +48,7 @@ function StarMath.starIncome(typeId: string, level: number): number
 	if def == nil then
 		return 0
 	end
-	return def.income * StarMath.levelDef(level).incomeMultiplier
+	return def.income * StarMath.levelMultiplier(level)
 end
 
 function StarMath.planetIncome(planetId: string): number
@@ -106,14 +114,19 @@ function StarMath.placeCost(typeId: string, owned: number): number?
 	return math.floor(def.cost * S.PRICE_GROWTH ^ math.max(owned, 0) + 0.5)
 end
 
--- Cost to level a star up from `level`, or nil at the top.
+-- Cost to level a star up from `level`, or nil at its max level.
 function StarMath.upgradeCost(typeId: string, level: number): number?
 	local def = S.BY_ID[typeId]
-	if def == nil or level < 1 or level >= #S.LEVELS then
+	if def == nil or level < 1 or level >= StarMath.maxLevel(typeId) then
 		return nil
 	end
-	local share = S.LEVELS[level + 1].upgradeShare
-	return if share then math.floor(def.cost * share + 0.5) else nil
+	return math.floor(def.cost * S.UPGRADE_SHARE * S.UPGRADE_GROWTH ^ (level - 1) + 0.5)
+end
+
+-- May this star evolve now? Only at its max level, and not past the top.
+function StarMath.canEvolve(star: Types.StarRecord): boolean
+	return StarMath.evolveTarget(star.typeId) ~= nil
+		and star.level >= StarMath.maxLevel(star.typeId)
 end
 
 -- The type a star evolves into, or nil for the last tier.
@@ -140,7 +153,7 @@ end
 
 -- The first open, empty slot of a star, as its save key ("1".."4"), or nil.
 function StarMath.freeSlot(star: Types.StarRecord): string?
-	for slot = 1, StarMath.slots(star.level) do
+	for slot = 1, StarMath.slots(star.typeId) do
 		local key = tostring(slot)
 		if star.planets[key] == nil then
 			return key

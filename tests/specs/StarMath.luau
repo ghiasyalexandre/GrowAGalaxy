@@ -44,11 +44,50 @@ return function(T, Loader)
 			T.equal(StarMath.evolveTarget("BlackHole"), nil)
 		end)
 
-		T.test("levels open orbit slots and stop at the top", function()
-			T.equal(StarMath.slots(1), 1)
-			T.equal(StarMath.slots(#S.LEVELS), #S.SLOTS)
+		T.test("max level is 4 at tier 1 and 2 more (even) each tier", function()
+			local previous = 0
+			for _, id in S.ORDER do
+				local top = StarMath.maxLevel(id)
+				T.equal(top % 2, 0, `{id} max level is even`)
+				if previous > 0 then
+					T.equal(top - previous, S.MAX_LEVEL_STEP)
+				end
+				previous = top
+			end
+			T.equal(StarMath.maxLevel(first), 4)
+		end)
+
+		T.test("levelling stops at max level, prices rise level by level", function()
+			local top = StarMath.maxLevel(first)
 			T.truthy(StarMath.upgradeCost(first, 1))
-			T.equal(StarMath.upgradeCost(first, #S.LEVELS), nil)
+			T.truthy(StarMath.upgradeCost(first, top - 1) > StarMath.upgradeCost(first, 1))
+			T.equal(StarMath.upgradeCost(first, top), nil)
+		end)
+
+		T.test("a star evolves only at max level, and never past the black hole", function()
+			local top = StarMath.maxLevel(first)
+			T.falsy(StarMath.canEvolve(star(first, top - 1)))
+			T.truthy(StarMath.canEvolve(star(first, top)))
+			T.falsy(StarMath.canEvolve(star("BlackHole", StarMath.maxLevel("BlackHole"))))
+		end)
+
+		T.test("orbits: 4 at tier 1, one more per evolution", function()
+			T.equal(StarMath.slots(first), 4)
+			T.equal(StarMath.slots("RedDwarf"), 5)
+			T.equal(StarMath.slots("BlackHole"), 4 + #S.ORDER - 1)
+			T.truthy(#S.SLOTS >= StarMath.slots("BlackHole"))
+		end)
+
+		T.test("outer orbits are slower (Kepler)", function()
+			for index = 2, #S.SLOTS do
+				T.truthy(S.SLOTS[index].periodDays > S.SLOTS[index - 1].periodDays)
+			end
+		end)
+
+		T.test("a star grows with level up to MAX_RADIUS_SCALE", function()
+			local base = S.BY_ID[first].radius
+			T.near(StarMath.radius(first, 1), base)
+			T.near(StarMath.radius(first, StarMath.maxLevel(first)), base * S.MAX_RADIUS_SCALE)
 		end)
 
 		T.test("a star holds planets up to its own tier", function()
@@ -57,10 +96,12 @@ return function(T, Loader)
 			T.truthy(StarMath.planetAllowed("BlackHole", "Crystal"))
 		end)
 
-		T.test("free slots respect the level and skip taken orbits", function()
+		T.test("free slots skip taken orbits and stop at the type's orbits", function()
 			T.equal(StarMath.freeSlot(star(first, 1)), "1")
-			T.equal(StarMath.freeSlot(star(first, 1, { ["1"] = "Barren" })), nil)
-			T.equal(StarMath.freeSlot(star(first, 3, { ["1"] = "Barren" })), "2")
+			T.equal(StarMath.freeSlot(star(first, 1, { ["1"] = "Barren" })), "2")
+			local full = { ["1"] = "Barren", ["2"] = "Barren", ["3"] = "Barren", ["4"] = "Barren" }
+			T.equal(StarMath.freeSlot(star(first, 4, full)), nil)
+			T.equal(StarMath.freeSlot(star("RedDwarf", 1, full)), "5")
 		end)
 
 		T.test(
@@ -75,7 +116,7 @@ return function(T, Loader)
 
 		T.test("income adds the star (by level) and its planets", function()
 			local s = star("RedDwarf", 2, { ["1"] = "Barren", ["2"] = "Molten" })
-			local expected = S.BY_ID.RedDwarf.income * S.LEVELS[2].incomeMultiplier
+			local expected = S.BY_ID.RedDwarf.income * StarMath.levelMultiplier(2)
 				+ P.BY_ID.Barren.income
 				+ P.BY_ID.Molten.income
 			T.near(StarMath.income(s), expected)

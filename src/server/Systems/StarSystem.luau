@@ -7,9 +7,10 @@
 -- StarRequest (RemoteFunction, client -> server), returns (ok, message):
 --   "place", typeId: string, pos: Vector3       buy a star at pos (region space)
 --   "move", starId: string, pos: Vector3        move a star and its planets
---   "upgrade", starId: string                   next level: more production, more slots
---   "evolve", starId: string                    become the next star type, keeping
---                                               level and planets
+--   "upgrade", starId: string                   next level: more production
+--   "evolve", starId: string                    at max level: become the next star
+--                                               type, back to level 1, keeping
+--                                               planets, with one more orbit
 --   "buyPlanet", starId: string, planetId       buy a planet into the first free slot
 --   "upgradePlanet", starId: string, slot: string  planet in that slot -> next tier
 -- Every request is validated here: ownership, Config.Stars, the region's
@@ -195,7 +196,10 @@ local function upgrade(player: Player, starId: unknown): (boolean, string)
 	end
 	local cost = StarMath.upgradeCost(star.typeId, star.level)
 	if cost == nil then
-		return false, "This star is at its highest level. Try evolving it."
+		return false,
+			if StarMath.evolveTarget(star.typeId)
+				then "Max level! This star is ready to evolve."
+				else "This star is at its highest level."
 	end
 	if not DataSystem.spendStardust(player, cost) then
 		return false, `You need {cost} {CURRENCY} for this upgrade.`
@@ -205,7 +209,9 @@ local function upgrade(player: Player, starId: unknown): (boolean, string)
 	DataSystem.addStat(player, "starUpgrades", 1)
 	StarBuilder.apply(model, star)
 	return true,
-		`Level {level}! {StarMath.slots(level)} orbit slots, {StarMath.income(star)} {CURRENCY}/s.`
+		if level >= StarMath.maxLevel(star.typeId) and StarMath.evolveTarget(star.typeId)
+			then `Level {level}: max level! Now {StarMath.income(star)} {CURRENCY}/s. It can evolve.`
+			else `Level {level}! Now {StarMath.income(star)} {CURRENCY}/s.`
 end
 
 local function evolve(player: Player, starId: unknown): (boolean, string)
@@ -218,16 +224,24 @@ local function evolve(player: Player, starId: unknown): (boolean, string)
 		return false, "Nothing is beyond a black hole."
 	end
 	local def = S.BY_ID[target]
+	local top = StarMath.maxLevel(star.typeId)
+	if star.level < top then
+		return false, `Level this star up to {top} before it can evolve.`
+	end
 	if not DataSystem.spendStardust(player, def.cost) then
 		return false, `You need {def.cost} {CURRENCY} to evolve into a {def.displayName}.`
 	end
-	DataSystem.updateStar(player, starId :: string, { typeId = target })
+	-- A new type starts again at level 1, keeping its planets.
+	DataSystem.updateStar(player, starId :: string, { typeId = target, level = 1 })
 	DataSystem.addStat(player, "starEvolutions", 1)
 	if target == BLACK_HOLE then
 		DataSystem.addStat(player, "blackHoles", 1)
 	end
 	StarBuilder.apply(model, star)
-	return true, `Your star became a {def.displayName}! Now {StarMath.income(star)} {CURRENCY}/s.`
+	return true,
+		`Your star became a {def.displayName}! {StarMath.slots(target)} orbits, levels up to {StarMath.maxLevel(
+			target
+		)}.`
 end
 
 local function buyPlanet(player: Player, starId: unknown, planetId: unknown): (boolean, string)
@@ -241,7 +255,7 @@ local function buyPlanet(player: Player, starId: unknown, planetId: unknown): (b
 	end
 	local slot = StarMath.freeSlot(star)
 	if slot == nil then
-		return false, "No free orbit. Level the star up to open more."
+		return false, "No free orbit. Evolve the star to open another."
 	end
 	if not DataSystem.spendStardust(player, def.cost) then
 		return false, `You need {def.cost} {CURRENCY} for a {def.displayName}.`

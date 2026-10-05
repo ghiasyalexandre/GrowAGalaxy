@@ -22,6 +22,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 10. Stellar spectacle: star birth, level-up, supernova and planet effects, celebrations, shop and goal polish | [Merged](docs/stage-10-stellar-spectacle.md) |
 | 11. Sprite sheet UI: icons, button and panel skins, progress bars (needs the sheet uploaded) | [Merged](docs/stage-11-sprite-ui.md) |
 | 12. UI kit atlas, hover animations, vivid sparkles (needs the atlas uploaded) | [Merged](docs/stage-12-ui-kit.md) |
+| 13. Evolve at max level (level resets, max +2 per tier), orbit per evolution, lit planets, system inspector with time slider | [Merged](docs/stage-13-evolution-orbits.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

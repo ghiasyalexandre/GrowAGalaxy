@@ -1,5 +1,8 @@
 # Stage 7: Star and planet tiers
 
+> Levels, evolution and orbits changed in [stage 13](stage-13-evolution-orbits.md): a star
+> evolves only at its type's max level and restarts at level 1; orbits come with the type.
+
 **Status: code complete, CI-verified (format, lint, strict types, 101 unit tests, build, smoke
 test). Not yet playtested in Studio.**
 

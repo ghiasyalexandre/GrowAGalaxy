@@ -28,6 +28,7 @@ local Config = require(Shared:WaitForChild("Config"))
 local StarsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Stars"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
+local OrbitTime = require(Shared:WaitForChild("Logic"):WaitForChild("OrbitTime"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 local Types = require(Shared:WaitForChild("Types"))
 
@@ -41,7 +42,7 @@ local QUARTER = 0.5523
 -- Seconds after placement during which a newly seen star plays its birth.
 local BIRTH_WINDOW = 4
 
-type Planet = { part: Part, slot: number, phase: number }
+type Planet = { part: Part, slot: number, phase: number, id: string }
 
 type Visual = {
 	model: Model,
@@ -59,6 +60,7 @@ type Visual = {
 local StarController = {}
 
 local visuals: { [Model]: Visual } = {}
+local clock = { time = 0, rate = nil :: number?, paused = false }
 local panel: Frame
 local title: TextLabel
 local subtitle: TextLabel
@@ -143,7 +145,10 @@ local function buildPlanets(v: Visual)
 		return
 	end
 	local planets = StarMath.decodePlanets(encoded)
-	for slot = 1, StarMath.slots(level) do
+	local typeId = v.model:GetAttribute("TypeId")
+	local starDefNow = if type(typeId) == "string" then S.BY_ID[typeId] else nil
+	local sunlight = if starDefNow then Color3.fromHex(starDefNow.light) else Color3.new(1, 1, 1)
+	for slot = 1, StarMath.slots(if type(typeId) == "string" then typeId else S.DEFAULT_TYPE) do
 		local slotDef = S.SLOTS[slot]
 		local planetId = planets[slot]
 		local def = if planetId then P.BY_ID[planetId] else nil
@@ -166,16 +171,47 @@ local function buildPlanets(v: Visual)
 			part.CanTouch = false
 			part.CastShadow = false
 			part.Parent = v.model
+			-- Far from the star its light doesn't reach, so each planet carries
+			-- its own: a light just sunward of it (the planet faces its star,
+			-- see animate) lights the day side in the star's colour.
+			local sunward = Instance.new("Attachment")
+			sunward.Name = "GaG_Sunward"
+			sunward.Position = Vector3.new(0, 0, -def.radius * 2.2)
+			sunward.Parent = part
+			local light = Instance.new("PointLight")
+			light.Color = sunlight
+			light.Range = def.radius * 4.5
+			light.Brightness = 3
+			light.Shadows = false
+			light.Parent = sunward
+			-- A glowing trail along its orbit, so planets read from afar.
+			local top = Instance.new("Attachment")
+			top.Position = Vector3.new(0, def.radius * 0.7, 0)
+			top.Parent = part
+			local bottom = Instance.new("Attachment")
+			bottom.Position = Vector3.new(0, -def.radius * 0.7, 0)
+			bottom.Parent = part
+			local trail = Instance.new("Trail")
+			trail.Attachment0 = top
+			trail.Attachment1 = bottom
+			trail.Lifetime = 1.4
+			trail.LightEmission = 1
+			trail.FaceCamera = true
+			trail.Color =
+				ColorSequence.new(Color3.fromHex(def.color):Lerp(Color3.new(1, 1, 1), 0.35))
+			trail.Transparency = NumberSequence.new(0.45, 1)
+			trail.WidthScale = NumberSequence.new(1, 0.2)
+			trail.Parent = part
 			local ringHex = def.ring
 			if ringHex then
 				for _, item in
-					ring(part, def.radius * 1.8, 20, Color3.fromHex(ringHex), def.radius * 0.5)
+					ring(part, def.radius * 1.6, 20, Color3.fromHex(ringHex), def.radius * 0.45)
 				do
 					table.insert(v.rings, item)
 				end
 			end
 			-- Start planets spread around their orbits, same on every client.
-			table.insert(v.planets, { part = part, slot = slot, phase = slot * 2.1 })
+			table.insert(v.planets, { part = part, slot = slot, phase = slot * 2.1, id = def.id })
 		end
 	end
 end
@@ -328,11 +364,12 @@ refreshPanel = function()
 	local income = model:GetAttribute("Income")
 	local starId = model:GetAttribute("StarId")
 
-	title.Text =
-		`{if def then def.displayName else typeId}  ·  level {level}/{StarMath.maxLevel()}`
+	local top = StarMath.maxLevel(typeId)
+	local open = StarMath.slots(typeId)
+	title.Text = `{if def then def.displayName else typeId}  ·  level {level}/{top}`
 	title.TextColor3 = if def then Color3.fromHex(def.light) else C.gold
 	subtitle.Text =
-		`+{fmt(if type(income) == "number" then income else 0)} {CURRENCY}/s  ·  holds planets up to tier {if def
+		`+{fmt(if type(income) == "number" then income else 0)} {CURRENCY}/s  ·  {open} orbits  ·  planets up to tier {if def
 			then def.tier
 			else 1}`
 
@@ -354,12 +391,21 @@ refreshPanel = function()
 	local target = StarMath.evolveTarget(typeId)
 	if target then
 		local targetDef = S.BY_ID[target]
+		-- Evolving needs max level; until then the button says when.
 		table.insert(
 			buttons,
 			tagIcon(
-				priceButton(actions, `Evolve: {targetDef.displayName}`, targetDef.cost, function()
-					request("evolve", starId)
-				end, "special"),
+				if level >= top
+					then priceButton(
+						actions,
+						`Evolve: {targetDef.displayName}`,
+						targetDef.cost,
+						function()
+							request("evolve", starId)
+						end,
+						"special"
+					)
+					else Theme.button(actions, `Evolve at level {top}`, "disabled", nil),
 				"RainbowStar"
 			)
 		)
@@ -391,10 +437,10 @@ refreshPanel = function()
 		return
 	end
 
-	-- Orbit slots.
+	-- Orbits: the star's own, plus a preview of the one its evolution opens.
 	Theme.clear(list)
-	local open = StarMath.slots(level)
-	for slot = 1, #S.SLOTS do
+	local shown = if target then math.min(open + 1, #S.SLOTS) else open
+	for slot = 1, shown do
 		local row = Theme.row(list, 52, slot)
 		local planetId = planets[slot]
 		local planetDef = if planetId then P.BY_ID[planetId] else nil
@@ -425,15 +471,8 @@ refreshPanel = function()
 				refreshPanel()
 			end)
 		else
-			local needLevel = #S.LEVELS
-			for index, levelDef in S.LEVELS do
-				if levelDef.slots >= slot then
-					needLevel = index
-					break
-				end
-			end
-			rowText(row, `Orbit {slot}: locked`, nil, 14)
-			button = Theme.button(row, `Star level {needLevel}`, "disabled", nil)
+			rowText(row, `Orbit {slot}: opens when this star evolves`, nil, 14)
+			button = Theme.button(row, "Evolve to open", "disabled", nil)
 		end
 		placeRight(button, 170)
 	end
@@ -483,7 +522,7 @@ local function buildPanel()
 
 	title = Theme.label(panel, {
 		Position = UDim2.fromOffset(16, 10),
-		Size = UDim2.new(1, -110, 0, 26),
+		Size = UDim2.new(1, -190, 0, 26),
 		TextSize = 20,
 		Font = Enum.Font.GothamBlack,
 	})
@@ -494,7 +533,19 @@ local function buildPanel()
 		TextSize = 14,
 		TextColor3 = C.subtle,
 	})
-	Theme.closeButton(panel, closePanel)
+	local close = Theme.closeButton(panel, closePanel)
+	-- Inspect: watch this system up close with its own clock.
+	local inspect = Theme.button(panel, "Inspect", "primary", function()
+		local model = panelStar
+		closePanel()
+		if model then
+			ClientState.inspectStar:Fire(model)
+		end
+	end)
+	inspect.AnchorPoint = Vector2.new(1, 0)
+	inspect.Position = UDim2.new(1, -close.Size.X.Offset - 18, 0, 10)
+	inspect.Size = UDim2.fromOffset(110, 32)
+	Theme.buttonIcon(inspect, "Telescope")
 
 	actions = Instance.new("Frame")
 	actions.Name = "Actions"
@@ -510,7 +561,7 @@ end
 
 -- Stars ------------------------------------------------------------------
 
-local animate: () -> ()
+local animate: (dt: number?) -> ()
 
 local function starDef(v: Visual): StarsConfig.StarTypeDef?
 	local typeId = v.model:GetAttribute("TypeId")
@@ -536,14 +587,16 @@ local function onTypeChanged(v: Visual)
 	end
 	v.typeId = typeId
 	local def = starDef(v)
+	-- A new orbit ring and the new star's light on its planets.
+	buildPlanets(v)
+	animate()
 	StarFx.supernova(v.core.Position, v.core.Size.X / 2, starColor(v))
 	if def then
-		local best = P.BY_ID[P.ORDER[math.min(def.tier, #P.ORDER)]]
 		celebrate(
 			v,
 			"STAR EVOLVED",
 			def.displayName,
-			`Tier {def.tier}  ·  now holds planets up to {best.displayName}`,
+			`{StarMath.slots(def.id)} orbits  ·  levels up to {StarMath.maxLevel(def.id)}  ·  planets up to tier {def.tier}`,
 			true
 		)
 	end
@@ -556,18 +609,28 @@ local function onLevelChanged(v: Visual)
 	end
 	local raised = level > v.level
 	v.level = level
-	buildPlanets(v)
-	animate()
 	if raised then
 		StarFx.levelUp(v.core.Position, v.core.Size.X / 2, starColor(v))
 		local def = starDef(v)
-		celebrate(
-			v,
-			"LEVEL UP",
-			`{if def then def.displayName else "Star"}  ·  level {level}`,
-			`{StarMath.slots(level)} orbits open  ·  production x{StarMath.levelDef(level).incomeMultiplier}`,
-			false
-		)
+		local top = if def then StarMath.maxLevel(def.id) else level
+		local nextDef = if def then StarMath.evolveTarget(def.id) else nil
+		if level >= top and nextDef then
+			celebrate(
+				v,
+				"MAX LEVEL",
+				`{if def then def.displayName else "Star"}  ·  level {level}`,
+				`Ready to evolve into a {S.BY_ID[nextDef].displayName}`,
+				false
+			)
+		else
+			celebrate(
+				v,
+				"LEVEL UP",
+				`{if def then def.displayName else "Star"}  ·  level {level}/{top}`,
+				`Production x{StarMath.levelMultiplier(level)}`,
+				false
+			)
+		end
 	end
 end
 
@@ -608,6 +671,19 @@ local function add(model: Instance)
 	if prompt and prompt:IsA("ProximityPrompt") then
 		prompt.Enabled = mine
 	end
+	-- Anyone may inspect any system (R / R3): a local prompt on this client.
+	local inspect = Instance.new("ProximityPrompt")
+	inspect.Name = "GaG_Inspect"
+	inspect.ActionText = "Inspect system"
+	inspect.ObjectText = "Solar system"
+	inspect.KeyboardKeyCode = Enum.KeyCode.R
+	inspect.GamepadKeyCode = Enum.KeyCode.ButtonR3
+	inspect.HoldDuration = 0
+	inspect.MaxActivationDistance = S.MANAGE_DISTANCE
+	inspect.RequiresLineOfSight = false
+	inspect.UIOffset = Vector2.new(0, 70)
+	inspect:SetAttribute("GaG_Inspect", true)
+	inspect.Parent = core
 	local level = model:GetAttribute("Level")
 	local planetsText = model:GetAttribute("Planets")
 	local v: Visual = {
@@ -674,18 +750,42 @@ local function add(model: Instance)
 	)
 end
 
-animate = function()
-	local now = Workspace:GetServerTimeNow()
+-- Orbit clock: simulated seconds. Normally it follows the server clock at
+-- ORBIT_DEFAULT_RATE, so every client sees the same positions; while a system
+-- is inspected the inspect slider sets its own rate (StarController.clock).
+animate = function(dt: number?)
+	if clock.rate == nil then
+		clock.time = Workspace:GetServerTimeNow() * S.ORBIT_DEFAULT_RATE
+	elseif dt and not clock.paused then
+		clock.time += dt * (clock.rate :: number)
+	end
 	for _, v in visuals do
 		local center = v.core.CFrame.Position
 		for _, planet in v.planets do
 			local slot = S.SLOTS[planet.slot]
-			local angle = planet.phase + now / slot.period * 2 * math.pi
+			local angle = OrbitTime.angle(planet.slot, clock.time, planet.phase)
 			local offset = CFrame.Angles(math.rad(slot.tilt), 0, 0)
 				* Vector3.new(math.cos(angle) * slot.orbit, 0, math.sin(angle) * slot.orbit)
-			planet.part.CFrame = CFrame.new(center + offset) * CFrame.Angles(0, angle, 0)
+			-- Facing the star, so the sunward light sits on the day side.
+			planet.part.CFrame = CFrame.lookAt(center + offset, center)
 		end
 	end
+end
+
+-- The orbit clock: `rate` nil follows the server; otherwise simulated
+-- seconds per real second (set by the inspect view), optionally paused.
+StarController.clock = clock
+
+-- The planets drawn around a star: part, orbit slot and planet type id.
+function StarController.planetsOf(model: Model): { { part: Part, slot: number, id: string } }
+	local v = visuals[model]
+	local result: { { part: Part, slot: number, id: string } } = {}
+	if v then
+		for _, planet in v.planets do
+			table.insert(result, { part = planet.part, slot = planet.slot, id = planet.id })
+		end
+	end
+	return result
 end
 
 -- The local player's own star models by id, for the shop and placement.
@@ -736,7 +836,12 @@ function StarController.start()
 		end
 	end)
 	ProximityPromptService.PromptTriggered:Connect(function(prompt)
-		if prompt:GetAttribute("TycoonAction") == "Manage" then
+		if prompt:GetAttribute("GaG_Inspect") == true then
+			local model = prompt:FindFirstAncestorOfClass("Model")
+			if model then
+				ClientState.inspectStar:Fire(model)
+			end
+		elseif prompt:GetAttribute("TycoonAction") == "Manage" then
 			local model = prompt:FindFirstAncestorOfClass("Model")
 			if model and isMine(model) then
 				openPanel(model)

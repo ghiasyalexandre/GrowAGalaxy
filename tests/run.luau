@@ -17,6 +17,7 @@ local SPECS = {
 	"AsteroidField",
 	"MiningMath",
 	"StarMath",
+	"OrbitTime",
 	"Progression",
 }
 
