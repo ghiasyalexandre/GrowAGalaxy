@@ -11,18 +11,24 @@
 -- Raids: the Death Star appears at the difficulty's arena; every queued
 -- player is put in their active ship facing it (ShipSystem.spawnAndBoard).
 -- BeamSystem hands each shot to shot(): hits on the boss damage it (the weak
--- point more). The boss fires turbolaser volleys at raiders (aimed where
--- they were, so they can dodge) and, on harder raids, a telegraphed
--- superlaser; both hurt ships through CombatSystem.damageShip. A raider
--- whose ship is destroyed, who leaves their ship or the game is out. The
--- raid is won when the boss's health runs out, lost when TIME_LIMIT passes
--- or nobody is left. Winners who helped (RaidMath.earnsReward) get the
+-- point more; it jumps to a new spot every WEAK_POINT_MOVE_SHARE of health
+-- lost), hits on a drone destroy it. The boss's moves (see Config.Raids):
+-- turbolaser volleys, homing drones, shockwave rings, the superlaser and
+-- bombardment, each on its own timer, faster once enraged; the big ones never
+-- overlap. All of them hurt ships through CombatSystem.damageShip. A raider
+-- whose ship is destroyed, who leaves their ship or the game is out. The raid
+-- is won when the boss's health runs out, lost when TIME_LIMIT passes or
+-- nobody is left. Winners who helped (RaidMath.earnsReward) get the
 -- difficulty's fixed reward. Then everyone still there goes back to the ISS.
+--
+-- Clients draw every effect from RaidEvent: "bolt", "drone" (one destroyed),
+-- "shockCharge", "shockwave", "charge", "superlaser", "bombard",
+-- "bombardBlast", "weakMoved", "enraged", "bossDown", "result".
 --
 -- Pad attributes (for clients): Count, StartsAt (server time, 0 = no
 -- countdown), Busy (a raid is running). Player attributes: RaidQueue and
 -- Raid (the difficulty). Boss model attributes: Difficulty, Health (0..1),
--- EndsAt (server time), Raiders (still flying).
+-- EndsAt (server time), Raiders (still flying), Enraged.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -46,19 +52,42 @@ local WorldSystem = require(script.Parent.WorldSystem)
 local R = Config.Raids
 local TICK = 0.25
 local TOUCH_COOLDOWN = 1.5
+-- Seconds after the raid starts before each move first comes.
+local FIRST_MOVE: { [string]: number } =
+	{ volley = 4, drones = 8, shockwave = 13, superlaser = 20, bombard = 17 }
 
 type Queue = { players: { Player }, firstAt: number?, filledAt: number? }
 type Raider = { damage: number, flying: boolean }
+type Drone = {
+	part: BasePart,
+	target: Player,
+	heading: Vector3,
+	diesAt: number,
+	damage: number,
+}
+type Wave = {
+	center: Vector3,
+	normal: Vector3,
+	startsAt: number,
+	reached: number, -- radius already swept
+	damage: number,
+	hit: { [Player]: boolean },
+}
 type Raid = {
 	difficulty: string,
 	model: Model,
 	body: BasePart,
 	weak: BasePart,
+	weakDirection: RaidMath.Point,
+	weakStage: number,
 	health: number,
 	max: number,
 	endsAt: number,
-	nextVolley: number,
-	nextLaser: number,
+	nextMove: { [string]: number },
+	bigUntil: number,
+	enraged: boolean,
+	drones: { Drone },
+	waves: { Wave },
 	raiders: { [Player]: Raider },
 	over: boolean,
 }
@@ -72,9 +101,18 @@ local folder: Folder
 local limit = RateLimiter.new(4, 1)
 local lastTouch: { [Player]: number } = {}
 local elapsed = 0
+local random = Random.new()
+
+local function rng(): number
+	return random:NextNumber()
+end
 
 local function v(point: Vector3): RaidMath.Point
 	return { x = point.X, y = point.Y, z = point.Z }
+end
+
+local function vec(point: RaidMath.Point): Vector3
+	return Vector3.new(point.x, point.y, point.z)
 end
 
 local function arenaCenter(difficulty: string): Vector3
@@ -193,6 +231,11 @@ local function shipPosition(player: Player): Vector3?
 	return if hull then hull.Position else nil
 end
 
+local function isFlying(raid: Raid, player: Player): boolean
+	local raider = raid.raiders[player]
+	return raider ~= nil and raider.flying
+end
+
 local function hurt(raid: Raid, player: Player, amount: number)
 	if CombatSystem.damageShip(player, amount) then
 		knockOut(raid, player, "Your ship was destroyed. You're out of this raid.")
@@ -244,17 +287,25 @@ local function start(difficulty: string, players: { Player })
 	local model, body, weak = RaidBuilder.boss(CFrame.new(center), folder)
 	local max = RaidMath.bossHealth(difficulty, #players)
 	local now = Workspace:GetServerTimeNow()
-	local def = R.BY_ID[difficulty]
+	local nextMove: { [string]: number } = {}
+	for move, delay in FIRST_MOVE do
+		nextMove[move] = now + delay
+	end
 	local raid: Raid = {
 		difficulty = difficulty,
 		model = model,
 		body = body,
 		weak = weak,
+		weakDirection = v(Vector3.new(0, 0.42, -1).Unit),
+		weakStage = 0,
 		health = max,
 		max = max,
 		endsAt = now + R.TIME_LIMIT,
-		nextVolley = now + 4,
-		nextLaser = now + math.max(def.superlaserInterval, 8),
+		nextMove = nextMove,
+		bigUntil = 0,
+		enraged = false,
+		drones = {},
+		waves = {},
 		raiders = {},
 		over = false,
 	}
@@ -262,6 +313,7 @@ local function start(difficulty: string, players: { Player })
 	model:SetAttribute("Health", 1)
 	model:SetAttribute("EndsAt", raid.endsAt)
 	model:SetAttribute("Raiders", #players)
+	model:SetAttribute("Enraged", false)
 	raids[difficulty] = raid
 
 	for index, player in players do
@@ -277,17 +329,18 @@ local function start(difficulty: string, players: { Player })
 			else
 				Notify.send(
 					player,
-					`{difficulty} raid: destroy the Death Star! Its glowing green dish takes extra damage.`
+					`{difficulty} raid: destroy the Death Star! Hit its green weak point; it moves as the boss takes damage.`
 				)
 			end
 		end)
 	end
 end
 
-local function volley(raid: Raid, now: number)
-	local def = R.BY_ID[raid.difficulty]
+-- Moves ---------------------------------------------------------------------
+
+local function volley(raid: Raid, move: { bolts: number, damage: number })
 	local targets = flyingRaiders(raid)
-	for _ = 1, math.min(def.boltsPerVolley, #targets * 2) do
+	for _ = 1, math.min(move.bolts, #targets * 2) do
 		local player = targets[math.random(#targets)]
 		local aim = shipPosition(player)
 		if aim == nil then
@@ -302,19 +355,151 @@ local function volley(raid: Raid, now: number)
 			if
 				not raid.over
 				and at
-				and raid.raiders[player].flying
+				and isFlying(raid, player)
 				and RaidMath.boltHits(v(aim), v(at))
 			then
-				hurt(raid, player, def.boltDamage)
+				hurt(raid, player, move.damage)
 			end
 		end)
 	end
-	raid.nextVolley = now + def.volleyInterval
 end
 
-local function superlaser(raid: Raid, now: number)
-	local def = R.BY_ID[raid.difficulty]
-	raid.nextLaser = now + def.superlaserInterval
+local function launchDrones(raid: Raid, move: { count: number, damage: number }, now: number)
+	local targets = flyingRaiders(raid)
+	if #targets == 0 then
+		return
+	end
+	local center = raid.body.Position
+	for i = 1, move.count do
+		local target = targets[(i - 1) % #targets + 1]
+		local aim = shipPosition(target)
+		if aim == nil then
+			continue
+		end
+		-- Out of the hull on the side facing the target, spread a little.
+		local out = ((aim - center).Unit + vec(RaidMath.direction(rng(), rng())) * 0.35).Unit
+		local part = RaidBuilder.drone(center + out * R.BOSS_SIZE * 0.6, raid.model)
+		table.insert(raid.drones, {
+			part = part,
+			target = target,
+			heading = out,
+			diesAt = now + R.DRONE_LIFETIME,
+			damage = move.damage,
+		})
+	end
+end
+
+local function popDrone(drone: Drone)
+	if drone.part.Parent then
+		Net.RaidEvent:FireAllClients("drone", drone.part.Position)
+		drone.part:Destroy()
+	end
+end
+
+-- Steers every drone towards its target; runs every frame for smooth flight.
+local function stepDrones(raid: Raid, dt: number, now: number)
+	for i = #raid.drones, 1, -1 do
+		local drone = raid.drones[i]
+		if drone.part.Parent == nil then -- shot down
+			table.remove(raid.drones, i)
+			continue
+		end
+		if now >= drone.diesAt then
+			popDrone(drone)
+			table.remove(raid.drones, i)
+			continue
+		end
+		if not isFlying(raid, drone.target) then
+			local others = flyingRaiders(raid)
+			if #others == 0 then
+				continue
+			end
+			drone.target = others[math.random(#others)]
+		end
+		local aim = shipPosition(drone.target)
+		if aim == nil then
+			continue
+		end
+		local position = drone.part.Position
+		local toward = aim - position
+		if toward.Magnitude <= R.DRONE_HIT_RADIUS then
+			hurt(raid, drone.target, drone.damage)
+			popDrone(drone)
+			table.remove(raid.drones, i)
+			continue
+		end
+		-- Turn at most DRONE_TURN radians per second towards the target.
+		local want = toward.Unit
+		local angle = math.acos(math.clamp(drone.heading:Dot(want), -1, 1))
+		local turn = R.DRONE_TURN * dt
+		if angle > turn then
+			local turned = drone.heading:Lerp(want, turn / angle)
+			drone.heading = if turned.Magnitude > 1e-3 then turned.Unit else want
+		else
+			drone.heading = want
+		end
+		local nextPosition = position + drone.heading * R.DRONE_SPEED * dt
+		drone.part.CFrame = CFrame.lookAt(nextPosition, nextPosition + drone.heading)
+	end
+end
+
+local function shockwave(raid: Raid, move: { damage: number }, now: number)
+	local targets = flyingRaiders(raid)
+	if #targets == 0 then
+		return
+	end
+	local center = raid.body.Position
+	local aim = shipPosition(targets[math.random(#targets)]) or center + Vector3.zAxis
+	-- A plane through the boss containing a raider, at a random roll.
+	local toward = (aim - center).Unit
+	local normal = toward:Cross(vec(RaidMath.direction(rng(), rng())))
+	if normal.Magnitude < 1e-3 then
+		normal = toward:Cross(Vector3.yAxis)
+	end
+	normal = normal.Unit
+	Net.RaidEvent:FireAllClients("shockCharge", center, normal, R.SHOCKWAVE_CHARGE)
+	table.insert(raid.waves, {
+		center = center,
+		normal = normal,
+		startsAt = now + R.SHOCKWAVE_CHARGE,
+		reached = 0,
+		damage = move.damage,
+		hit = {},
+	})
+	task.delay(R.SHOCKWAVE_CHARGE, function()
+		if not raid.over then
+			Net.RaidEvent:FireAllClients("shockwave", center, normal)
+		end
+	end)
+end
+
+-- Grows every shockwave ring and hurts raiders it sweeps over.
+local function stepWaves(raid: Raid, now: number)
+	for i = #raid.waves, 1, -1 do
+		local wave = raid.waves[i]
+		if now < wave.startsAt then
+			continue
+		end
+		local radius = (now - wave.startsAt) * R.SHOCKWAVE_SPEED
+		for _, player in flyingRaiders(raid) do
+			local at = shipPosition(player)
+			if
+				at
+				and not wave.hit[player]
+				and RaidMath.ringHits(v(at), v(wave.center), v(wave.normal), wave.reached, radius)
+			then
+				wave.hit[player] = true
+				hurt(raid, player, wave.damage)
+			end
+		end
+		wave.reached = radius
+		if radius > R.SHOCKWAVE_RANGE then
+			table.remove(raid.waves, i)
+		end
+	end
+end
+
+local function superlaser(raid: Raid, move: { damage: number })
 	local targets = flyingRaiders(raid)
 	if #targets == 0 then
 		return
@@ -334,10 +519,75 @@ local function superlaser(raid: Raid, now: number)
 		for _, player in flyingRaiders(raid) do
 			local at = shipPosition(player)
 			if at and RaidMath.distanceToSegment(v(at), v(from), v(to)) <= R.SUPERLASER_WIDTH then
-				hurt(raid, player, def.superlaserDamage)
+				hurt(raid, player, move.damage)
 			end
 		end
 	end)
+end
+
+local function bombard(raid: Raid, move: { count: number, damage: number })
+	local targets = flyingRaiders(raid)
+	if #targets == 0 then
+		return
+	end
+	-- One blast where each raider is now, the rest scattered around them.
+	local spots: { Vector3 } = {}
+	for _, player in targets do
+		local at = shipPosition(player)
+		if at and #spots < move.count then
+			table.insert(spots, at)
+		end
+	end
+	if #spots == 0 then
+		return
+	end
+	local anchors = table.clone(spots)
+	while #spots < move.count do
+		local around = anchors[math.random(#anchors)]
+		local offset = vec(RaidMath.direction(rng(), rng()))
+			* R.BOMBARD_SPREAD
+			* (0.4 + rng() * 0.6)
+		table.insert(spots, around + offset)
+	end
+	Net.RaidEvent:FireAllClients("bombard", spots, R.BOMBARD_DELAY)
+	task.delay(R.BOMBARD_DELAY, function()
+		if raid.over then
+			return
+		end
+		Net.RaidEvent:FireAllClients("bombardBlast", spots)
+		for _, player in flyingRaiders(raid) do
+			local at = shipPosition(player)
+			if at == nil then
+				continue
+			end
+			for _, spot in spots do
+				if RaidMath.inBlast(v(spot), v(at)) then
+					hurt(raid, player, move.damage)
+					break
+				end
+			end
+		end
+	end)
+end
+
+-- True (and the move's timer restarted) when the move is due now. A big
+-- move also waits for the last big move's BIG_MOVE_GAP.
+local function due(raid: Raid, name: string, interval: number, now: number, big: boolean): boolean
+	if now < raid.nextMove[name] or (big and now < raid.bigUntil) then
+		return false
+	end
+	raid.nextMove[name] = now + RaidMath.moveInterval(interval, raid.enraged)
+	if big then
+		raid.bigUntil = now + R.BIG_MOVE_GAP
+	end
+	return true
+end
+
+local function moveWeakPoint(raid: Raid)
+	local from = raid.weak.Position
+	raid.weakDirection = RaidMath.nextWeakDirection(raid.weakDirection, rng)
+	RaidBuilder.placeWeakPoint(raid.weak, raid.body.Position, vec(raid.weakDirection))
+	Net.RaidEvent:FireAllClients("weakMoved", from, raid.weak.Position)
 end
 
 local function tickRaid(raid: Raid, now: number)
@@ -356,19 +606,37 @@ local function tickRaid(raid: Raid, now: number)
 	end
 	local flying = flyingRaiders(raid)
 	raid.model:SetAttribute("Raiders", #flying)
-	if #flying == 0 then
+	if #flying == 0 or now >= raid.endsAt then
 		finish(raid, false)
 		return
 	end
-	if now >= raid.endsAt then
-		finish(raid, false)
-		return
+
+	local enraged = RaidMath.enraged(raid.health, raid.max)
+	if enraged and not raid.enraged then
+		raid.enraged = true
+		raid.model:SetAttribute("Enraged", true)
+		Net.RaidEvent:FireAllClients("enraged", raid.body.Position)
 	end
-	if now >= raid.nextVolley then
-		volley(raid, now)
+
+	local moves = R.BY_ID[raid.difficulty].moves
+	if due(raid, "volley", moves.volley.interval, now, false) then
+		volley(raid, moves.volley)
 	end
-	if R.BY_ID[raid.difficulty].superlaser and now >= raid.nextLaser then
-		superlaser(raid, now)
+	local drones = moves.drones
+	if drones and due(raid, "drones", drones.interval, now, false) then
+		launchDrones(raid, drones, now)
+	end
+	local wave = moves.shockwave
+	if wave and due(raid, "shockwave", wave.interval, now, true) then
+		shockwave(raid, wave, now)
+	end
+	local laser = moves.superlaser
+	if laser and due(raid, "superlaser", laser.interval, now, true) then
+		superlaser(raid, laser)
+	end
+	local blast = moves.bombard
+	if blast and due(raid, "bombard", blast.interval, now, true) then
+		bombard(raid, blast)
 	end
 end
 
@@ -440,12 +708,27 @@ function RaidSystem.shot(player: Player, model: Model, info: Types.ShipInfo, aim
 	if result == nil then
 		return
 	end
+	if result.Instance:GetAttribute("Drone") then
+		for _, drone in raid.drones do
+			if drone.part == result.Instance then
+				popDrone(drone)
+				break
+			end
+		end
+		return
+	end
 	local damage = RaidMath.bossDamage(info.beamPower, result.Instance == raid.weak)
 	raid.health = math.max(raid.health - damage, 0)
 	raid.raiders[player].damage += damage
 	raid.model:SetAttribute("Health", math.floor(raid.health / raid.max * 1000) / 1000)
 	if raid.health <= 0 then
 		finish(raid, true)
+		return
+	end
+	local stage = RaidMath.weakStage(raid.health, raid.max)
+	if stage > raid.weakStage then
+		raid.weakStage = stage
+		moveWeakPoint(raid)
 	end
 end
 
@@ -517,12 +800,19 @@ function RaidSystem.start()
 	end)
 
 	RunService.Heartbeat:Connect(function(dt)
+		local now = Workspace:GetServerTimeNow()
+		-- Drones and shockwaves move every frame; the rest runs on TICK.
+		for _, raid in raids do
+			if not raid.over then
+				stepDrones(raid, dt, now)
+				stepWaves(raid, now)
+			end
+		end
 		elapsed += dt
 		if elapsed < TICK then
 			return
 		end
 		elapsed = 0
-		local now = Workspace:GetServerTimeNow()
 		tickQueues(now)
 		for _, raid in raids do
 			tickRaid(raid, now)

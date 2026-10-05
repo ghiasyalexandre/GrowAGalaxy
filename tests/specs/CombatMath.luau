@@ -48,5 +48,17 @@ return function(T, Loader)
 				last = hull
 			end
 		end)
+
+		T.test("hull climbs on a curve: each ship adds more than the last", function()
+			local lastHull, lastGain = 0, 0
+			for index, shipId in Config.Ships.ORDER do
+				local hull = Config.Ships.BY_ID[shipId].stats.hull
+				if index > 1 then
+					T.truthy(hull - lastHull > lastGain, shipId)
+					lastGain = hull - lastHull
+				end
+				lastHull = hull
+			end
+		end)
 	end)
 end

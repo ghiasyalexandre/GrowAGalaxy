@@ -96,8 +96,7 @@ local function spheres(): { Sphere }
 	return list
 end
 
-local function spawnAt(position: Vec3, sizeId: string)
-	local size = A.SIZES[sizeId]
+local function spawnAt(position: Vec3, size: AsteroidConfig.SizeDef)
 	local id = nextId
 	nextId += 1
 	local built =
@@ -123,20 +122,25 @@ local function spawnAt(position: Vec3, sizeId: string)
 	built.model.Parent = folder
 end
 
--- Tries to place one asteroid near `centre` (or anywhere when nil).
--- Returns where it went, or nil if no valid spot was found.
-local function placeOne(centre: Vec3?, existing: { Sphere }, blocked: { Sphere }): Vec3?
+-- Tries to place one asteroid in the group around `centre` (or anywhere
+-- when nil). Returns where it went, or nil if no valid spot was found.
+local function placeOne(
+	centre: Vec3?,
+	plan: AsteroidField.GroupPlan,
+	existing: { Sphere },
+	blocked: { Sphere }
+): Vec3?
 	if count >= A.MAX_COUNT then
 		return nil
 	end
-	local sizeId = AsteroidField.pickSize(rng)
-	local extent = A.SIZES[sizeId].radius * EXTENT
+	local size = AsteroidField.varied(A.SIZES[AsteroidField.pickSize(rng)], rng)
+	local extent = size.radius * EXTENT
 	for _ = 1, A.PLACEMENT_ATTEMPTS do
 		local position = if centre
-			then AsteroidField.near(centre, A.CLUSTER_SPREAD, rng)
+			then AsteroidField.inGroup(centre, plan, rng)
 			else AsteroidField.randomPoint(rng)
 		if AsteroidField.isValid(position, extent, existing, blocked) then
-			spawnAt(position, sizeId)
+			spawnAt(position, size)
 			table.insert(existing, { position = position, radius = extent })
 			return position
 		end
@@ -152,16 +156,16 @@ local function spawnClusters(clusters: number)
 		if count >= A.TARGET_COUNT then
 			return
 		end
-		local first = placeOne(nil, existing, blocked)
+		local plan = AsteroidField.groupPlan(rng)
+		local first = placeOne(nil, plan, existing, blocked)
 		if first == nil then
 			continue
 		end
-		local members = random:NextInteger(A.CLUSTER_MIN, A.CLUSTER_MAX)
-		for _ = 2, members do
+		for _ = 2, plan.members do
 			if count >= A.TARGET_COUNT then
 				return
 			end
-			placeOne(first, existing, blocked)
+			placeOne(first, plan, existing, blocked)
 		end
 	end
 end

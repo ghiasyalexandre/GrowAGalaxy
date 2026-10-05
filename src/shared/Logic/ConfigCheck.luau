@@ -253,11 +253,18 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Raid {id}: must pay more and be tougher than the difficulty before it`)
 		end
 		lastStardust, lastHealth = def.reward.stardust, def.bossHealth
-		if def.volleyInterval <= 0 or def.boltsPerVolley < 1 or def.boltDamage <= 0 then
-			fail(`Raid {id}: needs a positive volley interval, bolts and damage`)
-		end
-		if def.superlaser and (def.superlaserInterval <= 0 or def.superlaserDamage <= 0) then
-			fail(`Raid {id}: a superlaser needs a positive interval and damage`)
+		-- Every move present needs a positive interval and damage (and count).
+		for name, move in def.moves :: { [string]: any } do
+			local count = move.count or move.bolts or 1
+			if
+				type(move.interval) ~= "number"
+				or move.interval <= 0
+				or type(move.damage) ~= "number"
+				or move.damage <= 0
+				or count < 1
+			then
+				fail(`Raid {id}: move {name} needs a positive interval, damage and count`)
+			end
 		end
 		local boost = def.reward.boost
 		if
@@ -272,6 +279,20 @@ function ConfigCheck.run(config: any): { string }
 		or raids.TIME_LIMIT <= 0
 	then
 		fail("Raids: bad queue or time settings")
+	end
+	if
+		raids.WEAK_POINT_MOVE_SHARE <= 0
+		or raids.WEAK_POINT_MOVE_SHARE >= 1
+		or raids.WEAK_POINT_MIN_ANGLE <= 0
+		or raids.WEAK_POINT_MIN_ANGLE > 120
+		or raids.ENRAGE_SHARE <= 0
+		or raids.ENRAGE_SHARE >= 1
+		or raids.ENRAGE_SPEEDUP < 1
+	then
+		fail("Raids: bad weak point or enrage settings")
+	end
+	if raids.DRONE_SPEED <= 0 or raids.SHOCKWAVE_SPEED <= 0 or raids.BOMBARD_DELAY <= 0 then
+		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
 	-- Combat (opt-in PvP).
@@ -317,11 +338,24 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
-	for _, name in { "SHIP_MAX_BANK_DEGREES", "SUIT_LEAN_DEGREES", "SUIT_ROLL_DEGREES" } do
+	for _, name in
+		{
+			"SHIP_MAX_BANK_DEGREES",
+			"SUIT_IDLE_LEAN_DEGREES",
+			"SUIT_LEAN_DEGREES",
+			"SUIT_ROLL_DEGREES",
+		}
+	do
 		local value = movement[name]
 		if type(value) ~= "number" or value < 0 or value >= 90 then
 			fail(`Movement: {name} must be from 0 up to 90`)
 		end
+	end
+	if movement.SUIT_IDLE_LEAN_DEGREES > movement.SUIT_LEAN_DEGREES then
+		fail("Movement: SUIT_IDLE_LEAN_DEGREES must not exceed SUIT_LEAN_DEGREES")
+	end
+	if movement.SUIT_FLOOR_GAP < 0 or movement.SUIT_FLOOR_PUSH <= 0 then
+		fail("Movement: SUIT_FLOOR_GAP must be 0 or more and SUIT_FLOOR_PUSH positive")
 	end
 	if movement.CAMERA_FOV + movement.CAMERA_FOV_BOOST + movement.CAMERA_BOOST_FOV > 120 then
 		fail("Movement: CAMERA_FOV plus both FOV boosts is over Roblox's limit of 120")
@@ -367,6 +401,17 @@ function ConfigCheck.run(config: any): { string }
 	end
 	if asteroids.CLUSTER_MIN < 1 or asteroids.CLUSTER_MAX < asteroids.CLUSTER_MIN then
 		fail("Asteroids: need 1 <= CLUSTER_MIN <= CLUSTER_MAX")
+	end
+	if
+		asteroids.CLUSTER_SKEW <= 0
+		or asteroids.CLUSTER_SPREAD_MIN <= 0
+		or asteroids.CLUSTER_SPREAD_MAX < asteroids.CLUSTER_SPREAD_MIN
+		or asteroids.STREAM_CHANCE < 0
+		or asteroids.STREAM_CHANCE > 1
+		or asteroids.SIZE_JITTER < 0
+		or asteroids.SIZE_JITTER >= 0.5
+	then
+		fail("Asteroids: bad group spread, stream chance or size jitter")
 	end
 	if asteroids.ISS_CLEARANCE + 2 * largestRock >= asteroids.MAX_DISTANCE then
 		fail("Asteroids: no room between ISS_CLEARANCE and MAX_DISTANCE")
@@ -446,9 +491,14 @@ function ConfigCheck.run(config: any): { string }
 	if stars.MAX_LEVEL_STEP < 2 or stars.MAX_LEVEL_STEP % 2 ~= 0 then
 		fail("Stars: MAX_LEVEL_STEP must be an even number of at least 2")
 	end
-	if stars.LEVEL_INCOME_STEP <= 0 or stars.UPGRADE_SHARE <= 0 or stars.UPGRADE_GROWTH < 1 then
+	if
+		stars.LEVEL_INCOME_LINEAR <= 0
+		or stars.LEVEL_INCOME_CURVE < 0
+		or stars.UPGRADE_SHARE <= 0
+		or stars.UPGRADE_GROWTH < 1
+	then
 		fail(
-			"Stars: LEVEL_INCOME_STEP and UPGRADE_SHARE must be positive, UPGRADE_GROWTH at least 1"
+			"Stars: LEVEL_INCOME_LINEAR and UPGRADE_SHARE must be positive, LEVEL_INCOME_CURVE not negative, UPGRADE_GROWTH at least 1"
 		)
 	end
 	if stars.MAX_RADIUS_SCALE < 1 then

@@ -299,6 +299,21 @@ end
 local bossModel, bossBody, weakPoint = RaidBuilder.boss(roblox.CFrame.new(0, 1100, 0), raidArea)
 check(bossModel.Parent == raidArea and bossBody.Anchored, "boss is anchored and parented")
 check(weakPoint.Name == "WeakPoint" and weakPoint.Parent == bossModel, "boss has a weak point")
+check(weakPoint:FindFirstChild("Target") ~= nil, "weak point has a target marker")
+local weakBefore = weakPoint.CFrame.Position
+RaidBuilder.placeWeakPoint(weakPoint, bossBody.CFrame.Position, roblox.Vector3.new(0, 0, 1))
+local moved = weakPoint.CFrame.Position
+check(
+	(moved - weakBefore).Magnitude > 10
+		and math.abs((moved - bossBody.CFrame.Position).Magnitude - Raids.BOSS_SIZE * 0.49)
+			< 0.5,
+	"the weak point moves to a new spot on the hull"
+)
+local drone = RaidBuilder.drone(roblox.Vector3.new(0, 1100, -300), bossModel)
+check(
+	drone:GetAttribute("Drone") == true and drone.Parent == bossModel and not drone.CanCollide,
+	"drones build inside the boss model, tagged and not collidable"
+)
 check(#warnings == 0, `no raid warnings ({table.concat(warnings, "; ")})`)
 raidArea:Destroy()
 

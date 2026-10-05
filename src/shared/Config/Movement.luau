@@ -26,10 +26,18 @@ local Movement = {
 	SHIP_STRAFE_BANK_DEGREES = 15, -- bank at full strafe
 	SHIP_BANK_SMOOTHING = 5,
 
-	-- Spacesuit body: leans into the direction of travel while floating.
-	SUIT_LEAN_DEGREES = 50, -- forward lean at full speed
+	-- Spacesuit body: floats leaning forward (a swimmer's pose, so the feet
+	-- trail behind instead of hanging into the floor) and leans further
+	-- into the direction of travel.
+	SUIT_IDLE_LEAN_DEGREES = 30, -- forward lean while still or drifting
+	SUIT_LEAN_DEGREES = 70, -- forward lean at full speed
 	SUIT_ROLL_DEGREES = 15, -- sideways tilt at full sideways speed
 	SUIT_LEAN_SMOOTHING = 5,
+	-- Floors push a floating player up so their feet stay above them: this
+	-- many studs of gap under the feet, pushed back at FLOOR_PUSH studs per
+	-- second for every stud they sink.
+	SUIT_FLOOR_GAP = 0.6,
+	SUIT_FLOOR_PUSH = 10,
 
 	-- Chase camera
 	CAMERA_HEIGHT = 7,

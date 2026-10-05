@@ -29,9 +29,10 @@ function StarMath.slots(typeId: string): number
 	return math.min(S.ORBITS_BASE + tierOf(typeId) - 1, #S.SLOTS)
 end
 
--- Production multiplier at a level.
+-- Production multiplier at a level: grows a little faster every level.
 function StarMath.levelMultiplier(level: number): number
-	return 1 + S.LEVEL_INCOME_STEP * (math.max(level, 1) - 1)
+	local n = math.max(level, 1) - 1
+	return 1 + S.LEVEL_INCOME_LINEAR * n + S.LEVEL_INCOME_CURVE * n * n
 end
 
 -- Visual radius of a star: grows to MAX_RADIUS_SCALE at max level.

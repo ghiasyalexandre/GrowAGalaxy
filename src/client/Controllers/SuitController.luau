@@ -11,7 +11,9 @@
 --
 -- So floating doesn't look frozen, R15 characters play their avatar's own
 -- swim animations (a slow tread while still or drifting, the stroke while
--- thrusting), and every character leans into the direction it's moving.
+-- thrusting), and every character floats leaning forward, like a swimmer,
+-- leaning further into the direction it's moving. Floors push a floating
+-- character up so its feet stay above them (they don't collide by themselves).
 -- Animations played on your own character replicate, so everyone sees them.
 
 local Players = game:GetService("Players")
@@ -37,8 +39,9 @@ local TELEPORT_DISTANCE = 30
 local SETTLE_TIME = 0.4
 local INPUT_DEADZONE = 0.05
 local LEAN = math.rad(M.SUIT_LEAN_DEGREES)
+local IDLE_LEAN = math.rad(M.SUIT_IDLE_LEAN_DEGREES)
 local ROLL = math.rad(M.SUIT_ROLL_DEGREES)
-local BACK_LEAN_SHARE = 0.4 -- moving backwards leans back less far
+local R6_LEG_LENGTH = 2 -- R6 has no HipHeight; its legs hang 2 studs below the torso
 local ANIMATION_FADE = 0.35
 -- Roblox's default R15 swim animations, used when the avatar's Animate
 -- script doesn't name its own.
@@ -50,6 +53,7 @@ local SuitController = {}
 type Suit = {
 	humanoid: Humanoid,
 	root: BasePart,
+	character: Model,
 	linear: LinearVelocity,
 	align: AlignOrientation,
 	swim: AnimationTrack?,
@@ -178,6 +182,7 @@ local function setup(character: Model)
 	suit = {
 		humanoid = humanoid,
 		root = root,
+		character = character,
 		linear = linear,
 		align = align,
 		swim = swim,
@@ -212,6 +217,31 @@ local function targetVelocity(current: Vector3, position: Vector3, dt: number): 
 		M.FLIGHT_BOUNDS_RADIUS,
 		M.FLIGHT_BOUNDS_HEIGHT
 	)
+end
+
+-- Studs from the root's centre down to the soles when standing straight.
+local function legReach(s: Suit): number
+	local legs = if s.humanoid.RigType == Enum.HumanoidRigType.R6
+		then R6_LEG_LENGTH
+		else s.humanoid.HipHeight
+	return legs + s.root.Size.Y / 2
+end
+
+-- With a floor closer below than the feet reach, rise at least fast enough
+-- to lift them clear (the legs don't collide, so they'd sink into it).
+local function keepAboveFloor(s: Suit, position: Vector3, velocity: Vector3): Vector3
+	local clearance = legReach(s) * math.cos(lean) + M.SUIT_FLOOR_GAP
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { s.character }
+	params.RespectCanCollide = true
+	local hit = Workspace:Raycast(position, Vector3.new(0, -clearance, 0), params)
+	if hit == nil then
+		return velocity
+	end
+	local sink = clearance - (position.Y - hit.Position.Y)
+	local rise = math.min(sink * M.SUIT_FLOOR_PUSH, M.SUIT_MAX_SPEED)
+	return Vector3.new(velocity.X, math.max(velocity.Y, rise), velocity.Z)
 end
 
 local function step(dt: number)
@@ -249,7 +279,8 @@ local function step(dt: number)
 	end
 	lastPosition = position
 
-	local velocity = targetVelocity(s.root.AssemblyLinearVelocity, position, dt)
+	local velocity =
+		keepAboveFloor(s, position, targetVelocity(s.root.AssemblyLinearVelocity, position, dt))
 	s.linear.VectorVelocity = velocity
 
 	-- Face where the camera is looking, leaning forwards (or back) and to the
@@ -261,7 +292,11 @@ local function step(dt: number)
 	end
 	local relative = facing:VectorToObjectSpace(velocity) / M.SUIT_MAX_SPEED
 	local ahead = math.clamp(-relative.Z, -1, 1)
-	local targetLean = if ahead >= 0 then ahead * LEAN else ahead * LEAN * BACK_LEAN_SHARE
+	-- Always leaning forward a little; more the faster you go ahead, less
+	-- (down to upright) going backwards.
+	local targetLean = if ahead >= 0
+		then IDLE_LEAN + ahead * (LEAN - IDLE_LEAN)
+		else IDLE_LEAN * (1 + ahead)
 	local targetRoll = -math.clamp(relative.X, -1, 1) * ROLL
 	lean = FlightMath.smooth(lean, targetLean, M.SUIT_LEAN_SMOOTHING, dt)
 	roll = FlightMath.smooth(roll, targetRoll, M.SUIT_LEAN_SMOOTHING, dt)

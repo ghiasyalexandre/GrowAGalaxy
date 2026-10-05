@@ -3,6 +3,9 @@
 **Status: code complete, CI-verified (format, lint, strict types, 157 unit tests, build, smoke
 test). Not yet playtested in Studio.**
 
+> Boss moves, health and rewards changed in [stage 20](stage-20-polish.md); the tables below
+> are as of stage 19.
+
 ## The ISS, rebuilt
 
 The station's tube is wider (radius 16, a 28-stud floor) with window bands along both sides.

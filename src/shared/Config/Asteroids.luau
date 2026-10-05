@@ -1,7 +1,10 @@
 --!strict
 -- Asteroids scattered across the flight area, mined with ship beams for
 -- Stardust. The server keeps the population near TARGET_COUNT (never above
--- MAX_COUNT), spawning small clusters at random valid spots: outside the
+-- MAX_COUNT), spawning groups at random valid spots: lone rocks, loose
+-- clumps of different sizes and spreads, and strung-out streams, each rock
+-- a little bigger or smaller than its size's average (and worth more or
+-- less to match). Spots are outside the
 -- ISS's clearance, outside every region slot (at its largest expansion, plus
 -- its station), clear of ships and players, and apart from other asteroids.
 --
@@ -61,10 +64,19 @@ local Asteroids = {
 	TARGET_COUNT = 110,
 	MAX_COUNT = 140,
 	SPAWN_INTERVAL = 3, -- seconds between spawn passes
-	CLUSTERS_PER_PASS = 2, -- clusters started per pass while below TARGET_COUNT
-	CLUSTER_MIN = 2,
-	CLUSTER_MAX = 5,
-	CLUSTER_SPREAD = 80, -- studs: how far cluster members sit from its centre
+	CLUSTERS_PER_PASS = 2, -- groups started per pass while below TARGET_COUNT
+	-- Rocks per group: CLUSTER_MIN to CLUSTER_MAX, small groups far likelier
+	-- (the roll is raised to CLUSTER_SKEW), so lone rocks are common.
+	CLUSTER_MIN = 1,
+	CLUSTER_MAX = 7,
+	CLUSTER_SKEW = 1.8,
+	-- Each group picks its own spread (studs from its centre) in this range.
+	CLUSTER_SPREAD_MIN = 35,
+	CLUSTER_SPREAD_MAX = 190,
+	STREAM_CHANCE = 0.3, -- share of groups strung out along a line instead of a clump
+	-- Each rock's radius is its size's x (1 +- SIZE_JITTER); durability and
+	-- reward scale with its area.
+	SIZE_JITTER = 0.25,
 	PLACEMENT_ATTEMPTS = 12, -- tries per asteroid before giving up this pass
 
 	-- Where they may spawn (studs, around the ISS at the origin)

@@ -627,7 +627,7 @@ local function onLevelChanged(v: Visual)
 				v,
 				"LEVEL UP",
 				`{if def then def.displayName else "Star"}  ·  level {level}/{top}`,
-				`Production x{StarMath.levelMultiplier(level)}`,
+				`Production x{math.floor(StarMath.levelMultiplier(level) * 100 + 0.5) / 100}`,
 				false
 			)
 		end

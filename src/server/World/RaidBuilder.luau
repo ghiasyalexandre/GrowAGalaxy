@@ -13,8 +13,10 @@
 --                      whose "Queue" and "Status" labels RaidSystem updates.
 --   boss(center)       the Death Star from ServerStorage/Assets/Bosses/
 --                      DeathStar (a grey sphere without it), BOSS_SIZE across,
---                      with a glowing green "WeakPoint" (its superlaser dish)
---                      facing -Z, where raiders start.
+--                      with a glowing green "WeakPoint" disc (and an always-
+--                      on-top target marker) facing -Z, where raiders start.
+--   placeWeakPoint     moves the weak point to a direction on the hull.
+--   drone(position)    a homing drone: a glowing red core trailing fire.
 
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -362,8 +364,7 @@ function RaidBuilder.boss(center: CFrame, parent: Instance): (Model, BasePart, B
 	body.Parent = model
 	model.PrimaryPart = body
 
-	-- The superlaser dish: upper front, facing the raiders.
-	local facing = Vector3.new(0, 0.42, -1).Unit
+	-- The weak point starts on the front, facing the raiders.
 	local weak = Instance.new("Part")
 	weak.Name = "WeakPoint"
 	weak.Shape = Enum.PartType.Cylinder
@@ -374,13 +375,40 @@ function RaidBuilder.boss(center: CFrame, parent: Instance): (Model, BasePart, B
 	weak.CanCollide = false
 	weak.CanTouch = false
 	weak.CastShadow = false
-	-- A cylinder's axis is X: point it along `facing`.
-	weak.CFrame = CFrame.lookAt(
-		center.Position + facing * size * 0.49,
-		center.Position + facing * size
-	) * CFrame.Angles(0, math.pi / 2, 0)
+	RaidBuilder.placeWeakPoint(weak, center.Position, Vector3.new(0, 0.42, -1).Unit)
 	weak.Parent = model
 	lamp(weak, Color3.fromRGB(90, 255, 120), 120, 4)
+	-- A target marker raiders can see through the hull, so they can find it
+	-- after it moves.
+	local marker = Instance.new("BillboardGui")
+	marker.Name = "Target"
+	marker.AlwaysOnTop = true
+	marker.LightInfluence = 0
+	marker.Size = UDim2.fromOffset(64, 64)
+	marker.MaxDistance = 2500
+	marker.Parent = weak
+	local ring = Instance.new("Frame")
+	ring.AnchorPoint = Vector2.new(0.5, 0.5)
+	ring.Position = UDim2.fromScale(0.5, 0.5)
+	ring.Size = UDim2.fromOffset(40, 40)
+	ring.BackgroundTransparency = 1
+	ring.Parent = marker
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(1, 0)
+	round.Parent = ring
+	local edge = Instance.new("UIStroke")
+	edge.Color = Color3.fromRGB(110, 255, 140)
+	edge.Thickness = 3
+	edge.Parent = ring
+	local dot = Instance.new("Frame")
+	dot.AnchorPoint = Vector2.new(0.5, 0.5)
+	dot.Position = UDim2.fromScale(0.5, 0.5)
+	dot.Size = UDim2.fromOffset(8, 8)
+	dot.BackgroundColor3 = Color3.fromRGB(110, 255, 140)
+	dot.Parent = ring
+	local dotRound = Instance.new("UICorner")
+	dotRound.CornerRadius = UDim.new(1, 0)
+	dotRound.Parent = dot
 	local glow = Instance.new("PointLight")
 	glow.Color = Color3.fromRGB(255, 80, 80)
 	glow.Range = 60
@@ -388,6 +416,41 @@ function RaidBuilder.boss(center: CFrame, parent: Instance): (Model, BasePart, B
 	glow.Parent = body
 	model.Parent = parent
 	return model, body, weak
+end
+
+-- Puts the weak point on the hull of a boss centred at `center`, facing out
+-- along the unit vector `direction`.
+function RaidBuilder.placeWeakPoint(weak: BasePart, center: Vector3, direction: Vector3)
+	local surface = center + direction * R.BOSS_SIZE * 0.49
+	-- A cylinder's axis is X: point it along `direction`.
+	weak.CFrame = CFrame.lookAt(surface, surface + direction) * CFrame.Angles(0, math.pi / 2, 0)
+end
+
+-- A homing drone at `position`: a red neon core trailing fire. One part,
+-- so the server can move it cheaply. Not collidable; lasers can hit it.
+function RaidBuilder.drone(position: Vector3, parent: Instance): BasePart
+	local size = R.DRONE_SIZE
+	local core = Instance.new("Part")
+	core.Name = "Drone"
+	core.Shape = Enum.PartType.Ball
+	core.Size = Vector3.one * size
+	core.Material = Enum.Material.Neon
+	core.Color = Color3.fromRGB(255, 60, 60)
+	core.Anchored = true
+	core.CanCollide = false
+	core.CanTouch = false
+	core.CastShadow = false
+	core.CFrame = CFrame.new(position)
+	core:SetAttribute("Drone", true)
+	lamp(core, Color3.fromRGB(255, 70, 70), 30, 3)
+	local trail = Instance.new("Fire")
+	trail.Color = Color3.fromRGB(255, 80, 60)
+	trail.SecondaryColor = Color3.fromRGB(255, 200, 80)
+	trail.Size = size * 0.6
+	trail.Heat = 4
+	trail.Parent = core
+	core.Parent = parent
+	return core
 end
 
 return RaidBuilder

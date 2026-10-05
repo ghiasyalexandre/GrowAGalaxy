@@ -186,8 +186,11 @@ return {
 	ORBITS_BASE = ORBITS_BASE, -- orbits at tier 1; one more per tier
 	MAX_LEVEL_BASE = 4, -- max level at tier 1 (even)
 	MAX_LEVEL_STEP = 2, -- added per tier (even, so max levels stay even)
-	-- Production at level L: income x (1 + LEVEL_INCOME_STEP x (L - 1)).
-	LEVEL_INCOME_STEP = 0.75,
+	-- Production at level L: income x (1 + LINEAR x n + CURVE x n^2), n = L - 1.
+	-- The same as a flat 0.75 per level up to level 4, then it pulls ahead:
+	-- x10.5 at level 10 and x25.7 at level 18 (a flat step gave x7.75, x13.75).
+	LEVEL_INCOME_LINEAR = 0.6,
+	LEVEL_INCOME_CURVE = 0.05,
 	-- Level L -> L + 1 costs the type's price x UPGRADE_SHARE x UPGRADE_GROWTH^(L - 1).
 	UPGRADE_SHARE = 0.4,
 	UPGRADE_GROWTH = 1.25,

@@ -13,12 +13,14 @@
 --   * and keeps each blocker's clearance from every blocker.
 
 local Config = require(script.Parent.Parent.Config)
+local AsteroidsConfig = require(script.Parent.Parent.Config.Asteroids)
 local RegionMath = require(script.Parent.RegionMath)
 local Types = require(script.Parent.Parent.Types)
 
 type Vec3 = Types.Vec3
 
 export type Sphere = { position: Vec3, radius: number }
+type SizeDef = AsteroidsConfig.SizeDef
 
 local A = Config.Asteroids
 
@@ -124,6 +126,61 @@ function AsteroidField.pickSize(rng: () -> number): string
 		end
 	end
 	return A.SIZE_ORDER[#A.SIZE_ORDER]
+end
+
+export type GroupPlan = {
+	members: number,
+	spread: number, -- studs
+	stream: Vec3?, -- unit direction for a stream; nil for a clump
+}
+
+-- How the next group of asteroids looks: how many, how spread out, and
+-- whether it is a clump or a stream.
+function AsteroidField.groupPlan(rng: () -> number): GroupPlan
+	local range = A.CLUSTER_MAX - A.CLUSTER_MIN + 1
+	local members =
+		math.min(A.CLUSTER_MIN + math.floor(rng() ^ A.CLUSTER_SKEW * range), A.CLUSTER_MAX)
+	local spread = A.CLUSTER_SPREAD_MIN + rng() * (A.CLUSTER_SPREAD_MAX - A.CLUSTER_SPREAD_MIN)
+	local stream: Vec3? = nil
+	if members >= 3 and rng() < A.STREAM_CHANCE then
+		local z = rng() * 2 - 1
+		local ring = math.sqrt(math.max(1 - z * z, 0))
+		local angle = rng() * 2 * math.pi
+		stream = { x = math.cos(angle) * ring, y = math.sin(angle) * ring * 0.4, z = z }
+		local s = stream :: Vec3
+		local length = math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z)
+		stream = { x = s.x / length, y = s.y / length, z = s.z / length }
+	end
+	return { members = members, spread = spread, stream = stream }
+end
+
+-- A random point in a group around `centre`: anywhere in the clump, or
+-- along the stream's line (up to 2 x spread either way) with a little jitter.
+function AsteroidField.inGroup(centre: Vec3, plan: GroupPlan, rng: () -> number): Vec3
+	local stream = plan.stream
+	if stream == nil then
+		return AsteroidField.near(centre, plan.spread, rng)
+	end
+	local along = (rng() * 2 - 1) * plan.spread * 2
+	local onLine = {
+		x = centre.x + stream.x * along,
+		y = centre.y + stream.y * along,
+		z = centre.z + stream.z * along,
+	}
+	return AsteroidField.near(onLine, plan.spread * 0.3, rng)
+end
+
+-- A copy of a size with its radius scaled by (1 +- SIZE_JITTER), and its
+-- durability and reward scaled with the rock's area (whole numbers, at
+-- least 1). The weak point keeps its size.
+function AsteroidField.varied(size: SizeDef, rng: () -> number): SizeDef
+	local scale = 1 + (rng() * 2 - 1) * A.SIZE_JITTER
+	local area = scale * scale
+	local copy = table.clone(size)
+	copy.radius = size.radius * scale
+	copy.durability = math.max(1, math.floor(size.durability * area + 0.5))
+	copy.reward = math.max(1, math.floor(size.reward * area + 0.5))
+	return copy
 end
 
 return AsteroidField

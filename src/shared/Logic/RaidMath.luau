@@ -1,7 +1,7 @@
 --!strict
 -- Raid rules (Config.Raids) shared by the server (RaidSystem) and tests:
--- boss health, damage, when a queue starts, who earns the reward, and hit
--- tests for the boss's attacks. Pure module: no Roblox services; points are
+-- boss health, damage, when a queue starts, who earns the reward, where the
+-- weak point goes, enrage, and hit tests for the boss's attacks. Pure module: no Roblox services; points are
 -- plain { x, y, z } tables.
 
 local Config = require(script.Parent.Parent.Config)
@@ -73,6 +73,78 @@ end
 -- Seconds a bolt takes to fly `distance` studs.
 function RaidMath.boltTime(distance: number): number
 	return math.max(distance, 0) / R.BOLT_SPEED
+end
+
+-- How many times the weak point has moved at this much health: once per
+-- WEAK_POINT_MOVE_SHARE of the boss's health lost.
+function RaidMath.weakStage(health: number, maxHealth: number): number
+	if maxHealth <= 0 then
+		return 0
+	end
+	local lost = 1 - math.clamp(health / maxHealth, 0, 1)
+	return math.floor(lost / R.WEAK_POINT_MOVE_SHARE + 1e-9)
+end
+
+-- Whether the boss is enraged (below ENRAGE_SHARE, still alive).
+function RaidMath.enraged(health: number, maxHealth: number): boolean
+	return health > 0 and maxHealth > 0 and health / maxHealth < R.ENRAGE_SHARE
+end
+
+-- Seconds until a move comes round again.
+function RaidMath.moveInterval(interval: number, enraged: boolean): number
+	return if enraged then interval / R.ENRAGE_SPEEDUP else interval
+end
+
+-- A unit vector from two numbers in [0, 1), evenly spread over the sphere.
+function RaidMath.direction(u: number, v: number): Point
+	local z = u * 2 - 1
+	local ring = math.sqrt(math.max(1 - z * z, 0))
+	local angle = v * 2 * math.pi
+	return { x = math.cos(angle) * ring, y = math.sin(angle) * ring, z = z }
+end
+
+-- A new spot for the weak point (a unit direction from the boss's centre),
+-- at least WEAK_POINT_MIN_ANGLE round from `previous`. `rng` returns numbers
+-- in [0, 1).
+function RaidMath.nextWeakDirection(previous: Point?, rng: () -> number): Point
+	local minDot = math.cos(math.rad(R.WEAK_POINT_MIN_ANGLE))
+	local candidate = RaidMath.direction(rng(), rng())
+	for _ = 1, 24 do
+		if previous == nil or dot(candidate, previous) <= minDot then
+			return candidate
+		end
+		candidate = RaidMath.direction(rng(), rng())
+	end
+	-- Unlucky draws: the opposite side always qualifies.
+	if previous then
+		return { x = -previous.x, y = -previous.y, z = -previous.z }
+	end
+	return candidate
+end
+
+-- Whether a shockwave ring (centred on `center`, in the plane with unit
+-- `normal`) that grew from radius `from` to `to` swept over `point`.
+function RaidMath.ringHits(
+	point: Point,
+	center: Point,
+	normal: Point,
+	from: number,
+	to: number
+): boolean
+	local d = sub(point, center)
+	local off = dot(d, normal)
+	if math.abs(off) > R.SHOCKWAVE_THICKNESS then
+		return false
+	end
+	local radial = math.sqrt(math.max(dot(d, d) - off * off, 0))
+	local half = R.SHOCKWAVE_BAND / 2
+	return radial >= from - half and radial <= to + half
+end
+
+-- Whether a bombard blast at `spot` catches a ship at `ship`.
+function RaidMath.inBlast(spot: Point, ship: Point): boolean
+	local d = sub(ship, spot)
+	return math.sqrt(dot(d, d)) <= R.BOMBARD_RADIUS
 end
 
 return RaidMath

@@ -6,15 +6,36 @@
 -- queued players are put in their ships at that difficulty's arena, high
 -- above the ISS, facing the Death Star.
 --
--- The boss: its health grows with the number of players. Lasers damage it
--- (its glowing superlaser dish takes WEAK_POINT_MULTIPLIER x). It fires
--- turbolaser volleys at raiders' ships (aimed where they are when fired, so
--- they can be dodged) and, on Medium and Hard, charges its superlaser: a
--- telegraphed beam that hits everything in a line. Raiders whose ships are
--- destroyed are out. Win before TIME_LIMIT to earn the difficulty's
--- reward (fixed amounts: no multiplier applies).
+-- The boss: its health grows with the number of players. Lasers damage it;
+-- its glowing weak point takes WEAK_POINT_MULTIPLIER x and jumps to a new
+-- spot on the hull every time the boss loses WEAK_POINT_MOVE_SHARE of its
+-- health. Below ENRAGE_SHARE health it is enraged: every move comes
+-- ENRAGE_SPEEDUP x as often. Its moves (each per difficulty, nil = never):
+--
+--   volley      turbolaser bolts aimed where raiders are when fired (dodge
+--               by moving)
+--   drones      homing drones that chase a raider and explode on contact;
+--               one laser hit destroys one
+--   shockwave   a glowing ring expanding from the boss in a tilted plane,
+--               after a short charge showing that plane; fly out of the
+--               plane (above or below the ring) to dodge it
+--   superlaser  a telegraphed beam that hits everything along a line
+--   bombard     (Hard) warning zones appear on and around raiders, then
+--               detonate
+--
+-- Raiders whose ships are destroyed are out. Win before TIME_LIMIT to earn
+-- the difficulty's reward (fixed amounts: no multiplier applies).
+-- Logic/ConfigCheck validates this table.
 
 export type Difficulty = "Easy" | "Medium" | "Hard"
+
+export type Moves = {
+	volley: { interval: number, bolts: number, damage: number },
+	drones: { interval: number, count: number, damage: number }?,
+	shockwave: { interval: number, damage: number }?,
+	superlaser: { interval: number, damage: number }?,
+	bombard: { interval: number, count: number, damage: number }?,
+}
 
 export type DifficultyDef = {
 	id: Difficulty,
@@ -25,12 +46,7 @@ export type DifficultyDef = {
 	arena: { x: number, y: number, z: number }, -- world position of the boss
 	bossHealth: number, -- for one raider
 	healthPerExtraRaider: number, -- share of bossHealth added per extra raider
-	volleyInterval: number, -- seconds between turbolaser volleys
-	boltsPerVolley: number,
-	boltDamage: number, -- hull points
-	superlaser: boolean,
-	superlaserInterval: number,
-	superlaserDamage: number,
+	moves: Moves, -- intervals in seconds, damage in hull points
 	reward: { stardust: number, boost: { source: "mining" | "star", seconds: number }? },
 }
 
@@ -44,15 +60,14 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 1,
 		pad = { angle = -50 },
 		arena = { x = -1200, y = 1100, z = 0 },
-		bossHealth = 1500,
+		bossHealth = 4000,
 		healthPerExtraRaider = 0.6,
-		volleyInterval = 4,
-		boltsPerVolley = 2,
-		boltDamage = 12,
-		superlaser = false,
-		superlaserInterval = 0,
-		superlaserDamage = 0,
-		reward = { stardust = 3000 },
+		moves = {
+			volley = { interval = 4, bolts = 2, damage = 12 },
+			drones = { interval = 18, count = 2, damage = 15 },
+			shockwave = { interval = 22, damage = 20 },
+		},
+		reward = { stardust = 4000 },
 	},
 	Medium = {
 		id = "Medium",
@@ -61,15 +76,15 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 2,
 		pad = { angle = 0 },
 		arena = { x = 0, y = 1100, z = 1200 },
-		bossHealth = 4000,
+		bossHealth = 12000,
 		healthPerExtraRaider = 0.7,
-		volleyInterval = 3,
-		boltsPerVolley = 3,
-		boltDamage = 18,
-		superlaser = true,
-		superlaserInterval = 30,
-		superlaserDamage = 70,
-		reward = { stardust = 9000, boost = { source = "mining", seconds = 10 * 60 } },
+		moves = {
+			volley = { interval = 3, bolts = 3, damage = 18 },
+			drones = { interval = 15, count = 3, damage = 22 },
+			shockwave = { interval = 18, damage = 30 },
+			superlaser = { interval = 30, damage = 70 },
+		},
+		reward = { stardust = 14000, boost = { source = "mining", seconds = 10 * 60 } },
 	},
 	Hard = {
 		id = "Hard",
@@ -78,15 +93,16 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 3,
 		pad = { angle = 50 },
 		arena = { x = 1200, y = 1100, z = 0 },
-		bossHealth = 10000,
+		bossHealth = 35000,
 		healthPerExtraRaider = 0.8,
-		volleyInterval = 2.2,
-		boltsPerVolley = 4,
-		boltDamage = 26,
-		superlaser = true,
-		superlaserInterval = 20,
-		superlaserDamage = 120,
-		reward = { stardust = 25000, boost = { source = "star", seconds = 20 * 60 } },
+		moves = {
+			volley = { interval = 2.2, bolts = 4, damage = 26 },
+			drones = { interval = 12, count = 4, damage = 30 },
+			shockwave = { interval = 14, damage = 45 },
+			superlaser = { interval = 20, damage = 120 },
+			bombard = { interval = 16, count = 6, damage = 60 },
+		},
+		reward = { stardust = 45000, boost = { source = "star", seconds = 20 * 60 } },
 	},
 }
 
@@ -101,14 +117,40 @@ return {
 	OUT_DELAY = 3, -- seconds after losing your ship before you go home
 	-- Boss
 	BOSS_SIZE = 260, -- studs across
-	BOSS_SPIN = 0.04, -- radians per second (drawn by clients)
-	DAMAGE_PER_POWER = 1, -- boss damage per shot = shooter's beamPower x this
+	-- Boss damage per shot = shooter's beamPower x this (the same share of
+	-- beam power a shot puts into an asteroid, Config.Beam.SHOT_POWER).
+	DAMAGE_PER_POWER = 0.5,
 	WEAK_POINT_MULTIPLIER = 3,
+	WEAK_POINT_MOVE_SHARE = 0.05, -- the weak point jumps after each 5% of health lost
+	WEAK_POINT_MIN_ANGLE = 50, -- degrees: each new spot is at least this far round from the last
+	ENRAGE_SHARE = 0.25, -- below this share of health the boss is enraged
+	ENRAGE_SPEEDUP = 1.35, -- enraged, every move comes this many times as often
+	-- Big moves (shockwave, superlaser, bombard) never overlap: after one
+	-- starts, the others wait this long.
+	BIG_MOVE_GAP = 5,
 	START_DISTANCE = 520, -- studs from the boss's centre where raiders start
+	-- Volley
 	BOLT_SPEED = 260, -- studs per second (turbolasers)
 	BOLT_HIT_RADIUS = 14, -- studs: a ship this close to the aim point is hit
+	-- Drones
+	DRONE_SPEED = 75, -- studs per second; every ship can outrun one
+	DRONE_TURN = 2.5, -- radians per second they can turn
+	DRONE_LIFETIME = 14, -- seconds before one burns out
+	DRONE_HIT_RADIUS = 12, -- studs: explodes on a ship this close
+	DRONE_SIZE = 7, -- studs across
+	-- Shockwave
+	SHOCKWAVE_CHARGE = 1.5, -- seconds the plane is shown before the ring goes out
+	SHOCKWAVE_SPEED = 230, -- studs per second the ring grows
+	SHOCKWAVE_RANGE = 950, -- studs: the ring fades at this radius
+	SHOCKWAVE_THICKNESS = 16, -- studs either side of the plane that the ring hits
+	SHOCKWAVE_BAND = 24, -- studs of ring width
+	-- Superlaser
 	SUPERLASER_CHARGE = 3, -- seconds of warning glow before it fires
 	SUPERLASER_WIDTH = 40, -- studs: ships this close to the beam's line are hit
+	-- Bombard
+	BOMBARD_DELAY = 2.6, -- seconds between the warning and the blast
+	BOMBARD_RADIUS = 45, -- studs: blast radius
+	BOMBARD_SPREAD = 150, -- studs: extra blasts land this far around raiders
 	-- A raider must deal this share of the boss's health to share the reward
 	-- (or still be flying when it falls).
 	MIN_DAMAGE_SHARE = 0.03,

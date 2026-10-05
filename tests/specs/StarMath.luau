@@ -136,5 +136,15 @@ return function(T, Loader)
 			T.near(StarMath.accrue(99, 2, 3, 100), 100)
 			T.near(StarMath.accrue(150, 2, 3, 100), 150)
 		end)
+
+		T.test("each star level adds more production than the last", function()
+			local lastGain = 0
+			for level = 2, 18 do
+				local gain = StarMath.levelMultiplier(level) - StarMath.levelMultiplier(level - 1)
+				T.truthy(gain > lastGain - 1e-9, `level {level}`)
+				lastGain = gain
+			end
+			T.equal(StarMath.levelMultiplier(1), 1)
+		end)
 	end)
 end
