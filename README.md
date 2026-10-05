@@ -31,6 +31,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 19. Roomier ISS, Saturn V raid beacon, Death Star raids in three difficulties | [Merged](docs/stage-19-iss-raids.md) |
 | 20. Polish: floating posture, Death Star overhaul, random asteroid groups, curved progression | [Merged](docs/stage-20-polish.md) |
 | 21. Vanity hangar and Showcase Dock, ship paint, 5-level upgrades, settings and music, solar flares, golden swarms | [Merged](docs/stage-21-hangar-paint-settings.md) |
+| 22. Hangar / Station travel buttons, Zero G Dodgeball minigame | [Merged](docs/stage-22-dodgeball.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

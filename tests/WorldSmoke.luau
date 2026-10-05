@@ -202,7 +202,7 @@ for _, name in WorldSystem.MARKERS do
 end
 local arrival = WorldSystem.getMarker("ArrivalSpawn")
 check(arrival ~= nil and arrival:IsA("SpawnLocation"), "ArrivalSpawn is a SpawnLocation")
-check(count(tagged.WarpPrompt) == 2, "ISS has 2 airlock warp prompts")
+check(count(tagged.WarpPrompt) == 3, "ISS has 2 airlock warp prompts and the Dodgeball portal")
 check(count(tagged.LaunchPrompt) == 0, "ISS has no hangar (raids replace the berths)")
 check(count(tagged.RoutePrompt) == 1, "ISS has a navigation route prompt")
 check(count(tagged.DockZone) == 0, "ISS has no docking zone")
@@ -242,7 +242,7 @@ for slot = 1, requireModule(shared.Config).World.MAX_PLAYERS do
 	check(facesRegion, `slot {slot}: station spawn faces into the region`)
 	table.insert(stations, { slot = slot, region = region, station = station })
 end
-check(count(tagged.WarpPrompt) == 2, "stations have no warp prompts (ships replace them)")
+check(count(tagged.WarpPrompt) == 3, "stations have no warp prompts (ships replace them)")
 check(count(tagged.LaunchPrompt) == 0, "stations have no launch consoles (HUD button)")
 check(count(tagged.RoutePrompt) == 1, "stations have no navigation consoles")
 check(count(tagged.TycoonPrompt) == 8, "every station has exactly one console (Collect)")
@@ -278,6 +278,28 @@ end
 check(count(tagged.DockZone) == 8, "every station has a docking zone")
 
 -- Raids: the beacon, a pad per difficulty and the boss build at the ISS.
+print("Dodgeball")
+local DodgeballBuilder = requireModule(server.World.DodgeballBuilder)
+local DodgeballMath = requireModule(shared.Logic.DodgeballMath)
+local warpsBefore = count(tagged.WarpPrompt)
+local arenaModel = DodgeballBuilder.build(roblox.Instance.new("Folder"))
+local blockCount = #DodgeballMath.blocks()
+check(count(tagged.DodgeBlock) == blockCount, `arena has {blockCount} tagged cover blocks`)
+local spawnsFound = 0
+for index = 1, requireModule(shared.Config).Dodgeball.SPAWN_COUNT do
+	if arenaModel:FindFirstChild(`Spawn{index}`) then
+		spawnsFound += 1
+	end
+end
+check(
+	spawnsFound == requireModule(shared.Config).Dodgeball.SPAWN_COUNT,
+	"arena has every spawn marker"
+)
+check(count(tagged.WarpPrompt) == warpsBefore + 1, "arena has an exit portal back to the ISS")
+local arenaParts = countParts(arenaModel)
+check(arenaParts <= 120, `arena has {arenaParts} parts (budget 120)`)
+check(#warnings == 0, `no arena warnings ({table.concat(warnings, "; ")})`)
+
 print("Raids")
 local RaidBuilder = requireModule(server.World.RaidBuilder)
 local Raids = requireModule(shared.Config).Raids

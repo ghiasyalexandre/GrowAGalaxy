@@ -31,7 +31,19 @@ local NavigationSystem = {}
 
 local lastWarp: { [Player]: number } = {}
 
-local function destination(target: string): CFrame?
+-- Destinations other systems add (e.g. the Dodgeball arena), by WarpTarget.
+local extraTargets: { [string]: (Player) -> CFrame? } = {}
+
+-- Lets another system own a WarpTarget: `where` picks the player's goal.
+function NavigationSystem.addTarget(name: string, where: (Player) -> CFrame?)
+	extraTargets[name] = where
+end
+
+local function destination(target: string, player: Player): CFrame?
+	local extra = extraTargets[target]
+	if extra then
+		return extra(player)
+	end
 	local markerName = MARKER_TARGETS[target]
 	local marker = markerName and WorldSystem.getMarker(markerName)
 	if marker == nil then
@@ -62,7 +74,7 @@ local function onTriggered(prompt: ProximityPrompt, player: Player)
 		return
 	end
 
-	local goal = destination(target)
+	local goal = destination(target, player)
 	if goal == nil then
 		return
 	end

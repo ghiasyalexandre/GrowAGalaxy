@@ -10,6 +10,7 @@ return {
 	Combat = require(script.Combat),
 	Daily = require(script.Daily),
 	Raids = require(script.Raids),
+	Dodgeball = require(script.Dodgeball),
 	Asteroids = require(script.Asteroids),
 	Materials = require(script.Materials),
 	Zones = require(script.Zones),

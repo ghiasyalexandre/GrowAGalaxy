@@ -295,6 +295,43 @@ function ConfigCheck.run(config: any): { string }
 		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
+	-- Zero G Dodgeball.
+	local dodge = config.Dodgeball
+	for _, name in
+		{
+			"BLOCK_COUNT",
+			"SPAWN_COUNT",
+			"SPEED_MULTIPLIER",
+			"LAUNCH_SPEED",
+			"LAUNCH_REACH",
+			"LAUNCH_TIME",
+			"THROW_COOLDOWN",
+			"BALL_SPEED",
+			"BALL_RADIUS",
+			"BALL_LIFETIME",
+			"OUT_TIME",
+			"KNOCKBACK",
+			"MEMBERSHIP_TICK",
+		}
+	do
+		local value = dodge[name]
+		if type(value) ~= "number" or value <= 0 then
+			fail(`Dodgeball: {name} must be a positive number`)
+		end
+	end
+	if dodge.BLOCK_SIZE[1] <= 0 or dodge.BLOCK_SIZE[2] < dodge.BLOCK_SIZE[1] then
+		fail("Dodgeball: BLOCK_SIZE must be a rising pair of positive sizes")
+	end
+	local bottom = dodge.CENTER.y - dodge.SIZE.y / 2
+	local top = dodge.CENTER.y + dodge.SIZE.y / 2
+	local clearOfField = top < -config.Asteroids.HEIGHT or bottom > config.Asteroids.HEIGHT
+	if
+		math.max(math.abs(bottom), math.abs(top)) > config.Movement.FLIGHT_BOUNDS_HEIGHT
+		or not clearOfField
+	then
+		fail("Dodgeball: the arena must be inside the flight area and clear of the asteroid field")
+	end
+
 	-- Combat (opt-in PvP).
 	local combat = config.Combat
 	for _, name in
