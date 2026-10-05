@@ -1,8 +1,9 @@
 --!strict
--- "Return to Station": moves a lost or stuck player to their own station, or
--- to the ISS arrival module if they have no station yet. A player flying their
--- ship has it stowed first; they can launch it again from any hangar. Cargo
--- lives on the profile, so nothing is lost or duplicated.
+-- The HUD's travel buttons (SuitRecover): "hangar" moves the player to their
+-- own station (the ISS arrival module if they have none yet), "station" to
+-- the ISS arrival module, where everyone spawns. A player flying their ship
+-- has it stowed first; they can launch it again from their hangar. Both share
+-- RECOVER_COOLDOWN.
 --
 -- Spacesuit movement itself runs on the client (SuitController); FlightGuard
 -- checks it.
@@ -25,10 +26,10 @@ local SuitSystem = {}
 local lastRecover: { [Player]: number } = {}
 local recoverLimit = RateLimiter.new(2, 0.5)
 
-local function destination(player: Player): (CFrame?, string)
-	local spawn = StationSystem.getSpawn(player)
+local function destination(player: Player, where: string): (CFrame?, string)
+	local spawn = if where == "hangar" then StationSystem.getSpawn(player) else nil
 	if spawn then
-		return spawn, "Back at your station."
+		return spawn, "Welcome back to your hangar."
 	end
 	local arrival = WorldSystem.getMarker("ArrivalSpawn")
 	if arrival then
@@ -37,20 +38,20 @@ local function destination(player: Player): (CFrame?, string)
 	return nil, ""
 end
 
-local function recover(player: Player)
+local function recover(player: Player, where: unknown)
+	if where ~= "hangar" and where ~= "station" then
+		return
+	end
 	if not recoverLimit.allow(player) or Teleport.rootOf(player) == nil then
 		return
 	end
 	local now = os.clock()
 	local ready = (lastRecover[player] or -math.huge) + Config.Movement.RECOVER_COOLDOWN
 	if now < ready then
-		Notify.send(
-			player,
-			`Return to Station is recharging. Try again in {math.ceil(ready - now)}s.`
-		)
+		Notify.send(player, `Travel is recharging. Try again in {math.ceil(ready - now)}s.`)
 		return
 	end
-	local goal, message = destination(player)
+	local goal, message = destination(player, where :: string)
 	if goal == nil then
 		return
 	end

@@ -81,7 +81,7 @@ local Movement = {
 
 	-- Interactions
 	LAUNCH_COOLDOWN = 3, -- seconds between ship launches per player
-	RECOVER_COOLDOWN = 15, -- seconds between Return to Station uses
+	RECOVER_COOLDOWN = 8, -- seconds between Hangar / Station travel button uses
 	BOARD_DISTANCE = 16,
 	-- When every ISS berth is taken, a ship parked there this long without its
 	-- pilot is stowed to make room. Its owner can launch it again.

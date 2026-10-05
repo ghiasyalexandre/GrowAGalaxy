@@ -73,6 +73,12 @@
         },
         "WorldEvent": {
           "$className": "RemoteEvent"
+        },
+        "DodgeballThrow": {
+          "$className": "RemoteEvent"
+        },
+        "DodgeballEvent": {
+          "$className": "RemoteEvent"
         }
       }
     },

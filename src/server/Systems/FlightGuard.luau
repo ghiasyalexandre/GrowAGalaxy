@@ -53,7 +53,12 @@ local function currentSubject(player: Player): Subject?
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if humanoid and humanoid.Health > 0 and root and root:IsA("BasePart") then
-		return { part = root, maxSpeed = M.SUIT_MAX_SPEED }
+		-- Zero G Dodgeball: faster suits, launches off blocks, knockbacks.
+		local D = Config.Dodgeball
+		local top = if player:GetAttribute("Dodgeball") == true
+			then math.max(M.SUIT_MAX_SPEED * D.SPEED_MULTIPLIER, D.LAUNCH_SPEED, D.KNOCKBACK)
+			else M.SUIT_MAX_SPEED
+		return { part = root, maxSpeed = top }
 	end
 	return nil
 end

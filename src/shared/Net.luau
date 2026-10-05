@@ -8,7 +8,7 @@
 --   RegionsChanged   RemoteEvent     server -> client  ({ Types.RegionInfo })
 --   ShipRequest      RemoteEvent     client -> server  (action: "exit" | "dock" | "launch")
 --   ShipState        RemoteEvent     server -> client  (ship: Model?, info: Types.ShipInfo?)
---   SuitRecover      RemoteEvent     client -> server  () "Return to Station"
+--   SuitRecover      RemoteEvent     client -> server  ("hangar" | "station") travel buttons
 --   BeamInput        RemoteEvent     client -> server  (action: "start" | "aim" | "stop",
 --                                                       aim: Vector3?) aim in ship space
 --   Notify           RemoteEvent     server -> client  (text: string)
@@ -30,6 +30,8 @@
 --   CustomizeRequest RemoteFunction  client -> server  ("paint" | "finish" | "showcase", shipId, value)
 --                                                     -> (ok: boolean, message: string)
 --   WorldEvent       RemoteEvent     server -> all     (kind: "swarm" | "swarmEnd", ...) world events
+--   DodgeballThrow   RemoteEvent     client -> server  (direction: Vector3) throw your sun-ball
+--   DodgeballEvent   RemoteEvent     server -> client  ("throw" | "end" | "hit", ...) Zero G Dodgeball
 --   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
 --                                                       "bossDown" | "result", ...) raid effects
 
@@ -56,6 +58,8 @@ local Net = {
 	RaidEvent = folder:WaitForChild("RaidEvent") :: RemoteEvent,
 	CustomizeRequest = folder:WaitForChild("CustomizeRequest") :: RemoteFunction,
 	WorldEvent = folder:WaitForChild("WorldEvent") :: RemoteEvent,
+	DodgeballThrow = folder:WaitForChild("DodgeballThrow") :: RemoteEvent,
+	DodgeballEvent = folder:WaitForChild("DodgeballEvent") :: RemoteEvent,
 }
 
 return Net

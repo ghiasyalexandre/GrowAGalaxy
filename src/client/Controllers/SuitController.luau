@@ -12,7 +12,8 @@
 -- So floating doesn't look frozen, R15 characters play their avatar's own
 -- swim animations (a slow tread while still or drifting, the stroke while
 -- thrusting), and every character floats leaning forward, like a swimmer,
--- leaning further into the direction it's moving. Floors push a floating
+-- leaning further into the direction it's moving. In Zero G Dodgeball the suit
+-- is faster, and launch() throws the player off a block (or back, when hit). Floors push a floating
 -- character up so its feet stay above them (they don't collide by themselves).
 -- Animations played on your own character replicate, so everyone sees them.
 
@@ -34,7 +35,7 @@ local MAX_FORCE = 20000
 local MAX_TORQUE = 100000
 local TURN_RESPONSIVENESS = 20
 -- A jump bigger than this between frames means the server moved us
--- (airlock, Return to Station, leaving a ship): stop drifting afterwards.
+-- (airlock, the travel buttons, leaving a ship): stop drifting afterwards.
 local TELEPORT_DISTANCE = 30
 local SETTLE_TIME = 0.4
 local INPUT_DEADZONE = 0.05
@@ -190,7 +191,37 @@ local function setup(character: Model)
 	}
 end
 
+-- Zero G Dodgeball (player attribute Dodgeball): the suit is faster there.
+local function speedMultiplier(): number
+	return if Players.LocalPlayer:GetAttribute("Dodgeball") == true
+		then Config.Dodgeball.SPEED_MULTIPLIER
+		else 1
+end
+
+local launchVelocity = Vector3.zero
+local launchUntil = 0
+
+-- Sends the floating player off at `velocity` for `seconds`, overriding
+-- their own thrust (Dodgeball launches off blocks and knockbacks); after
+-- that they slow back down to their normal top speed.
+function SuitController.launch(velocity: Vector3, seconds: number)
+	launchVelocity = velocity
+	launchUntil = os.clock() + seconds
+end
+
+-- Whether the suit is floating (not seated, alive).
+function SuitController.floating(): boolean
+	return active
+end
+
 local function targetVelocity(current: Vector3, position: Vector3, dt: number): Vector3
+	-- A launch or knockback carries you for a moment, whatever you press.
+	if os.clock() < launchUntil then
+		return launchVelocity
+	end
+	local boost = speedMultiplier()
+	local topSpeed = M.SUIT_MAX_SPEED * boost
+	local acceleration = M.SUIT_ACCELERATION * boost
 	if os.clock() < settleUntil then
 		return Vector3.zero
 	end
@@ -198,16 +229,15 @@ local function targetVelocity(current: Vector3, position: Vector3, dt: number): 
 	local input = Input.moveVector()
 	local velocity: Vector3
 	if Input.isHeld("Brake") then
-		velocity = FlightMath.step(current, Vector3.zero, M.SUIT_ACCELERATION, M.SUIT_BRAKING, dt)
+		velocity = FlightMath.step(current, Vector3.zero, acceleration, M.SUIT_BRAKING, dt)
 	elseif input.Magnitude > INPUT_DEADZONE then
-		local target = FlightMath.suitTarget(input, camera.CFrame, M.SUIT_MAX_SPEED)
-		velocity = FlightMath.step(current, target, M.SUIT_ACCELERATION, M.SUIT_BRAKING, dt)
+		local target = FlightMath.suitTarget(input, camera.CFrame, topSpeed)
+		velocity = FlightMath.step(current, target, acceleration, M.SUIT_BRAKING, dt)
 	elseif ClientState.stabilization then
-		velocity =
-			FlightMath.step(current, Vector3.zero, M.SUIT_ACCELERATION, M.SUIT_STABILIZE_DRAG, dt)
-	elseif current.Magnitude > M.SUIT_MAX_SPEED then
+		velocity = FlightMath.step(current, Vector3.zero, acceleration, M.SUIT_STABILIZE_DRAG, dt)
+	elseif current.Magnitude > topSpeed then
 		-- Drifting, but never faster than the suit can go (after a bump).
-		velocity = FlightMath.step(current, current.Unit * M.SUIT_MAX_SPEED, 0, M.SUIT_BRAKING, dt)
+		velocity = FlightMath.step(current, current.Unit * topSpeed, 0, M.SUIT_BRAKING, dt)
 	else
 		velocity = current
 	end
@@ -290,7 +320,7 @@ local function step(dt: number)
 	if flat.Magnitude > 0.1 then
 		facing = CFrame.lookAt(Vector3.zero, flat.Unit)
 	end
-	local relative = facing:VectorToObjectSpace(velocity) / M.SUIT_MAX_SPEED
+	local relative = facing:VectorToObjectSpace(velocity) / (M.SUIT_MAX_SPEED * speedMultiplier())
 	local ahead = math.clamp(-relative.Z, -1, 1)
 	-- Always leaning forward a little; more the faster you go ahead, less
 	-- (down to upright) going backwards.

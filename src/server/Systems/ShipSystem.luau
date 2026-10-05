@@ -15,7 +15,7 @@
 --           pilot out beside it.
 --   Dock    ShipRequest "dock", inside the player's own docking zone below
 --           DOCK_MAX_SPEED, parks the ship at their berth.
---   Stow    Leaving the game or Return to Station removes the ship.
+--   Stow    Leaving the game or a travel button removes the ship.
 --   Destroy PvP (CombatSystem) blows the ship up: the pilot floats free,
 --           every client draws the explosion (ShipDestroyed), and the
 --           owner can relaunch after Config.Combat.RELAUNCH_DELAY.
@@ -533,7 +533,7 @@ function ShipSystem.shipOf(part: Instance): (Player?, Model?, boolean)
 	return ship.owner, ship.model, ship.piloting
 end
 
--- Removes the player's ship, unseating them first. Used by Return to Station.
+-- Removes the player's ship, unseating them first. Used by the travel buttons.
 function ShipSystem.stow(player: Player): boolean
 	local ship = ships[player]
 	if ship == nil then

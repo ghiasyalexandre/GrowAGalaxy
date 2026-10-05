@@ -10,7 +10,7 @@
 --
 -- Interior, one module per area: Observation Cupola, Arrival (spawn),
 -- Star Lounge (galaxy hologram, couches), Navigation (route to your
--- station), Zero-G Playground (bouncy glowing balls to push around, floating
+-- station), the Zero G Dodgeball portal (to the arena, DodgeballSystem; floating
 -- hoops), Ship Showroom (ship models turning on pads) and the Raid Airlock.
 -- Gravity is off, so players float; floors give them something to push on.
 --
@@ -54,7 +54,7 @@ local MODULES: { ModuleDef } = {
 	{ id = "Arrival", label = "Arrival", length = 44, trim = "#4FC3F7" },
 	{ id = "Lounge", label = "Star Lounge", length = 40, trim = "#B06BFF" },
 	{ id = "Navigation", label = "Navigation", length = 32, trim = "#4FC3F7" },
-	{ id = "Playground", label = "Zero-G Playground", length = 52, trim = "#FF5AA0" },
+	{ id = "Playground", label = "Zero G Dodgeball", length = 52, trim = "#FFB020" },
 	{ id = "Showroom", label = "Ship Showroom", length = 48, trim = "#FFD36B" },
 	{ id = "RaidAirlock", label = "Raid Airlock", length = 32, trim = "#FF4A4A" },
 }
@@ -282,33 +282,37 @@ local function lounge(parent: Instance, span: Span)
 end
 
 local function playground(parent: Instance, span: Span)
-	-- Floating hoops to fly through.
-	for i, x in { span.center - 16, span.center, span.center + 16 } do
-		hoop(parent, Vector3.new(x, 1 + (i % 2) * 4, (i - 2) * 5), 4.5, BALL_COLORS[i])
-	end
-	-- Bouncy glowing balls, free to drift and be pushed around (zero g).
-	for i = 1, 10 do
-		local ball = Instance.new("Part")
-		ball.Name = "BounceBall"
-		ball.Shape = Enum.PartType.Ball
-		ball.Size = Vector3.one * (2.5 + (i % 3))
-		ball.Material = Enum.Material.Neon
-		ball.Color = Color3.fromHex(BALL_COLORS[(i - 1) % #BALL_COLORS + 1])
-		ball.CFrame =
-			CFrame.new(span.center - 20 + i * 4, FLOOR_Y + 4 + (i % 4) * 2, ((i % 5) - 2) * 3)
-		ball.CustomPhysicalProperties = PhysicalProperties.new(0.15, 0.1, 0.95, 1, 1)
-		ball.CastShadow = false
-		ball.Anchored = false
-		ball.Parent = parent
+	-- The Zero G Dodgeball portal: a big glowing ring across the module with
+	-- a shimmering sun-coloured field inside; its prompt sends you to the
+	-- arena (DodgeballSystem). Small hoops float around it for show.
+	local center = Vector3.new(span.center, FLOOR_Y + 9, 0)
+	hoop(parent, center, 8, "#FFB020")
+	hoop(parent, center, 9.2, "#FF6A3D")
+	local field = Build.part({
+		name = "PortalField",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(0.4, 15.5, 15.5),
+		cframe = CFrame.new(center),
+		color = "#FFB020",
+		material = Enum.Material.ForceField,
+		transparency = 0.1,
+		collide = false,
+		parent = parent,
+	})
+	field.CastShadow = false
+	lamp(field, "#FFAA3C", 30, 3)
+	Build.prompt(field, { action = "Play Zero G Dodgeball", object = "Portal", warp = "Dodgeball" })
+	for i, x in { span.center - 18, span.center + 18 } do
+		hoop(parent, Vector3.new(x, 2 + i * 2, (i - 1.5) * 10), 3, BALL_COLORS[i])
 	end
 	Build.sign({
 		name = "PlaygroundSign",
-		text = "Zero-G Playground\nPush the balls, fly through the hoops!",
-		size = Vector3.new(18, 5, 0.4),
+		text = "Zero G Dodgeball\nStep through the portal: throw suns, launch off blocks!",
+		size = Vector3.new(20, 5, 0.4),
 		cframe = CFrame.new(span.center, 2, -13.5),
 		faces = { Enum.NormalId.Back },
 		parent = parent,
-		textColor = "#FF5AA0",
+		textColor = "#FFB020",
 	})
 end
 

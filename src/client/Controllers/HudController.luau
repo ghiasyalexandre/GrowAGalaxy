@@ -1,7 +1,7 @@
 --!strict
 -- Heads-up display: Stardust and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Station button (bottom left), the Settings and PvP buttons and the Star
+-- Hangar and Station travel buttons (bottom left), the Settings and PvP buttons and the Star
 -- Shop, Shipyard and Store buttons stacked under the wallet, and
 -- while flying a reticle, the laser's heat gauge, the boost tank and, while
 -- the beam extracts an asteroid, the extraction bar.
@@ -56,7 +56,8 @@ local sectorLabel: TextLabel
 local hintLabel: TextLabel
 local readoutLabel: TextLabel
 local reticle: TextLabel
-local recoverButton: TextButton
+local hangarButton: TextButton
+local stationButton: TextButton
 local effectsButton: TextButton
 local shipyardButton: TextButton
 local storeButton: TextButton
@@ -373,25 +374,32 @@ local function build()
 		TextStrokeTransparency = 0.5,
 	})
 
-	recoverButton = Instance.new("TextButton")
-	recoverButton.Name = "ReturnToStation"
-	recoverButton.AnchorPoint = Vector2.new(0, 1)
-	recoverButton.Position = UDim2.new(0, 16, 1, -24)
-	recoverButton.Size = UDim2.new(0, 190, 0, 40)
-	recoverButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
-	recoverButton.BackgroundTransparency = 0.2
-	recoverButton.Font = Enum.Font.GothamBold
-	recoverButton.TextScaled = true
-	recoverButton.TextColor3 = Color3.fromRGB(255, 214, 120)
-	recoverButton.Text = "Return to Station"
-	recoverButton.Parent = gui
-	corner(recoverButton, 8)
-	local padding = Instance.new("UIPadding")
-	padding.PaddingTop = UDim.new(0, 8)
-	padding.PaddingBottom = UDim.new(0, 8)
-	padding.Parent = recoverButton
-	dressButton(recoverButton, "ButtonBlue", "Station")
-	Theme.hover(recoverButton)
+	-- Travel: Hangar takes you to your own station (your tycoon), Station
+	-- to the ISS, where everyone spawns.
+	local function travelButton(name: string, x: number, sprite: string, icon: string): TextButton
+		local button = Instance.new("TextButton")
+		button.Name = name
+		button.AnchorPoint = Vector2.new(0, 1)
+		button.Position = UDim2.new(0, x, 1, -24)
+		button.Size = UDim2.new(0, 130, 0, 40)
+		button.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+		button.BackgroundTransparency = 0.2
+		button.Font = Enum.Font.GothamBold
+		button.TextScaled = true
+		button.TextColor3 = Color3.fromRGB(255, 214, 120)
+		button.Text = name
+		button.Parent = gui
+		corner(button, 8)
+		local padding = Instance.new("UIPadding")
+		padding.PaddingTop = UDim.new(0, 8)
+		padding.PaddingBottom = UDim.new(0, 8)
+		padding.Parent = button
+		dressButton(button, sprite, icon)
+		Theme.hover(button)
+		return button
+	end
+	hangarButton = travelButton("Hangar", 16, "ButtonBlue", "Station")
+	stationButton = travelButton("Station", 152, "ButtonPurple", "Earth")
 
 	-- Settings (effects, sound, music, boundary box) under the wallet.
 	effectsButton = Instance.new("TextButton")
@@ -529,7 +537,7 @@ local function build()
 	launchButton = Instance.new("TextButton")
 	launchButton.Name = "LaunchShip"
 	launchButton.AnchorPoint = Vector2.new(0, 1)
-	launchButton.Position = UDim2.new(0, 214, 1, -24)
+	launchButton.Position = UDim2.new(0, 288, 1, -24)
 	launchButton.Size = UDim2.new(0, 190, 0, 40)
 	launchButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	launchButton.AutoButtonColor = false
@@ -877,8 +885,11 @@ function HudController.init()
 	pvpButton.Activated:Connect(function()
 		ClientState.setPvp(player:GetAttribute("PvP") ~= true)
 	end)
-	recoverButton.Activated:Connect(function()
-		Net.SuitRecover:FireServer()
+	hangarButton.Activated:Connect(function()
+		Net.SuitRecover:FireServer("hangar")
+	end)
+	stationButton.Activated:Connect(function()
+		Net.SuitRecover:FireServer("station")
 	end)
 	shopButton.Activated:Connect(function()
 		ClientState.openStarShop:Fire()
