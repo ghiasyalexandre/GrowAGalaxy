@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 22 merged into `main`).
+Last updated: 2026-10-05 (stage 23 merged into `main`).
 
 ## Status by stage
 
@@ -28,7 +28,8 @@ Last updated: 2026-10-05 (stage 22 merged into `main`).
 | 20. Floating lean, floor clearance and suit thruster sound (default walking sounds muted), showroom spin fix, Death Star overhaul (moving weak point, drones, shockwaves, Hard bombardment, enrage), random asteroid groups, curved progression | Merged | Passing (166 tests) | **Not yet** |
 | 21. Vanity hangar + Showcase Dock, ship paint and finish, 5-level equipment, Settings panel and music, vertical shop buttons, solar flares, golden swarms, steeper whole-number progression, closer stars, star panel and orbit hardening | Merged | Passing (168 tests + orbit smoke) | **Not yet** |
 | 22. Hangar / Station travel buttons, Zero G Dodgeball arena (portal, cover blocks, block launches, sun-balls) | Merged | Passing (173 tests) | **Not yet** |
-| 23+. Save hardening, tuning | Not started | | |
+| 23. Hidden pilot, laser/boost colours (paint removed), ship rockets, top flight HUD, controls-hint setting, Stardust trails, tougher richer golden asteroids | Merged | Passing (175 tests) | **Not yet** |
+| 24+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 

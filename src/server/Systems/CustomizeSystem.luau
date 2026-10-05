@@ -1,13 +1,13 @@
 --!strict
--- Ship paint jobs and the Showcase Dock (Config.Paint), from the Shipyard's
--- Paint tab through CustomizeRequest:
+-- Ship colours and the Showcase Dock (Config.Paint), from the Shipyard's
+-- Colors tab through CustomizeRequest:
 --
---   ("paint", shipId, colour | nil)     a swatch colour, or nil for factory
---   ("finish", shipId, finishId | nil)  a finish, or nil for factory
+--   ("laser", shipId, colour | nil)     the laser's colour, or nil for standard
+--   ("boost", shipId, colour | nil)     the engines' colour, or nil for standard
 --   ("showcase", shipId, on: boolean)   put an owned ship on show, or not
 --
 -- Returns (ok, message). DataSystem validates ownership and values; a spawned
--- ship and the dock's displays are repainted at once.
+-- ship and the dock's displays change colour at once.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -37,13 +37,13 @@ local function handle(
 		return false, "You don't own that ship."
 	end
 	local name = Config.Ships.BY_ID[shipId].displayName
-	if action == "paint" and (value == nil or type(value) == "string") then
-		if not DataSystem.setShipLook(player, shipId, value :: string?, loadout.finish) then
+	if action == "laser" and (value == nil or type(value) == "string") then
+		if not DataSystem.setShipLook(player, shipId, value :: string?, loadout.boostColor) then
 			return false, "That colour isn't on offer."
 		end
-	elseif action == "finish" and (value == nil or type(value) == "string") then
-		if not DataSystem.setShipLook(player, shipId, loadout.paint, value :: string?) then
-			return false, "That finish isn't on offer."
+	elseif action == "boost" and (value == nil or type(value) == "string") then
+		if not DataSystem.setShipLook(player, shipId, loadout.laserColor, value :: string?) then
+			return false, "That colour isn't on offer."
 		end
 	elseif action == "showcase" and type(value) == "boolean" then
 		if not DataSystem.setShowcase(player, shipId, value) then
@@ -65,7 +65,7 @@ local function handle(
 	if table.find(profile.showcase, shipId) then
 		HangarSystem.refreshShowcase(player)
 	end
-	return true, `{name} repainted.`
+	return true, `{name}'s colours changed.`
 end
 
 function CustomizeSystem.start()

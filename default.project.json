@@ -79,6 +79,12 @@
         },
         "DodgeballEvent": {
           "$className": "RemoteEvent"
+        },
+        "RocketRequest": {
+          "$className": "RemoteEvent"
+        },
+        "RocketEvent": {
+          "$className": "RemoteEvent"
         }
       }
     },

@@ -25,7 +25,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local ShipLook = require(ReplicatedStorage.Shared.Util.ShipLook)
+local Types = require(ReplicatedStorage.Shared.Types)
 local ShipModel = require(ReplicatedStorage.Shared.Util.ShipModel)
 
 local COLORS = Config.World.COLORS
@@ -293,14 +293,35 @@ ShipBuilder.BOARD_TAG = BOARD_TAG
 -- must be clear of other ships and players before a ship appears there.
 ShipBuilder.BERTH_BOX = Vector3.new(20, 14, 24)
 
--- Builds a parked ship with its hull centred on `cframe`, wearing `look`
--- (its paint job, Util/ShipLook; factory colours when nil). The hull is
--- anchored; ShipSystem unanchors it when the owner boards.
+-- A ship's laser and boost colours (Config.Paint; nil = standard): the
+-- laser's in the BeamColor attribute (every client's beam and rocket blast),
+-- the boost's in BoostColor (engine glow) and on its exhaust and wing trails.
+function ShipBuilder.applyColors(model: Model, look: Types.ShipLook, accent: string)
+	model:SetAttribute("BeamColor", look.laserColor)
+	model:SetAttribute("BoostColor", look.boostColor)
+	local boost = if look.boostColor then Color3.fromHex(look.boostColor) else nil
+	for _, item in model:GetDescendants() do
+		if item:IsA("ParticleEmitter") and item.Name == "Exhaust" then
+			item.Color = if boost
+				then ColorSequence.new(boost:Lerp(Color3.new(1, 1, 1), 0.6), boost)
+				else ColorSequence.new(
+					Color3.fromHex("#D6F4FF"),
+					Color3.fromHex(Config.Paint.DEFAULT_BOOST)
+				)
+		elseif item:IsA("Trail") and item.Name == "WingTrail" then
+			item.Color = ColorSequence.new(boost or Color3.fromHex(accent))
+		end
+	end
+end
+
+-- Builds a parked ship with its hull centred on `cframe`, in its colours
+-- (`look`; standard when nil). The hull is anchored; ShipSystem unanchors it
+-- when the owner boards.
 function ShipBuilder.build(
 	shipId: string,
 	cframe: CFrame,
 	accent: string,
-	look: ShipLook.Look?
+	look: Types.ShipLook?
 ): Model
 	local def = Config.Ships.BY_ID[shipId] or Config.Ships.BY_ID[Config.Ships.STARTER_SHIP]
 	local paint = Color3.fromHex(def.paint)
@@ -415,11 +436,9 @@ function ShipBuilder.build(
 
 	model:SetAttribute("ShipId", def.id)
 	-- Each ship type has its own paint: recolour the plain hull parts.
-	local paintParts: { BasePart } = {}
 	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") and part.Color == plain then
 			part.Color = paint
-			table.insert(paintParts, part)
 		end
 	end
 
@@ -435,16 +454,13 @@ function ShipBuilder.build(
 				part.Massless = true
 				if not ShipModel.textured(part) then
 					part.Color = paint
-					table.insert(paintParts, part)
 				end
 				weld(hull, part)
 			end
 		end
 		skin.Parent = model
 	end
-	ShipLook.mark(model, paintParts)
-	ShipLook.apply(model, look or {})
-	CollectionService:AddTag(model, ShipLook.TAG)
+	ShipBuilder.applyColors(model, look or {}, accent)
 	return model
 end
 

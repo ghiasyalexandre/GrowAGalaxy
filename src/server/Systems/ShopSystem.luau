@@ -6,6 +6,8 @@
 -- ShopRequest (RemoteFunction, client -> server), returns (ok, message):
 --   "buyShip", shipId          buy an earnable ship (fitted with your equipment)
 --   "selectShip", shipId       make an owned ship the one your hangars launch
+--   "buyTrail", trailId        buy a trail (Config.Trails) and equip it
+--   "equipTrail", trailId|""   equip an owned trail, or none
 --   "buyEquipment", itemId     buy an item (fitted to every ship you own), or
 --                              raise one you own a level, up to MAX_LEVEL
 --   "expand"                   buy the next galaxy expansion
@@ -114,6 +116,26 @@ local function onRequest(player: Player, action: unknown, id: unknown): (boolean
 		return selectShip(player, id)
 	elseif action == "buyEquipment" then
 		return buyEquipment(player, profile, id)
+	elseif action == "buyTrail" then
+		local def = Config.Trails.BY_ID[id]
+		if def == nil then
+			return false, "That trail isn't for sale."
+		elseif profile.ownedTrails[id] then
+			return false, "You already own that trail."
+		elseif not DataSystem.spendStardust(player, def.cost) then
+			return false, `You need {def.cost} {CURRENCY} for that.`
+		end
+		DataSystem.grantTrail(player, id)
+		DataSystem.equipTrail(player, id)
+		return true,
+			`{def.displayName} equipped: x{def.multiplier} Stardust from everything you earn.`
+	elseif action == "equipTrail" then
+		local wanted = if id == "" then nil else id
+		if not DataSystem.equipTrail(player, wanted) then
+			return false, "You don't own that trail."
+		end
+		local def = if wanted then Config.Trails.BY_ID[wanted] else nil
+		return true, if def then `{def.displayName} equipped.` else "Trail removed."
 	end
 	return false, "Invalid request."
 end

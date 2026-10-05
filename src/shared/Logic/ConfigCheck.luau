@@ -295,6 +295,36 @@ function ConfigCheck.run(config: any): { string }
 		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
+	-- Trails: known colours, multipliers above 1.
+	for _, id in config.Trails.ORDER do
+		local def = config.Trails.BY_ID[id]
+		if
+			def == nil
+			or def.id ~= id
+			or def.multiplier <= 1
+			or def.cost <= 0
+			or #def.colors < 1
+		then
+			fail(`Trail {id}: needs a multiplier above 1, a price and colours`)
+		end
+	end
+	-- Rockets.
+	local rockets = config.Rockets
+	for _, name in
+		{ "COOLDOWN", "SPEED", "LIFETIME", "HIT_RADIUS", "BLAST_RADIUS", "POWER", "MAX_AIM_ANGLE" }
+	do
+		local value = rockets[name]
+		if type(value) ~= "number" or value <= 0 then
+			fail(`Rockets: {name} must be a positive number`)
+		end
+	end
+	-- Ship colours.
+	for _, hex in config.Paint.SWATCHES do
+		if type(hex) ~= "string" or string.match(hex, "^#%x%x%x%x%x%x$") == nil then
+			fail(`Paint: {hex} is not a #RRGGBB colour`)
+		end
+	end
+
 	-- Zero G Dodgeball.
 	local dodge = config.Dodgeball
 	for _, name in
@@ -462,6 +492,7 @@ function ConfigCheck.run(config: any): { string }
 		asteroids.SWARM_INTERVAL <= asteroids.SWARM_DURATION
 		or asteroids.SWARM_COUNT < 1
 		or asteroids.SWARM_REWARD < 1
+		or asteroids.SWARM_DURABILITY < 1
 		or asteroids.SWARM_SPREAD <= 0
 	then
 		fail(

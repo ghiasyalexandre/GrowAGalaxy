@@ -689,6 +689,25 @@ local function tickQueues(now: number)
 	end
 end
 
+local damageBoss: (raid: Raid, player: Player, damage: number) -> ()
+
+-- A rocket blast (RocketSystem) in the player's raid: damages the boss if
+-- the blast reaches its hull, and pops any drones it catches.
+function RaidSystem.blast(player: Player, center: Vector3, radius: number, power: number)
+	local raid = raidOf(player)
+	if raid == nil or raid.over then
+		return
+	end
+	for _, drone in raid.drones do
+		if drone.part.Parent and (drone.part.Position - center).Magnitude <= radius then
+			popDrone(drone)
+		end
+	end
+	if (raid.body.Position - center).Magnitude <= radius + R.BOSS_SIZE / 2 then
+		damageBoss(raid, player, RaidMath.bossDamage(power, false))
+	end
+end
+
 -- Called by BeamSystem for each shot fired.
 function RaidSystem.shot(player: Player, model: Model, info: Types.ShipInfo, aim: Vector3)
 	local raid = raidOf(player)
@@ -717,7 +736,12 @@ function RaidSystem.shot(player: Player, model: Model, info: Types.ShipInfo, aim
 		end
 		return
 	end
-	local damage = RaidMath.bossDamage(info.beamPower, result.Instance == raid.weak)
+	damageBoss(raid, player, RaidMath.bossDamage(info.beamPower, result.Instance == raid.weak))
+end
+
+-- Takes `damage` off the boss for `player`: the win, and the weak point's
+-- jump every WEAK_POINT_MOVE_SHARE.
+damageBoss = function(raid: Raid, player: Player, damage: number)
 	raid.health = math.max(raid.health - damage, 0)
 	raid.raiders[player].damage += damage
 	raid.model:SetAttribute("Health", math.floor(raid.health / raid.max * 1000) / 1000)

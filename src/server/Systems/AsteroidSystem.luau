@@ -176,10 +176,12 @@ end
 local swarmElapsed = 0
 local swarm: { centre: Vector3, endsAt: number, ids: { number } }? = nil
 
--- A golden copy of a size: worth SWARM_REWARD x, named for the banner.
+-- A golden copy of a size: worth SWARM_REWARD x, SWARM_DURABILITY x as
+-- tough, named for the banner.
 local function golden(size: AsteroidConfig.SizeDef): AsteroidConfig.SizeDef
 	local copy = table.clone(size)
 	copy.reward = math.floor(size.reward * A.SWARM_REWARD + 0.5)
+	copy.durability = math.floor(size.durability * A.SWARM_DURABILITY + 0.5)
 	copy.displayName = `Golden {string.lower(size.displayName)}`
 	return copy
 end
@@ -341,6 +343,21 @@ function AsteroidSystem.breakAsteroid(asteroid: Asteroid): boolean
 		model:Destroy()
 	end)
 	return true
+end
+
+-- Asteroids that can still be mined whose rock reaches within `radius` of
+-- `center` (rocket blasts).
+function AsteroidSystem.within(center: Vector3, radius: number): { Asteroid }
+	local found: { Asteroid } = {}
+	for _, asteroid in asteroids do
+		if
+			not asteroid.broken
+			and (asteroid.position - center).Magnitude <= radius + asteroid.extent
+		then
+			table.insert(found, asteroid)
+		end
+	end
+	return found
 end
 
 function AsteroidSystem.getFolder(): Folder

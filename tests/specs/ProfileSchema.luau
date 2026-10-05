@@ -226,35 +226,47 @@ return function(T, Loader)
 		end)
 
 		T.test(
-			"v10: paint jobs, showcase and the boundary setting are filled in and checked",
+			"v11: ship colours, trails, showcase and settings are filled in and checked",
 			function()
 				local data = ProfileSchema.default()
-				data.schemaVersion = 9
+				data.schemaVersion = 10
 				data.showcase = nil :: any
+				data.ownedTrails = nil :: any
 				data.settings.showBounds = nil :: any
+				data.settings.showControls = nil :: any
 				data.ownedShips.RedFighter = true
 				data.loadouts.RedFighter = {
 					equipment = {},
-					paint = Config.Paint.SWATCHES[2],
+					paint = "#9AA3B0",
 					finish = "Metallic",
+					laserColor = Config.Paint.SWATCHES[2],
 				} :: any
 				data.loadouts[Config.Ships.STARTER_SHIP] =
-					{ equipment = {}, paint = "#123456", finish = "Chrome" } :: any
+					{ equipment = {}, laserColor = "#123456", boostColor = 7 } :: any
+				data.trail = "CometDust"
 				T.truthy(ProfileSchema.normalize(data))
-				T.equal(data.schemaVersion, 10)
+				T.equal(data.schemaVersion, 11)
 				T.equal(#data.showcase, 0)
 				T.equal(data.settings.showBounds, true)
-				T.equal(data.loadouts.RedFighter.paint, Config.Paint.SWATCHES[2])
-				T.equal(data.loadouts.RedFighter.finish, "Metallic")
+				T.equal(data.settings.showControls, true)
+				T.equal(data.trail, nil, "a trail that isn't owned can't be equipped")
+				T.equal(data.loadouts.RedFighter.laserColor, Config.Paint.SWATCHES[2])
+				T.equal((data.loadouts.RedFighter :: any).paint, nil, "old paint jobs are dropped")
+				T.equal((data.loadouts.RedFighter :: any).finish, nil)
 				T.equal(
-					data.loadouts[Config.Ships.STARTER_SHIP].paint,
+					data.loadouts[Config.Ships.STARTER_SHIP].laserColor,
 					nil,
 					"colours outside the swatches are dropped"
 				)
+				T.equal(data.loadouts[Config.Ships.STARTER_SHIP].boostColor, nil)
+
+				data.ownedTrails = { CometDust = true }
+				data.trail = "CometDust"
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(data.trail, "CometDust")
 				T.equal(
-					data.loadouts[Config.Ships.STARTER_SHIP].finish,
-					nil,
-					"unknown finishes are dropped"
+					ProfileSchema.trailMultiplier(data),
+					Config.Trails.BY_ID.CometDust.multiplier
 				)
 
 				data.showcase =

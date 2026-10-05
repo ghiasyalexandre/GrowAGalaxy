@@ -101,6 +101,13 @@ local BINDINGS: { [string]: Binding } = {
 		modes = { ship = true },
 		touch = true,
 	},
+	Rocket = {
+		keys = { Enum.KeyCode.Q, Enum.KeyCode.ButtonB },
+		title = "Rocket",
+		hold = false,
+		modes = { ship = true },
+		touch = true,
+	},
 	-- Tap: over-the-shoulder camera. Hold (flying): free the mouse cursor.
 	FreeCursor = {
 		keys = { Enum.KeyCode.LeftAlt, Enum.KeyCode.RightAlt, Enum.KeyCode.DPadRight },
@@ -113,7 +120,8 @@ local BINDINGS: { [string]: Binding } = {
 }
 
 -- Bind order, so touch buttons always appear in the same places.
-local ORDER = { "Up", "Down", "Brake", "Beam", "Boost", "Stabilize", "Exit", "Dock", "FreeCursor" }
+local ORDER =
+	{ "Up", "Down", "Brake", "Beam", "Boost", "Rocket", "Stabilize", "Exit", "Dock", "FreeCursor" }
 
 -- Above the default character controls, so Space and A don't also jump.
 local PRIORITY = Enum.ContextActionPriority.High.Value
@@ -127,9 +135,9 @@ local HINTS: { [Mode]: { [Device]: string } } = {
 		touch = "Thumbstick to float  ·  Up, Down and Brake buttons",
 	},
 	ship = {
-		keyboard = "Mouse steer  ·  Click laser  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt shoulder view (hold: cursor)",
-		gamepad = "Right stick steer  ·  RT laser  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit  ·  D-pad right shoulder",
-		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser to fire  ·  Boost  ·  Exit to leave",
+		keyboard = "Mouse steer  ·  Click laser  ·  Q rocket  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt shoulder view (hold: cursor)",
+		gamepad = "Right stick steer  ·  RT laser  ·  B rocket  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit  ·  D-pad right shoulder",
+		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser to fire  ·  Rocket  ·  Boost  ·  Exit to leave",
 	},
 }
 

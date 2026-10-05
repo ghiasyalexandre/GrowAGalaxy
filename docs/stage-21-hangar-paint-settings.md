@@ -19,6 +19,8 @@ Four new red pads, each with its building away from the pad:
 
 ## Ship paint and finish (Shipyard, new Paint tab)
 
+> Replaced in [stage 23](stage-23-rockets-trails.md) by laser and boost colours.
+
 - **Ship:** pick one of your owned ships. A big turning preview shows it in its current paint
   job.
 - **Colour:** one of 16 swatches, or **F** for the factory colours.
