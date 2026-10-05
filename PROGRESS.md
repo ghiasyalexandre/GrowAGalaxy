@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 25 merged into `main`).
+Last updated: 2026-10-05 (stage 26 merged into `main`).
 
 ## Status by stage
 
@@ -31,7 +31,8 @@ Last updated: 2026-10-05 (stage 25 merged into `main`).
 | 23. Hidden pilot, laser/boost colours (paint removed), ship rockets, top flight HUD, controls-hint setting, Stardust trails, tougher richer golden asteroids | Merged | Passing (175 tests) | **Not yet** |
 | 24. Planet levels 1-5 (x3 income, slightly bigger, moons), planet atmospheres and effects, pricier expansions | Merged | Passing (177 tests) | **Not yet** |
 | 25. Live Roblox products connected (3 passes, 2 developer products), Black Hole badge, premium price tag | Merged | Passing (178 tests) | **Not yet** (no live purchase tested) |
-| 26+. Save hardening, tuning | Not started | | |
+| 26. Stardust leaderboard store (OrderedDataStore `StardustLeaderboard`, scope `global`, units Stardust; current balance) | Merged | Passing (178 tests) | **Not yet** |
+| 27+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 
