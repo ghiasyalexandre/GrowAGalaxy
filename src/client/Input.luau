@@ -5,9 +5,11 @@
 --
 --   moveVector()    x = right, y = up, z = forward, each in [-1, 1]
 --   isHeld(name)    "Up", "Down", "Brake", "Beam", "Boost", "FreeCursor"
+--                   (FreeCursor only once Alt is held past ALT_TAP_TIME)
 --   lookDelta(dt)   steering in radians since the last call (x = yaw right,
 --                   y = pitch down). Ship mode only.
---   pressed         Signal fired with "Stabilize", "Exit" or "Dock"
+--   pressed         Signal fired with "Stabilize", "Exit", "Dock" or "Shoulder"
+--                   (a quick tap of Alt or D-pad right)
 --   setMode(mode)   "suit" or "ship": which actions are bound
 --   device()        "keyboard", "gamepad" or "touch", the last one used
 --   hint(mode)      one-line control summary for the HUD
@@ -36,6 +38,8 @@ type Binding = {
 	hold: boolean,
 	modes: { [Mode]: boolean },
 	touch: boolean,
+	-- A hold binding released quickly fires this action instead.
+	tap: string?,
 }
 
 local BOTH = { suit = true, ship = true }
@@ -97,12 +101,14 @@ local BINDINGS: { [string]: Binding } = {
 		modes = { ship = true },
 		touch = true,
 	},
+	-- Tap: over-the-shoulder camera. Hold (flying): free the mouse cursor.
 	FreeCursor = {
-		keys = { Enum.KeyCode.LeftAlt },
+		keys = { Enum.KeyCode.LeftAlt, Enum.KeyCode.RightAlt, Enum.KeyCode.DPadRight },
 		title = "Cursor",
 		hold = true,
-		modes = { ship = true },
+		modes = BOTH,
 		touch = false,
+		tap = "Shoulder",
 	},
 }
 
@@ -116,13 +122,13 @@ local STICK_DEADZONE = 0.15
 
 local HINTS: { [Mode]: { [Device]: string } } = {
 	suit = {
-		keyboard = "WASD float  ·  Space up  ·  Ctrl down  ·  X brake  ·  Z stabilizer",
-		gamepad = "Left stick float  ·  RB up  ·  LB down  ·  LT brake  ·  D-pad up stabilizer",
+		keyboard = "WASD float  ·  Space up  ·  Ctrl down  ·  X brake  ·  Z stabilizer  ·  Alt shoulder view",
+		gamepad = "Left stick float  ·  RB up  ·  LB down  ·  LT brake  ·  D-pad up stabilizer  ·  D-pad right shoulder",
 		touch = "Thumbstick to float  ·  Up, Down and Brake buttons",
 	},
 	ship = {
-		keyboard = "Mouse steer  ·  Click laser  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt cursor",
-		gamepad = "Right stick steer  ·  RT laser  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit",
+		keyboard = "Mouse steer  ·  Click laser  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt shoulder view (hold: cursor)",
+		gamepad = "Right stick steer  ·  RT laser  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit  ·  D-pad right shoulder",
 		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser to fire  ·  Boost  ·  Exit to leave",
 	},
 }
@@ -134,6 +140,7 @@ Input.deviceChanged = Signal.new() :: Signal.Signal<()>
 
 local mode: Mode? = nil
 local held: { [string]: boolean } = {}
+local heldSince: { [string]: number } = {}
 local controls: any = nil
 local lastDevice: Device = "keyboard"
 local touchLook: { [InputObject]: Vector3 } = {}
@@ -161,7 +168,12 @@ local function handle(name: string, state: Enum.UserInputState): Enum.ContextAct
 	if binding.hold then
 		if state == Enum.UserInputState.Begin then
 			held[name] = true
+			heldSince[name] = os.clock()
 		elseif state == Enum.UserInputState.End or state == Enum.UserInputState.Cancel then
+			local quick = os.clock() - (heldSince[name] or 0) < M.ALT_TAP_TIME
+			if held[name] and binding.tap and quick and state == Enum.UserInputState.End then
+				Input.pressed:Fire(binding.tap)
+			end
 			held[name] = false
 		end
 	elseif state == Enum.UserInputState.Begin then
@@ -198,7 +210,14 @@ function Input.mode(): Mode?
 end
 
 function Input.isHeld(name: string): boolean
-	return held[name] == true
+	if held[name] ~= true then
+		return false
+	end
+	-- A binding with a tap action only counts as held once it's no longer a tap.
+	local binding = BINDINGS[name]
+	return binding == nil
+		or binding.tap == nil
+		or os.clock() - (heldSince[name] or 0) >= M.ALT_TAP_TIME
 end
 
 function Input.moveVector(): Vector3

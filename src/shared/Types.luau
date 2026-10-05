@@ -37,6 +37,7 @@ export type Settings = {
 	cameraSensitivity: number,
 	stabilization: boolean,
 	reducedEffects: boolean,
+	pvp: boolean,
 }
 
 export type Profile = {
@@ -99,6 +100,7 @@ export type ShipInfo = {
 	boostMultiplier: number,
 	boostDuration: number,
 	boostRecharge: number,
+	hull: number,
 }
 
 export type InitialState = {

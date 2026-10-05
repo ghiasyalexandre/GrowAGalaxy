@@ -18,11 +18,13 @@
 --   ShopRequest      RemoteFunction  client -> server  (action: "buyShip" | "selectShip" |
 --                                                       "buyEquipment" | "expand", id: string?)
 --                                                       -> (ok: boolean, message: string)
---   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects",
+--   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects" | "pvp",
 --                                                       value: boolean)
 --   Reward           RemoteEvent     server -> client  (kind: "collect" | "mine" | "achievement",
 --                                                       amount: number, position: Vector3?,
 --                                                       label: string?) celebrate earned Stardust
+--   ShipDestroyed    RemoteEvent     server -> all      (pivot: CFrame, size: Vector3, paint: string,
+--                                                       ownerUserId: number) draw the explosion
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -41,6 +43,7 @@ local Net = {
 	ShopRequest = folder:WaitForChild("ShopRequest") :: RemoteFunction,
 	SettingChanged = folder:WaitForChild("SettingChanged") :: RemoteEvent,
 	Reward = folder:WaitForChild("Reward") :: RemoteEvent,
+	ShipDestroyed = folder:WaitForChild("ShipDestroyed") :: RemoteEvent,
 }
 
 return Net

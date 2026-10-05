@@ -196,6 +196,39 @@ function ConfigCheck.run(config: any): { string }
 			)
 		end
 	end
+	-- Combat (opt-in PvP).
+	local combat = config.Combat
+	for _, name in
+		{
+			"DAMAGE_PER_POWER",
+			"REGEN_DELAY",
+			"REGEN_SHARE",
+			"COMBAT_LOCK",
+			"TOGGLE_COOLDOWN",
+			"RELAUNCH_DELAY",
+			"SERVER_TICK",
+			"EXPLOSION_SIZE",
+			"EXPLOSION_TIME",
+			"DEBRIS_LIFETIME",
+			"SHAKE_RADIUS",
+			"TAG_DISTANCE",
+			"HIT_MARKER_TIME",
+		}
+	do
+		local value = combat[name]
+		if type(value) ~= "number" or value <= 0 then
+			fail(`Combat: {name} must be a positive number`)
+		end
+	end
+	if combat.DEBRIS_SPEED[1] > combat.DEBRIS_SPEED[2] then
+		fail("Combat: DEBRIS_SPEED must be { min, max }")
+	end
+	if combat.EMBER_SHARE < 0 or combat.EMBER_SHARE > 1 or combat.DEBRIS_DRAG >= 1 then
+		fail("Combat: EMBER_SHARE must be 0..1 and DEBRIS_DRAG below 1")
+	end
+	if movement.ALT_TAP_TIME <= 0 or movement.SHOULDER_SMOOTHING <= 0 then
+		fail("Movement: ALT_TAP_TIME and SHOULDER_SMOOTHING must be positive")
+	end
 	if movement.BOOST_RESTART_SHARE <= 0 or movement.BOOST_RESTART_SHARE > 1 then
 		fail("Movement: BOOST_RESTART_SHARE must be between 0 and 1")
 	end

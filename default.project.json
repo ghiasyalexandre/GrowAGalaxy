@@ -51,6 +51,9 @@
         },
         "Reward": {
           "$className": "RemoteEvent"
+        },
+        "ShipDestroyed": {
+          "$className": "RemoteEvent"
         }
       }
     },

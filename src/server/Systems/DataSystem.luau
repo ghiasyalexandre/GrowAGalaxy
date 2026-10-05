@@ -300,7 +300,7 @@ function DataSystem.grantCosmetic(player: Player, cosmeticId: string)
 end
 
 -- Player settings a client may change (all booleans).
-local BOOLEAN_SETTINGS = { stabilization = true, reducedEffects = true }
+local BOOLEAN_SETTINGS = { stabilization = true, reducedEffects = true, pvp = true }
 
 -- Saves a setting from the client. Unknown names and non-boolean values are
 -- ignored.

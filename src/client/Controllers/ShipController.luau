@@ -89,6 +89,7 @@ type Flight = {
 	kick: number, -- camera recoil pitch in radians, recovering to 0
 	shake: number, -- camera shake in studs, dying away
 	hitSeen: number, -- ClientState.beam.hitAt already shaken for
+	shoulder: number, -- 0 to 1, smoothed over-the-shoulder offset
 }
 
 local ShipController = {}
@@ -319,7 +320,18 @@ local function update(dt: number)
 	local distance = M.CAMERA_DISTANCE
 		+ M.CAMERA_SPEED_PULLBACK * forward
 		+ M.CAMERA_BOOST_PULLBACK * f.boostBlend
-	local desired = position + aim:VectorToWorldSpace(Vector3.new(0, M.CAMERA_HEIGHT, distance))
+	-- Over the shoulder: camera and look point both slide right, so the ship
+	-- sits left of the reticle.
+	f.shoulder = FlightMath.smooth(
+		f.shoulder,
+		if ClientState.shoulder then 1 else 0,
+		M.SHOULDER_SMOOTHING,
+		dt
+	)
+	local side = aim.RightVector * M.CAMERA_SHOULDER_OFFSET * f.shoulder
+	local desired = position
+		+ side
+		+ aim:VectorToWorldSpace(Vector3.new(0, M.CAMERA_HEIGHT, distance))
 	f.cameraPosition = f.cameraPosition:Lerp(desired, 1 - math.exp(-M.CAMERA_SMOOTHING * dt))
 	local up = (aim * CFrame.Angles(0, 0, f.bank * M.CAMERA_ROLL_SHARE)).UpVector
 	if ClientState.beam.hitAt ~= f.hitSeen then
@@ -332,7 +344,7 @@ local function update(dt: number)
 	local camera = Workspace.CurrentCamera
 	camera.CFrame = CFrame.lookAt(
 		f.cameraPosition + shake,
-		position + aim.LookVector * LOOK_AHEAD,
+		position + side + aim.LookVector * LOOK_AHEAD,
 		up
 	) * CFrame.Angles(f.kick, 0, 0)
 	local kickShare = f.kick / math.rad(math.max(B.RECOIL_DEGREES, 0.01))
@@ -408,6 +420,7 @@ local function enter(ship: Model)
 		kick = 0,
 		shake = 0,
 		hitSeen = ClientState.beam.hitAt,
+		shoulder = if ClientState.shoulder then 1 else 0,
 	}
 	flight = f
 	setOwnPrompt(ship, false)
@@ -461,6 +474,13 @@ end
 
 function ShipController.init()
 	Input.setMode("suit")
+	-- Explosions nearby and hits taken shake the flight camera.
+	ClientState.shake:Connect(function(amount)
+		local f = flight
+		if f then
+			f.shake = math.max(f.shake, amount)
+		end
+	end)
 
 	local player = Players.LocalPlayer
 	player.CharacterAdded:Connect(watchCharacter)

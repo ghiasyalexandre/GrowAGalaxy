@@ -19,6 +19,7 @@ local SPECS = {
 	"StarMath",
 	"OrbitTime",
 	"Progression",
+	"CombatMath",
 }
 
 for _, name in SPECS do

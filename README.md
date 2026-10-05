@@ -24,6 +24,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 12. UI kit atlas, hover animations, vivid sparkles (needs the atlas uploaded) | [Merged](docs/stage-12-ui-kit.md) |
 | 13. Evolve at max level (level resets, max +2 per tier), orbit per evolution, lit planets, system inspector with time slider | [Merged](docs/stage-13-evolution-orbits.md) |
 | 14. 11-ship ladder (Micro Recon to Meteor Slicer), imported ship models, Shipyard Ships tab | [Merged](docs/stage-14-ships.md) |
+| 15. Opt-in PvP, ship explosions and debris, over-the-shoulder camera, slower laser bolts | [Merged](docs/stage-15-pvp.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

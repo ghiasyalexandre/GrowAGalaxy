@@ -86,7 +86,9 @@ The design revision of Oct 2026 overrides the original spec where they conflict:
   orbiting planets and raise its production. Moons and planet development come later.
 - Save stars as id, position relative to the region, type, appearance, level. Derive planets and
   orbits from level plus config.
-- Excluded from the MVP: trading, PvP, stealing, offline income, gravitational simulation.
+- PvP is opt-in only (a saved setting, off by default; both pilots must have it on; docking
+  areas are safe). Ships explode at 0 hull; nothing is lost but a short relaunch wait.
+- Excluded from the MVP: trading, stealing, offline income, gravitational simulation.
 - Monetization only after core gameplay and saving are reliable. Never invent product ids or
   enable purchases without configured products.
 
