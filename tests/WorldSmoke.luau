@@ -52,6 +52,7 @@ local gameProxy = setmetatable({}, {
 })
 
 local warnings = {}
+local modelFallbacks = 0
 local cache = {}
 local function requireModule(module)
 	if cache[module] ~= nil then
@@ -75,7 +76,15 @@ local function requireModule(module)
 		ColorSequence = roblox.ColorSequence,
 		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
 		warn = function(...)
-			table.insert(warnings, table.concat({ ... }, " "))
+			local text = table.concat({ ... }, " ")
+			-- Lune can't fit imported ship models (no Model:GetBoundingBox or
+			-- ScaleTo), so ShipBuilder falls back to the greybox here. That path
+			-- needs a Studio playtest; the greybox path is what this checks.
+			if string.find(text, "Could not fit the", 1, true) then
+				modelFallbacks += 1
+				return
+			end
+			table.insert(warnings, text)
 		end,
 	}, { __index = getfenv() })
 	local chunk = luau.load(module.Source, { debugName = module:GetFullName(), environment = env })

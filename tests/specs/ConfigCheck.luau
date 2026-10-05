@@ -71,6 +71,22 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(broken), "has no id"))
 		end)
 
+		T.test("catches catalog mistakes: packs as passes, doubled grants", function()
+			local broken = T.deepCopy(Config)
+			broken.Products.BY_KEY.StardustSmall.kind = "GamePass"
+			T.truthy(hasProblem(ConfigCheck.run(broken), "packs and boosts are developer products"))
+			local doubled = T.deepCopy(Config)
+			doubled.Products.BY_KEY.MiningMultiplier.grants.beamPower = 2
+			T.truthy(hasProblem(ConfigCheck.run(doubled), "exactly one thing"))
+		end)
+
+		T.test("purchases are switched off and no product has an id yet", function()
+			T.equal(Config.Products.PURCHASES_ENABLED, false)
+			for key, def in Config.Products.BY_KEY do
+				T.equal(def.id, 0, key)
+			end
+		end)
+
 		T.test("catches a spacesuit faster than a ship", function()
 			local broken = T.deepCopy(Config)
 			broken.Movement.SUIT_MAX_SPEED = 500

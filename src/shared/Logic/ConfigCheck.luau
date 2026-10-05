@@ -735,8 +735,49 @@ function ConfigCheck.run(config: any): { string }
 		if product.key ~= key then
 			fail(`Product {key} has key "{product.key}"`)
 		end
-		if config.Products.PURCHASES_ENABLED and product.id <= 0 then
+		if config.Products.PURCHASES_ENABLED and product.enabled and product.id <= 0 then
 			fail(`Product {key} has no id but purchases are enabled`)
+		end
+		-- Exactly one grant, of a kind that fits the product type.
+		local count = 0
+		for _ in product.grants do
+			count += 1
+		end
+		if count ~= 1 then
+			fail(`Product {key} must grant exactly one thing`)
+		end
+		local repeatable = product.grants.stardust ~= nil or product.grants.boost ~= nil
+		if repeatable ~= (product.kind == "DeveloperProduct") then
+			fail(`Product {key}: packs and boosts are developer products, everything else passes`)
+		end
+		local boost = product.grants.boost
+		if
+			boost and (boost.seconds <= 0 or (boost.source ~= "mining" and boost.source ~= "star"))
+		then
+			fail(`Product {key}: bad boost`)
+		end
+		local multiplier = product.grants.multiplier
+		if
+			multiplier
+			and (
+				multiplier.value <= 1
+				or (multiplier.source ~= "mining" and multiplier.source ~= "star")
+			)
+		then
+			fail(`Product {key}: bad multiplier`)
+		end
+		if product.grants.stardust and product.grants.stardust <= 0 then
+			fail(`Product {key}: a pack must add Stardust`)
+		end
+		if product.grants.ship then
+			local ship = config.Ships.BY_ID[product.grants.ship]
+			-- A Robux ship must also be earnable with Stardust.
+			if ship and (ship.earn == nil or ship.productKey ~= key) then
+				fail(`Product {key}: its ship must be earnable and point back to it`)
+			end
+		end
+		if not table.find(config.Products.ORDER, key) then
+			fail(`Product {key} is missing from Products.ORDER`)
 		end
 		if product.grants.ship and config.Ships.BY_ID[product.grants.ship] == nil then
 			fail(`Product {key}: unknown ship "{product.grants.ship}"`)

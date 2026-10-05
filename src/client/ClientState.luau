@@ -67,6 +67,8 @@ ClientState.notify = Signal.new() :: Signal.Signal<string>
 ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
 -- Ask the Shipyard panel to open (HUD button).
 ClientState.openShipyard = Signal.new() :: Signal.Signal<()>
+-- Ask the Galaxy Store (optional Robux purchases) to open (HUD button).
+ClientState.openStore = Signal.new() :: Signal.Signal<()>
 -- Open the inspect view on a star's model (InspectController).
 ClientState.inspectStar = Signal.new() :: Signal.Signal<Model>
 -- True while a solar system is being inspected (the inspect camera is in

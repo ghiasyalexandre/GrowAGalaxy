@@ -205,14 +205,15 @@ return function(T, Loader)
 
 		T.test("keeps only the most recent purchase receipts", function()
 			local receipts = {}
-			for i = 1, 60 do
+			local max = Config.Products.MAX_RECEIPTS
+			for i = 1, max + 10 do
 				table.insert(receipts, `r{i}`)
 			end
 			local data = { receipts = receipts }
 			T.truthy(ProfileSchema.normalize(data))
-			T.equal(#data.receipts, 50)
+			T.equal(#data.receipts, max)
 			T.equal(data.receipts[1], "r11")
-			T.equal(data.receipts[50], "r60")
+			T.equal(data.receipts[max], `r{max + 10}`)
 		end)
 
 		T.test("view exposes only client-safe fields", function()

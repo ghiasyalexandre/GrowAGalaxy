@@ -60,6 +60,12 @@ export type Profile = {
 	stats: { [string]: number },
 	settings: Settings,
 	hangar: { [string]: boolean }, -- hangar upgrades built (Config.Hangar)
+	-- Seconds of temporary 2x boost left per source; counts down only while
+	-- the player is in a server.
+	boosts: { mining: number, star: number },
+	-- Passes Roblox last confirmed (key -> true): used only while a fresh
+	-- ownership check fails.
+	verifiedPasses: { [string]: boolean },
 	receipts: { string }, -- recent purchase ids for idempotent fulfilment (Stage 8)
 }
 
@@ -76,6 +82,8 @@ export type ProfileView = {
 	ownedEquipment: { [string]: boolean },
 	tutorialStep: number, -- Config.Tutorial step to show, 0 when done
 	settings: Settings,
+	boosts: { mining: number, star: number },
+	passes: { [string]: boolean }, -- passes the server has verified
 }
 
 export type RegionInfo = {
