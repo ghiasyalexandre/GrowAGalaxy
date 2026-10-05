@@ -159,6 +159,7 @@ export type StarChanges = {
 	pos: Types.Vec3?,
 	slot: string?, -- with planet: put this planet in this orbit slot
 	planet: string?,
+	planetLevel: number?, -- with slot: that planet's new level
 }
 
 -- Changes a star (already validated and paid for by the caller).
@@ -178,7 +179,16 @@ function DataSystem.updateStar(player: Player, id: string, changes: StarChanges)
 		star.pos = changes.pos
 	end
 	if changes.slot and changes.planet then
+		-- A new or upgraded planet starts at level 1.
 		star.planets[changes.slot] = changes.planet
+		if star.planetLevels then
+			star.planetLevels[changes.slot] = nil
+		end
+	end
+	if changes.slot and changes.planetLevel then
+		star.planetLevels = star.planetLevels or {}
+		local levels = star.planetLevels :: { [string]: number }
+		levels[changes.slot] = changes.planetLevel
 	end
 	pushIncome(player, profile)
 end

@@ -33,6 +33,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 21. Vanity hangar and Showcase Dock, ship paint, 5-level upgrades, settings and music, solar flares, golden swarms | [Merged](docs/stage-21-hangar-paint-settings.md) |
 | 22. Hangar / Station travel buttons, Zero G Dodgeball minigame | [Merged](docs/stage-22-dodgeball.md) |
 | 23. Pilot becomes the ship, laser/boost colours, rockets, Stardust trails | [Merged](docs/stage-23-rockets-trails.md) |
+| 24. Planet levels, livelier planets, pricier expansions | [Merged](docs/stage-24-planet-levels.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

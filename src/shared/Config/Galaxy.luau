@@ -40,12 +40,12 @@ local Galaxy = {
 		{
 			size = { x = 1536, y = 896, z = 1536 },
 			maxSystems = 6,
-			cost = { stardust = 8000, materials = {} },
+			cost = { stardust = 12000, materials = {} },
 		},
 		{
 			size = { x = 2048, y = 1152, z = 2048 },
 			maxSystems = 10,
-			cost = { stardust = 60000, materials = {} },
+			cost = { stardust = 90000, materials = {} },
 		},
 	} :: { ExpansionDef },
 }

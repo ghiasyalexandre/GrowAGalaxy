@@ -40,7 +40,9 @@ local ProfileSchema = {}
 -- 11: ship colours replaced paint jobs: loadouts save laserColor and
 --    boostColor (paint and finish are dropped); trails bought and the one
 --    equipped; the controls hint setting. Older profiles start with none.
-ProfileSchema.VERSION = 11
+-- 12: planets level up in their slots: stars save planetLevels (slot ->
+--    2..MAX_LEVEL). Older planets are level 1.
+ProfileSchema.VERSION = 12
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -213,11 +215,22 @@ local function galaxy(raw: any): Types.GalaxyRecord
 				if Config.Stars.BY_ID[star.typeId] then
 					level = math.min(level, StarMath.maxLevel(star.typeId))
 				end
+				-- Planet levels: only for slots holding a planet, 2..MAX_LEVEL.
+				local planetLevels: { [string]: number } = {}
+				if type(star.planetLevels) == "table" then
+					for slot, value in star.planetLevels do
+						local n = count(value)
+						if type(slot) == "string" and planets[slot] and n and n >= 2 then
+							planetLevels[slot] = math.min(n, Config.Planets.MAX_LEVEL)
+						end
+					end
+				end
 				stars[id] = {
 					typeId = star.typeId,
 					level = level,
 					pos = pos,
 					planets = planets,
+					planetLevels = planetLevels,
 					appearance = star.appearance,
 				}
 			end

@@ -608,7 +608,10 @@ function ConfigCheck.run(config: any): { string }
 		if def.radius <= 0 or def.radius > galaxy.PLANET_MAX_RADIUS then
 			fail(`Planet {id}: radius must be within 0..{galaxy.PLANET_MAX_RADIUS}`)
 		end
-		largestPlanet = math.max(largestPlanet, def.radius)
+		-- At its top level a planet is LEVEL_SIZE_STEP x (MAX_LEVEL - 1) bigger.
+		local grown = def.radius
+			* (1 + config.Planets.LEVEL_SIZE_STEP * (config.Planets.MAX_LEVEL - 1))
+		largestPlanet = math.max(largestPlanet, grown)
 	end
 	for index, slot in stars.SLOTS do
 		local where = `Stars slot {index}`

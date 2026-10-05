@@ -53,16 +53,43 @@ function StarMath.starIncome(typeId: string, level: number): number
 	return math.floor(def.income * StarMath.levelMultiplier(level) + 0.5)
 end
 
-function StarMath.planetIncome(planetId: string): number
+-- A planet's Stardust per second at a level (1 when omitted), whole.
+function StarMath.planetIncome(planetId: string, level: number?): number
 	local def = P.BY_ID[planetId]
-	return if def then def.income else 0
+	if def == nil then
+		return 0
+	end
+	local lv = math.clamp(level or 1, 1, P.MAX_LEVEL)
+	return math.floor(def.income * (1 + P.LEVEL_INCOME_STEP * (lv - 1)) + 0.5)
+end
+
+-- The level of the planet in a star's slot ("1".."N").
+function StarMath.planetLevel(star: Types.StarRecord, slot: string): number
+	local levels = star.planetLevels
+	return if levels and levels[slot] then levels[slot] else 1
+end
+
+-- Price to raise a planet from `level` to the next, or nil at MAX_LEVEL.
+function StarMath.planetLevelCost(planetId: string, level: number): number?
+	local def = P.BY_ID[planetId]
+	if def == nil or level < 1 or level >= P.MAX_LEVEL then
+		return nil
+	end
+	return math.floor(def.cost * P.LEVEL_COST_SHARE * P.LEVEL_COST_GROWTH ^ (level - 1) + 0.5)
+end
+
+-- A planet's radius at a level: a little bigger every level.
+function StarMath.planetRadius(planetId: string, level: number): number
+	local def = P.BY_ID[planetId]
+	local lv = math.clamp(level, 1, P.MAX_LEVEL)
+	return (if def then def.radius else 4) * (1 + P.LEVEL_SIZE_STEP * (lv - 1))
 end
 
 -- Stardust per second from a star and its planets.
 function StarMath.income(star: Types.StarRecord): number
 	local total = StarMath.starIncome(star.typeId, star.level)
-	for _, planetId in star.planets do
-		total += StarMath.planetIncome(planetId)
+	for slot, planetId in star.planets do
+		total += StarMath.planetIncome(planetId, StarMath.planetLevel(star, slot))
 	end
 	return total
 end
@@ -197,6 +224,30 @@ function StarMath.encodePlanets(planets: { [string]: string }): string
 		parts[slot] = planets[tostring(slot)] or ""
 	end
 	return table.concat(parts, ",")
+end
+
+-- Planet levels as an attribute string, slot by slot: "2,,1,". Empty
+-- slots are blank.
+function StarMath.encodePlanetLevels(star: Types.StarRecord): string
+	local parts: { string } = {}
+	for slot = 1, #S.SLOTS do
+		local key = tostring(slot)
+		parts[slot] = if star.planets[key] then tostring(StarMath.planetLevel(star, key)) else ""
+	end
+	return table.concat(parts, ",")
+end
+
+function StarMath.decodePlanetLevels(text: string): { [number]: number }
+	local levels: { [number]: number } = {}
+	local slot = 0
+	for part in string.gmatch(text .. ",", "([^,]*),") do
+		slot += 1
+		local n = tonumber(part)
+		if n then
+			levels[slot] = n
+		end
+	end
+	return levels
 end
 
 function StarMath.decodePlanets(text: string): { [number]: string }

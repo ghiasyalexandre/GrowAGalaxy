@@ -4,7 +4,7 @@
 --
 --   Star_<id>     Model, PrimaryPart = Core, streams persistently
 --                 attributes: StarId, OwnerUserId, TypeId, Level, Income,
---                 Planets ("Barren,,Ocean," by orbit slot)
+--                 Planets ("Barren,,Ocean," by orbit slot), PlanetLevels ("3,,1,")
 --     Core        Neon ball in the type's colour, with a PointLight
 --       Manage    ProximityPrompt tagged "TycoonPrompt", TycoonAction = "Manage"
 --     Disk        Black holes only: a glowing accretion disk
@@ -95,6 +95,7 @@ function StarBuilder.apply(model: Model, star: Types.StarRecord)
 	model:SetAttribute("Level", star.level)
 	model:SetAttribute("Income", StarMath.income(star))
 	model:SetAttribute("Planets", StarMath.encodePlanets(star.planets))
+	model:SetAttribute("PlanetLevels", StarMath.encodePlanetLevels(star))
 end
 
 function StarBuilder.build(
