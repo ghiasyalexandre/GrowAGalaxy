@@ -81,6 +81,21 @@ return function(T, Loader)
 			T.equal(data.loadouts[starter].equipment.Cargo, nil)
 		end)
 
+		T.test("v5: a level above the type's max level is lowered to it", function()
+			local data = {
+				schemaVersion = 4,
+				galaxy = {
+					stars = {
+						a = { typeId = "BrownDwarf", level = 5, pos = { x = 0, y = 0, z = 0 } },
+						b = { typeId = "RedDwarf", level = 3, pos = { x = 0, y = 0, z = 0 } },
+					},
+				},
+			}
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.galaxy.stars.a.level, 4, "Brown Dwarf max level is 4")
+			T.equal(data.galaxy.stars.b.level, 3, "levels within the max are kept")
+		end)
+
 		T.test("keeps valid stars and drops corrupt ones", function()
 			local data = {
 				galaxy = {
@@ -91,7 +106,7 @@ return function(T, Loader)
 							typeId = "YellowDwarf",
 							level = 2,
 							pos = { x = 0, y = 10, z = 500 },
-							planets = { ["1"] = "Barren", ["9"] = "Ocean", [2] = "Desert" },
+							planets = { ["1"] = "Barren", ["99"] = "Ocean", [2] = "Desert" },
 						},
 						s4 = { typeId = "RetiredStar", level = 1, pos = { x = 1, y = 2, z = 3 } },
 						s9 = {
@@ -108,7 +123,7 @@ return function(T, Loader)
 			T.equal(galaxy.expansion, #Config.Galaxy.EXPANSIONS, "expansion clamped")
 			T.truthy(galaxy.stars.s1)
 			T.equal(galaxy.stars.s1.planets["1"], "Barren")
-			T.equal(galaxy.stars.s1.planets["9"], nil, "slot out of range")
+			T.equal(galaxy.stars.s1.planets["99"], nil, "slot out of range")
 			T.equal(galaxy.stars.s1.planets["2"], nil, "number key dropped")
 			T.truthy(galaxy.stars.s4, "unknown type kept")
 			T.equal(type(galaxy.stars.s4.planets), "table", "planets filled in")

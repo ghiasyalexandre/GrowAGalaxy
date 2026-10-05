@@ -98,7 +98,9 @@ local function refresh()
 		Theme.label(row, {
 			Position = UDim2.fromOffset(72, 28),
 			Size = UDim2.new(1, -262, 0, 16),
-			Text = `+{Format.abbreviate(def.income)} {CURRENCY}/s  ·  planets up to {bestPlanet.displayName}`,
+			Text = `+{Format.abbreviate(def.income)} {CURRENCY}/s  ·  {StarMath.slots(typeId)} orbits  ·  levels 1-{StarMath.maxLevel(
+				typeId
+			)}  ·  planets up to {bestPlanet.displayName}`,
 			Font = Enum.Font.Gotham,
 			TextSize = 13,
 			TextColor3 = C.subtle,

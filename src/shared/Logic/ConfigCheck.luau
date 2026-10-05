@@ -293,27 +293,26 @@ function ConfigCheck.run(config: any): { string }
 	end
 	checkLadder("Star", stars.ORDER, stars.BY_ID)
 	checkLadder("Planet", planets.ORDER, planets.BY_ID)
-	local previousLevel: any = nil
-	for index, level in stars.LEVELS do
-		if (index == 1) ~= (level.upgradeShare == nil) then
-			fail(`Star level {index}: only level 1 may (and must) have no upgradeShare`)
-		end
-		if level.slots < 1 or level.slots > #stars.SLOTS then
-			fail(`Star level {index}: slots must be 1..{#stars.SLOTS}`)
-		end
-		if
-			previousLevel
-			and (
-				level.incomeMultiplier < previousLevel.incomeMultiplier
-				or level.slots < previousLevel.slots
-				or level.radiusScale < previousLevel.radiusScale
-			)
-		then
-			fail(`Star level {index}: must not be worse than level {index - 1}`)
-		end
-		previousLevel = level
+	-- Levels: max levels stay even; production and upgrade prices only rise.
+	if stars.MAX_LEVEL_BASE < 2 or stars.MAX_LEVEL_BASE % 2 ~= 0 then
+		fail("Stars: MAX_LEVEL_BASE must be an even number of at least 2")
 	end
-	local maxScale = stars.LEVELS[#stars.LEVELS].radiusScale
+	if stars.MAX_LEVEL_STEP < 2 or stars.MAX_LEVEL_STEP % 2 ~= 0 then
+		fail("Stars: MAX_LEVEL_STEP must be an even number of at least 2")
+	end
+	if stars.LEVEL_INCOME_STEP <= 0 or stars.UPGRADE_SHARE <= 0 or stars.UPGRADE_GROWTH < 1 then
+		fail(
+			"Stars: LEVEL_INCOME_STEP and UPGRADE_SHARE must be positive, UPGRADE_GROWTH at least 1"
+		)
+	end
+	if stars.MAX_RADIUS_SCALE < 1 then
+		fail("Stars: MAX_RADIUS_SCALE must be at least 1")
+	end
+	-- Orbits: one per tier above ORBITS_BASE, so the top tier needs them all.
+	if #stars.SLOTS < stars.ORBITS_BASE + #stars.ORDER - 1 then
+		fail("Stars: not enough SLOTS for the top tier's orbits")
+	end
+	local maxScale = stars.MAX_RADIUS_SCALE
 	local largestStar = 0
 	for id, def in stars.BY_ID do
 		local radius = def.radius * maxScale
@@ -337,7 +336,7 @@ function ConfigCheck.run(config: any): { string }
 		if slot.orbit - largestPlanet <= largestStar then
 			fail(`{where}: a big planet would touch the biggest star`)
 		end
-		if slot.period <= 0 then
+		if slot.periodDays <= 0 then
 			fail(`{where}: period must be positive`)
 		end
 		local nextSlot = stars.SLOTS[index + 1]

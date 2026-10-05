@@ -23,9 +23,9 @@ local Galaxy = {
 	PLANET_ORBIT_RADII = { 52, 96, 140, 184 } :: { number },
 	MOON_ORBIT_RADII = { 11, 16 } :: { number },
 
-	SYSTEM_RADIUS = 210, -- nothing in a system reaches further than this from its star
-	MIN_STAR_SPACING = 420, -- 2 x SYSTEM_RADIUS, so systems never overlap
-	WALL_MARGIN = 210, -- star centres stay this far inside the region walls
+	SYSTEM_RADIUS = 222, -- nothing in a system reaches further than this from its star
+	MIN_STAR_SPACING = 444, -- 2 x SYSTEM_RADIUS, so systems never overlap
+	WALL_MARGIN = 222, -- star centres stay this far inside the region walls
 
 	GRID_SNAP = 10, -- optional placement snapping, studs
 

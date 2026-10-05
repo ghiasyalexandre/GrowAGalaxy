@@ -23,7 +23,7 @@ export type Rect = SpriteAtlas.Rect
 export type SpriteDef = SpriteAtlas.SpriteDef
 
 return {
-	IMAGE = nil :: string?, -- "rbxassetid://<id>" once uploaded
+	IMAGE = "rbxassetid://88113805122624" :: string?,
 	SHEET_WIDTH = SpriteAtlas.WIDTH,
 	SHEET_HEIGHT = SpriteAtlas.HEIGHT,
 	SPRITES = SpriteAtlas.SPRITES,

@@ -228,6 +228,15 @@ local function update(dt: number)
 		leave()
 		return
 	end
+	if ClientState.inspecting then
+		-- The inspect view has the camera and mouse: the ship coasts to a stop.
+		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
+		UserInputService.MouseIconEnabled = true
+		f.localVelocity = FlightMath.step(f.localVelocity, Vector3.zero, 0, f.handling.braking, dt)
+		f.engine.VectorVelocity = f.orientation:VectorToWorldSpace(f.localVelocity)
+		f.wasHeld = true -- a click while inspecting doesn't fire on return
+		return
+	end
 
 	-- Mouse steering locks the cursor; hold Alt to use the cursor instead.
 	local steerWithMouse = Input.device() == "keyboard" and not Input.isHeld("FreeCursor")

@@ -63,6 +63,11 @@ ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 ClientState.notify = Signal.new() :: Signal.Signal<string>
 -- Ask the Star Shop panel to open (HUD button, shortcut, station console).
 ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
+-- Open the inspect view on a star's model (InspectController).
+ClientState.inspectStar = Signal.new() :: Signal.Signal<Model>
+-- True while a solar system is being inspected (the inspect camera is in
+-- charge: ship and suit controls stand by).
+ClientState.inspecting = false
 -- A milestone of yours worth a banner (RewardController): header, title,
 -- details, accent colour, and whether to flash the screen.
 ClientState.celebrate = Signal.new() :: Signal.Signal<string, string, string, Color3, boolean>
