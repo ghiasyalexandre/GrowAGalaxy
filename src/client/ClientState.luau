@@ -31,6 +31,8 @@ ClientState.mode = "suit" :: Mode
 ClientState.stabilization = true
 -- Fewer particles (sparkles, space dust) for slower devices or taste.
 ClientState.reducedEffects = false
+-- Over-the-shoulder camera (tap Alt): the camera sits to the right.
+ClientState.shoulder = false
 ClientState.route = "Station" :: Route
 -- Updated every frame while flying.
 ClientState.flight = {
@@ -71,6 +73,8 @@ ClientState.inspecting = false
 -- A milestone of yours worth a banner (RewardController): header, title,
 -- details, accent colour, and whether to flash the screen.
 ClientState.celebrate = Signal.new() :: Signal.Signal<string, string, string, Color3, boolean>
+-- Shake the flight camera by this many studs (explosions, hits taken).
+ClientState.shake = Signal.new() :: Signal.Signal<number>
 
 -- The local player's region slot, if they have one yet.
 function ClientState.mySlot(): number?
@@ -101,6 +105,12 @@ function ClientState.setReducedEffects(on: boolean)
 	ClientState.reducedEffects = on
 	ClientState.effectsChanged:Fire()
 	Net.SettingChanged:FireServer("reducedEffects", on)
+end
+
+-- Asks the server to switch PvP. The server may refuse (mid-fight); the
+-- player's PvP attribute is the real state.
+function ClientState.setPvp(on: boolean)
+	Net.SettingChanged:FireServer("pvp", on)
 end
 
 function ClientState.setRoute(route: Route)

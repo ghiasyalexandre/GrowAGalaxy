@@ -14,9 +14,12 @@
 --   Dock    ShipRequest "dock", inside the ISS docking zone or the player's
 --           own, below DOCK_MAX_SPEED, parks the ship at a free berth there.
 --   Stow    Leaving the game or Return to Station removes the ship.
+--   Destroy PvP (CombatSystem) blows the ship up: the pilot floats free,
+--           every client draws the explosion (ShipDestroyed), and the
+--           owner can relaunch after Config.Combat.RELAUNCH_DELAY.
 --
--- Ship model attributes: OwnerUserId, ShipId, MaxSpeed, BeamRange, and
--- Piloted (someone is flying it). BeamSystem adds the beam's state.
+-- Ship model attributes: OwnerUserId, ShipId, MaxSpeed, BeamRange, Health,
+-- Paint, and Piloted (someone is flying it). BeamSystem adds the beam's state.
 --
 -- Cargo lives on the profile, never on the ship, so moving, stowing or
 -- respawning a ship can't lose or duplicate it.
@@ -73,6 +76,7 @@ local ShipSystem = {}
 local ships: { [Player]: Ship } = {}
 local byModel: { [Model]: Ship } = {}
 local lastLaunch: { [Player]: number } = {}
+local destroyedAt: { [Player]: number } = {}
 local folder: Folder
 local requestLimit = RateLimiter.new(5, 2)
 
@@ -104,6 +108,7 @@ local function infoFor(profile: Types.Profile): Types.ShipInfo
 		boostMultiplier = stats.boostMultiplier,
 		boostDuration = stats.boostDuration,
 		boostRecharge = stats.boostRecharge,
+		hull = stats.hull,
 	}
 end
 
@@ -303,6 +308,9 @@ local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): S
 	-- Read by every client's ship effects (engine glow, beam reach).
 	model:SetAttribute("MaxSpeed", info.maxSpeed)
 	model:SetAttribute("BeamRange", info.beamRange)
+	model:SetAttribute("Health", 1)
+	local shipDef = Config.Ships.BY_ID[info.shipId]
+	model:SetAttribute("Paint", if shipDef then shipDef.paint else Config.World.COLORS.hull)
 	-- An owned beam-colour cosmetic recolours the laser for everyone.
 	local profile = DataSystem.getProfile(player)
 	for cosmeticId, def in Config.Cosmetics.BY_ID do
@@ -376,6 +384,14 @@ function ShipSystem.launch(player: Player, hangar: string)
 	local existing = ships[player]
 	if existing and existing.piloting then
 		Notify.send(player, "Leave your ship before launching it again.")
+		return
+	end
+	local rebuilt = (destroyedAt[player] or -math.huge) + Config.Combat.RELAUNCH_DELAY
+	if now < rebuilt then
+		Notify.send(
+			player,
+			`Your ship is being rebuilt. Launch again in {math.ceil(rebuilt - now)}s.`
+		)
 		return
 	end
 
@@ -462,6 +478,47 @@ local function dock(player: Player)
 		floatOut(ship, character)
 	end
 	Notify.send(player, "Docked.")
+end
+
+-- Blows up the player's ship (PvP): the pilot floats out, every client
+-- draws the explosion, and relaunching waits RELAUNCH_DELAY seconds.
+function ShipSystem.destroy(player: Player)
+	local ship = ships[player]
+	if ship == nil then
+		return
+	end
+	local pivot = ship.hull.CFrame
+	local _, size = ship.model:GetBoundingBox()
+	local paint = ship.model:GetAttribute("Paint")
+	local character = player.Character
+	if ship.piloting then
+		leaveSeat(ship)
+		if character then
+			floatOut(ship, character)
+		end
+	end
+	destroyedAt[player] = os.clock()
+	Net.ShipDestroyed:FireAllClients(
+		pivot,
+		size,
+		if type(paint) == "string" then paint else Config.World.COLORS.hull,
+		player.UserId
+	)
+	despawn(ship)
+end
+
+-- The owner of the ship a part belongs to, the ship, and whether it's
+-- being piloted. Nil for anything that isn't part of a spawned ship.
+function ShipSystem.shipOf(part: Instance): (Player?, Model?, boolean)
+	local current: Instance? = part
+	while current and current.Parent ~= folder do
+		current = current.Parent
+	end
+	local ship = if current and current:IsA("Model") then byModel[current] else nil
+	if ship == nil then
+		return nil, nil, false
+	end
+	return ship.owner, ship.model, ship.piloting
 end
 
 -- Removes the player's ship, unseating them first. Used by Return to Station.
@@ -551,6 +608,7 @@ function ShipSystem.start()
 			despawn(ship)
 		end
 		lastLaunch[player] = nil
+		destroyedAt[player] = nil
 	end)
 end
 

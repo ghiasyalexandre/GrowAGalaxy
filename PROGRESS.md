@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 14 merged into `main`).
+Last updated: 2026-10-05 (stage 15 merged into `main`).
 
 ## Status by stage
 
@@ -20,7 +20,8 @@ Last updated: 2026-10-05 (stage 14 merged into `main`).
 | 12. UI kit atlas (replaces the stage 11 sheet), hover animations, vivid sparkles | Merged | Passing (107 tests) | **Not yet** |
 | 13. Evolution ladder (max level per tier, reset on evolve), orbits per tier, lit planets, inspector | Merged | Passing (118 tests) | **Not yet** |
 | 14. 11-ship ladder in unlock order, imported ship models, Shipyard Ships tab with previews | Merged | Passing (120 tests) | **Not yet** |
-| 15+. Save hardening, tuning, monetization | Not started | | |
+| 15. Opt-in PvP, hull points, ship explosions with debris, over-the-shoulder camera (Alt), slower laser bolts | Merged | Passing (125 tests) | **Not yet** |
+| 16+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 

@@ -2,7 +2,7 @@
 -- Ship mining lasers, fired one shot per click. The pilot's client sends a
 -- shot with its aim; this system decides whether it may fire (piloting, not
 -- overheated, not faster than FIRE_INTERVAL), adds heat, hands the shot to
--- MiningSystem, and publishes it on the ship model so every client draws the
+-- MiningSystem and CombatSystem (PvP), and publishes it on the ship model so every client draws the
 -- bolt. Lasers cool between shots.
 --
 -- BeamInput (client -> server):
@@ -23,6 +23,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 
 local BeamMath = require(ReplicatedStorage.Shared.Logic.BeamMath)
+local CombatSystem = require(script.Parent.CombatSystem)
 local Config = require(ReplicatedStorage.Shared.Config)
 local MiningSystem = require(script.Parent.MiningSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -98,6 +99,7 @@ local function onInput(player: Player, action: unknown, aim: unknown)
 	model:SetAttribute("Shot", state.shots)
 	publishHeat(model, state)
 	MiningSystem.shot(player, model, info, direction)
+	CombatSystem.shot(player, model, info, direction)
 	if state.overheated then
 		MiningSystem.noteOverheat(player)
 		Notify.send(player, "Laser overheated. It fires again once it cools down.")

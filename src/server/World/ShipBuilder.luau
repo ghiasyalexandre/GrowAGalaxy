@@ -306,11 +306,19 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 	local source = ShipModel.find(def)
 	local skin: Model? = nil
 	local layout = SHUTTLE_LAYOUT
+	local hullSize = Vector3.new(6, 4, 12)
 	if source then
 		local ok, fitted, size = pcall(ShipModel.fit, source, def, SKIN_LIMIT)
 		if ok then
 			skin = fitted
 			layout = measuredLayout(size)
+			-- The invisible hull is the ship's collision and hit box, so it
+			-- roughly fills the model (the wings' tips stay outside).
+			hullSize = Vector3.new(
+				math.max(size.X * 0.6, 2),
+				math.max(size.Y * 0.8, 1.5),
+				math.max(size.Z * 0.85, 4)
+			)
 		else
 			warn(`[ShipBuilder] Could not fit the {def.model} model: {fitted}`)
 		end
@@ -318,7 +326,7 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 
 	local hull = Instance.new("Part")
 	hull.Name = "Hull"
-	hull.Size = Vector3.new(6, 4, 12)
+	hull.Size = hullSize
 	hull.CFrame = cframe
 	hull.Anchored = true
 	style(hull, COLORS.hull, nil, if skin then 1 else 0)

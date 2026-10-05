@@ -34,6 +34,7 @@ local function defaultSettings(): Types.Settings
 		cameraSensitivity = 1,
 		stabilization = true,
 		reducedEffects = false,
+		pvp = Config.Combat.PVP_DEFAULT,
 	}
 end
 
@@ -368,6 +369,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 		reducedEffects = if type(settings.reducedEffects) == "boolean"
 			then settings.reducedEffects
 			else fallback.reducedEffects,
+		pvp = if type(settings.pvp) == "boolean" then settings.pvp else fallback.pvp,
 	}
 
 	local receipts: { string } = {}

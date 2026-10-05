@@ -54,6 +54,11 @@ local readoutLabel: TextLabel
 local reticle: TextLabel
 local recoverButton: TextButton
 local effectsButton: TextButton
+local pvpButton: TextButton
+local setPvpText: (string) -> ()
+local hullPanel: Frame
+local hullFill: Frame
+local hullLabel: TextLabel
 local heatPanel: Frame
 local heatFill: Frame
 local heatLabel: TextLabel
@@ -76,6 +81,10 @@ local GOAL_INTERVAL = 1
 local BOOST_READY = Color3.fromRGB(120, 230, 255)
 local BOOST_ON = Color3.fromRGB(255, 255, 255)
 local BOOST_EMPTY = Color3.fromRGB(110, 120, 150)
+local HULL_GOOD = Color3.fromRGB(110, 230, 150)
+local HULL_LOW = Color3.fromRGB(255, 80, 60)
+local PVP_ON = Color3.fromRGB(255, 110, 100)
+local PVP_OFF = Color3.fromRGB(180, 190, 220)
 
 local function makeLabel(parent: Instance, props: { [string]: any }): TextLabel
 	local label = Instance.new("TextLabel")
@@ -390,6 +399,22 @@ local function build()
 	setEffectsText = dressButton(effectsButton, "ButtonDark", "Gear")
 	Theme.hover(effectsButton)
 
+	-- PvP switch beside it (Config.Combat): both pilots must have it on.
+	pvpButton = Instance.new("TextButton")
+	pvpButton.Name = "PvP"
+	pvpButton.Position = UDim2.new(0, 172, 0, 116)
+	pvpButton.Size = UDim2.new(0, 120, 0, 30)
+	pvpButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
+	pvpButton.BackgroundTransparency = 0.3
+	pvpButton.Font = Enum.Font.GothamBold
+	pvpButton.TextSize = 14
+	pvpButton.TextColor3 = PVP_OFF
+	pvpButton.Text = "PvP: off"
+	pvpButton.Parent = gui
+	corner(pvpButton, 6)
+	setPvpText = dressButton(pvpButton, "ButtonDark", "Shield")
+	Theme.hover(pvpButton)
+
 	-- Opens the Star Shop from anywhere (also the B key).
 	shopButton = Instance.new("TextButton")
 	shopButton.Name = "StarShop"
@@ -470,6 +495,8 @@ local function build()
 		makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY, "cyan", "Energy")
 	extractPanel, extractFill, extractLabel =
 		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Mining")
+	hullPanel, hullFill, hullLabel =
+		makeGauge(gui, "Hull", -210, "HULL", HULL_GOOD, "orange", "Shield")
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -602,6 +629,19 @@ local function refreshExtraction(flying: boolean)
 		else "EXTRACTING: AIM AT THE GLOWING WEAK POINT"
 end
 
+-- Hull comes from the server (CombatSystem's Health attribute on your ship).
+local function refreshHull()
+	local ship = ClientState.ship
+	local value = if ship then ship:GetAttribute("Health") else nil
+	local share = if type(value) == "number" then math.clamp(value, 0, 1) else 1
+	local info = ClientState.shipInfo
+	hullFill.Size = UDim2.fromScale(share, 1)
+	local color = HULL_LOW:Lerp(HULL_GOOD, share)
+	paintFill(hullFill, color)
+	hullLabel.TextColor3 = color
+	hullLabel.Text = if info then `HULL  {math.ceil(share * info.hull)} / {info.hull}` else "HULL"
+end
+
 -- Boost comes from this client's flight (ShipController).
 local function refreshBoost()
 	local flight = ClientState.flight
@@ -623,10 +663,12 @@ local function refreshReadout()
 	reticle.Visible = flying
 	heatPanel.Visible = flying
 	boostPanel.Visible = flying
+	hullPanel.Visible = flying
 	refreshExtraction(flying)
 	if flying then
 		refreshHeat()
 		refreshBoost()
+		refreshHull()
 		local flight = ClientState.flight
 		readoutLabel.Text =
 			`Speed {math.floor(flight.speed)} / {math.floor(flight.maxSpeed)}{if flight.boosting
@@ -691,6 +733,21 @@ function HudController.init()
 	refreshEffects()
 	effectsButton.Activated:Connect(function()
 		ClientState.setReducedEffects(not ClientState.reducedEffects)
+	end)
+	local player = Players.LocalPlayer
+	local function refreshPvp()
+		local on = player:GetAttribute("PvP") == true
+		setPvpText(if on then "PvP: ON" else "PvP: off")
+		pvpButton.TextColor3 = if on then PVP_ON else PVP_OFF
+		local label = pvpButton:FindFirstChild("Label")
+		if label and label:IsA("TextLabel") then
+			label.TextColor3 = pvpButton.TextColor3
+		end
+	end
+	player:GetAttributeChangedSignal("PvP"):Connect(refreshPvp)
+	refreshPvp()
+	pvpButton.Activated:Connect(function()
+		ClientState.setPvp(player:GetAttribute("PvP") ~= true)
 	end)
 	recoverButton.Activated:Connect(function()
 		Net.SuitRecover:FireServer()

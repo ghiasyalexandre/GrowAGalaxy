@@ -36,6 +36,14 @@ local Movement = {
 	CAMERA_DISTANCE = 26,
 	CAMERA_SMOOTHING = 12, -- higher follows more tightly
 	CAMERA_FOV = 70,
+	-- Over-the-shoulder view (tap Alt or D-pad right): the camera slides
+	-- this many studs to the right, easing in at SHOULDER_SMOOTHING.
+	CAMERA_SHOULDER_OFFSET = 8, -- ship chase camera
+	SUIT_SHOULDER_OFFSET = 2.5, -- spacesuit camera
+	SHOULDER_SMOOTHING = 8,
+	-- Alt released within this many seconds is a tap (shoulder view);
+	-- held longer, it frees the mouse cursor while flying.
+	ALT_TAP_TIME = 0.3,
 	CAMERA_FOV_BOOST = 15, -- extra field of view at top speed
 	CAMERA_SPEED_PULLBACK = 6, -- extra studs behind the ship at top speed
 	CAMERA_ROLL_SHARE = 0.3, -- share of the ship's bank the camera follows

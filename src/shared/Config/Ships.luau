@@ -21,6 +21,7 @@ export type ShipStats = {
 	heatCapacity: number, -- heat units before overheating
 	coolingRate: number, -- heat units shed per second while the beam is off
 	cargoCapacity: number, -- material units
+	hull: number, -- hull points: PvP damage it takes before exploding (Config.Combat)
 	-- Boost (hold Shift / L3): top speed x boostMultiplier for up to
 	-- boostDuration seconds; an empty tank refills in boostRecharge seconds.
 	boostMultiplier: number,
@@ -206,6 +207,7 @@ for index, id in ORDER do
 			heatCapacity = s[7],
 			coolingRate = s[8],
 			cargoCapacity = 60 + 30 * (index - 1),
+			hull = 100 + 30 * (index - 1),
 			boostMultiplier = s[9],
 			boostDuration = s[10],
 			boostRecharge = s[11],
