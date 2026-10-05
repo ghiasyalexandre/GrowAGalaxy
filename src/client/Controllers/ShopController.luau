@@ -748,11 +748,11 @@ function refresh()
 	for _, view in previews do
 		view.Parent = nil
 	end
-	Theme.clear(list)
-	firstButton = nil
 	if paintView then
 		paintView.Parent = nil
 	end
+	Theme.clear(list)
+	firstButton = nil
 	if tab == "ships" then
 		shipsTab(profile)
 	elseif tab == "paint" then
