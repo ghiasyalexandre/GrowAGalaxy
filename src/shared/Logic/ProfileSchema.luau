@@ -23,7 +23,9 @@ local ProfileSchema = {}
 -- 4: stars save the planets bought for them (planets became purchases).
 -- 5: each star type has its own max level (4, 6, 8 ...): levels above it are
 --    lowered to it (normalize does this for every load).
-ProfileSchema.VERSION = 5
+-- 6: the 11-ship ladder replaced the first five ships: their ids are renamed
+--    (Config.Ships.RENAMED) in owned ships, the active ship and loadouts.
+ProfileSchema.VERSION = 6
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -227,6 +229,31 @@ local function migrateGalaxyV2(raw: any)
 	raw.bodies = nil
 end
 
+-- Version 5 ship ids become their stage 14 replacements. A renamed ship
+-- doesn't overwrite a loadout already saved under the new id.
+local function migrateShipsV5(data: { [string]: any })
+	local renamed = Config.Ships.RENAMED
+	if type(data.ownedShips) == "table" then
+		for old, new in renamed do
+			if data.ownedShips[old] ~= nil then
+				data.ownedShips[new] = data.ownedShips[new] or data.ownedShips[old]
+				data.ownedShips[old] = nil
+			end
+		end
+	end
+	if type(data.activeShip) == "string" and renamed[data.activeShip] then
+		data.activeShip = renamed[data.activeShip]
+	end
+	if type(data.loadouts) == "table" then
+		for old, new in renamed do
+			if data.loadouts[old] ~= nil then
+				data.loadouts[new] = data.loadouts[new] or data.loadouts[old]
+				data.loadouts[old] = nil
+			end
+		end
+	end
+end
+
 -- Repairs a loaded profile in place. Returns false (and changes nothing) when
 -- the data must not be used, e.g. it was saved by a newer game version.
 function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
@@ -250,6 +277,9 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 	if version ~= nil and version < 3 then
 		migrateGalaxyV2(data.galaxy)
+	end
+	if version ~= nil and version < 6 then
+		migrateShipsV5(data)
 	end
 
 	local defaults = ProfileSchema.default()

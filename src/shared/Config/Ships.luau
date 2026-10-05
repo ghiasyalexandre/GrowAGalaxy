@@ -2,9 +2,14 @@
 -- Ship chassis. Equipment (Config.Equipment) and cosmetics (Config.Cosmetics)
 -- are separate so skins never change stats.
 --
--- Every ship can be earned. A ship with a productKey can also be unlocked with
--- Robux (Config.Products) and has exactly the same stats either way.
--- Working names from the design spec; tune freely.
+-- The ladder: ships unlock in ORDER. A ship can be bought once you own the
+-- one before it (Logic/Progression.shipUnlocked). A ship with a productKey can
+-- also be unlocked with Robux (Config.Products) and has the same stats.
+--
+-- Models: ShipBuilder dresses a ship with ReplicatedStorage/Assets/Ships/<model>
+-- (imported in Studio, see assets/roblox/Ships/README.md), scaled so its
+-- longest horizontal side is modelSize studs and turned modelYaw degrees so
+-- its nose faces -Z. Without the asset the greybox shuttle stands in.
 
 export type ShipStats = {
 	maxSpeed: number, -- studs per second
@@ -31,145 +36,197 @@ export type ShipDef = {
 	role: string,
 	description: string,
 	enabled: boolean, -- false = defined for later stages, not offered yet
-	paint: string, -- hull colour
+	paint: string, -- hull colour (greybox, untextured models, UI accents)
+	model: string, -- asset name under ReplicatedStorage/Assets/Ships
+	modelSize: number, -- studs: the model's longest horizontal side
+	modelYaw: number, -- degrees turned about Y so the nose faces -Z
 	stats: ShipStats,
 	earn: Cost?, -- nil = free starter ship
 	productKey: string?, -- optional Robux unlock with identical stats
 }
 
 local ORDER: { string } = {
-	"StarterShuttle",
-	"Prospector",
-	"CrystalExplorer",
-	"HeavyExcavator",
-	"NebulaCruiser",
+	"MicroRecon",
+	"RedFighter",
+	"GalactixRacer",
+	"Warship",
+	"CamoStellar",
+	"InfraredFurtive",
+	"InterstellarRunner",
+	"Transtellar",
+	"DualStriker",
+	"UltravioletIntruder",
+	"MeteorSlicer",
 }
 
-local BY_ID: { [string]: ShipDef } = {
-	StarterShuttle = {
-		id = "StarterShuttle",
-		paint = "#E8EAED",
-		displayName = "Starter Shuttle",
-		role = "Beginner mining",
-		description = "Simple controls and a basic mining beam.",
-		enabled = true,
-		stats = {
-			maxSpeed = 120,
-			acceleration = 60,
-			braking = 90,
-			turnRate = 2.2,
-			beamPower = 10,
-			beamRange = 120,
-			heatCapacity = 100,
-			coolingRate = 25,
-			cargoCapacity = 60,
-			boostMultiplier = 1.6,
-			boostDuration = 3,
-			boostRecharge = 6,
-		},
-		earn = nil,
-		productKey = nil,
+type Spec = {
+	name: string,
+	role: string,
+	description: string,
+	paint: string,
+	model: string?,
+	size: number,
+	yaw: number?,
+	cost: number?,
+	productKey: string?,
+	-- maxSpeed, acceleration, braking, turnRate, beamPower, beamRange,
+	-- heatCapacity, coolingRate, boostMultiplier, boostDuration, boostRecharge
+	stats: { number },
+}
+
+local SPECS: { [string]: Spec } = {
+	MicroRecon = {
+		name = "Micro Recon",
+		role = "Starter scout",
+		description = "Small, simple and easy to fly.",
+		paint = "#9FB4C7",
+		size = 14,
+		stats = { 120, 60, 90, 2.2, 10, 120, 100, 25, 1.6, 3, 6 },
 	},
-	Prospector = {
-		id = "Prospector",
-		paint = "#F2B544",
-		displayName = "Prospector",
-		role = "General progression",
-		description = "Better extraction and a larger cargo hold.",
-		enabled = true,
-		stats = {
-			maxSpeed = 140,
-			acceleration = 70,
-			braking = 100,
-			turnRate = 2.2,
-			beamPower = 16,
-			beamRange = 140,
-			heatCapacity = 120,
-			coolingRate = 30,
-			cargoCapacity = 150,
-			boostMultiplier = 1.8,
-			boostDuration = 4,
-			boostRecharge = 5,
-		},
-		earn = { stardust = 2500, materials = {} },
-		productKey = nil,
+	RedFighter = {
+		name = "Red Fighter",
+		role = "Agile miner",
+		description = "Quicker turns and a stronger beam.",
+		paint = "#D9433B",
+		size = 16,
+		yaw = 180, -- nose at +Z in the export
+		cost = 2500,
+		stats = { 135, 70, 100, 2.4, 14, 130, 115, 28, 1.7, 3.5, 5.5 },
 	},
-	CrystalExplorer = {
-		id = "CrystalExplorer",
-		paint = "#8FD3FF",
-		displayName = "Crystal Explorer",
-		role = "Precision mining",
-		description = "Better cooling, range and handling, with a modest hold.",
-		enabled = false,
-		stats = {
-			maxSpeed = 170,
-			acceleration = 90,
-			braking = 130,
-			turnRate = 2.8,
-			beamPower = 18,
-			beamRange = 200,
-			heatCapacity = 160,
-			coolingRate = 45,
-			cargoCapacity = 140,
-			boostMultiplier = 2.1,
-			boostDuration = 5,
-			boostRecharge = 4,
-		},
-		earn = { stardust = 15000, materials = {} },
-		productKey = "CrystalExplorerUnlock",
+	GalactixRacer = {
+		name = "Galactix Racer",
+		role = "Speed",
+		description = "Built to go fast, with a long boost.",
+		paint = "#3FA9F5",
+		size = 16,
+		cost = 8000,
+		productKey = "GalactixRacerUnlock",
+		stats = { 165, 95, 120, 2.6, 15, 130, 115, 30, 2.0, 4, 5 },
 	},
-	HeavyExcavator = {
-		id = "HeavyExcavator",
-		paint = "#C9622F",
-		displayName = "Heavy Excavator",
-		role = "Bulk mining",
-		description = "Powerful extraction and a huge hold, but slow to turn.",
-		enabled = false,
-		stats = {
-			maxSpeed = 110,
-			acceleration = 40,
-			braking = 60,
-			turnRate = 1.4,
-			beamPower = 30,
-			beamRange = 130,
-			heatCapacity = 200,
-			coolingRate = 30,
-			cargoCapacity = 400,
-			boostMultiplier = 1.5,
-			boostDuration = 3,
-			boostRecharge = 7,
-		},
-		earn = { stardust = 40000, materials = {} },
-		productKey = nil,
+	Warship = {
+		name = "Warship",
+		role = "Heavy mining",
+		description = "A slow, armoured hull with a heavy beam.",
+		paint = "#5B6470",
+		size = 20,
+		cost = 20000,
+		stats = { 125, 55, 85, 1.8, 24, 150, 170, 32, 1.5, 3, 6.5 },
 	},
-	NebulaCruiser = {
-		id = "NebulaCruiser",
-		paint = "#8C6BD9",
-		displayName = "Nebula Cruiser",
-		role = "Advanced exploration",
-		description = "Strong equipment and fast long-distance travel.",
-		enabled = false,
-		stats = {
-			maxSpeed = 220,
-			acceleration = 100,
-			braking = 140,
-			turnRate = 2.4,
-			beamPower = 32,
-			beamRange = 220,
-			heatCapacity = 220,
-			coolingRate = 50,
-			cargoCapacity = 300,
-			boostMultiplier = 2.5,
-			boostDuration = 6,
-			boostRecharge = 4,
-		},
-		earn = { stardust = 120000, materials = {} },
-		productKey = nil,
+	CamoStellar = {
+		name = "Camo Stellar",
+		role = "All-rounder",
+		description = "Balanced speed, power and cooling.",
+		paint = "#5E7D4A",
+		model = "CamoStellarJet",
+		size = 17,
+		yaw = 180, -- nose at +Z in the export
+		cost = 45000,
+		stats = { 150, 80, 110, 2.5, 22, 155, 160, 38, 1.8, 4, 5 },
+	},
+	InfraredFurtive = {
+		name = "Infrared Furtive",
+		role = "Stealth hunter",
+		description = "Fast and sharp, runs cool under fire.",
+		paint = "#B8322C",
+		size = 18,
+		yaw = 180, -- nose at +Z in the export
+		cost = 90000,
+		stats = { 170, 95, 125, 2.7, 25, 165, 170, 42, 2.0, 4.5, 4.5 },
+	},
+	InterstellarRunner = {
+		name = "Interstellar Runner",
+		role = "Long-range speed",
+		description = "The fastest cruiser for crossing the galaxy.",
+		paint = "#E8B04A",
+		size = 18,
+		yaw = 180, -- nose at +Z in the export
+		cost = 160000,
+		stats = { 195, 110, 135, 2.6, 26, 170, 180, 45, 2.2, 5, 4.5 },
+	},
+	Transtellar = {
+		name = "Transtellar",
+		role = "Deep-space miner",
+		description = "Long reach and a deep heat sink.",
+		paint = "#7E8CE0",
+		size = 20,
+		yaw = 180, -- nose at +Z in the export
+		cost = 280000,
+		stats = { 185, 100, 135, 2.4, 30, 185, 200, 48, 2.0, 5, 4.5 },
+	},
+	DualStriker = {
+		name = "Dual Striker",
+		role = "Heavy striker",
+		description = "Twin hulls carry a punishing beam.",
+		paint = "#F28C28",
+		size = 22,
+		cost = 450000,
+		stats = { 180, 100, 130, 2.3, 36, 190, 230, 50, 1.9, 5, 4.5 },
+	},
+	UltravioletIntruder = {
+		name = "Ultraviolet Intruder",
+		role = "Elite interceptor",
+		description = "Blistering speed and a strong beam.",
+		paint = "#8C4DE0",
+		size = 20,
+		cost = 700000,
+		stats = { 210, 120, 145, 2.8, 38, 205, 240, 55, 2.3, 5.5, 4 },
+	},
+	MeteorSlicer = {
+		name = "Meteor Slicer",
+		role = "Flagship",
+		description = "The best ship in the galaxy at everything.",
+		paint = "#C9C2B8",
+		size = 20,
+		cost = 1000000,
+		stats = { 240, 135, 160, 3.0, 42, 220, 260, 60, 2.5, 6, 4 },
 	},
 }
+
+local BY_ID: { [string]: ShipDef } = {}
+for index, id in ORDER do
+	local spec = SPECS[id]
+	local s = spec.stats
+	BY_ID[id] = {
+		id = id,
+		displayName = spec.name,
+		role = spec.role,
+		description = spec.description,
+		enabled = true,
+		paint = spec.paint,
+		model = spec.model or id,
+		modelSize = spec.size,
+		modelYaw = spec.yaw or 0,
+		stats = {
+			maxSpeed = s[1],
+			acceleration = s[2],
+			braking = s[3],
+			turnRate = s[4],
+			beamPower = s[5],
+			beamRange = s[6],
+			heatCapacity = s[7],
+			coolingRate = s[8],
+			cargoCapacity = 60 + 30 * (index - 1),
+			boostMultiplier = s[9],
+			boostDuration = s[10],
+			boostRecharge = s[11],
+		},
+		earn = if spec.cost then { stardust = spec.cost, materials = {} } else nil,
+		productKey = spec.productKey,
+	}
+end
 
 return {
 	ORDER = ORDER,
 	BY_ID = BY_ID,
-	STARTER_SHIP = "StarterShuttle",
+	STARTER_SHIP = "MicroRecon",
+	-- Ship ids from before the stage 14 ladder, mapped on load (ProfileSchema v6).
+	RENAMED = {
+		StarterShuttle = "MicroRecon",
+		Prospector = "RedFighter",
+		CrystalExplorer = "GalactixRacer",
+		HeavyExcavator = "Warship",
+		NebulaCruiser = "CamoStellar",
+	} :: { [string]: string },
+	-- Shipyard preview turntable speed, radians per second.
+	PREVIEW_SPIN = 0.8,
 }

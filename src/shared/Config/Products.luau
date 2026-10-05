@@ -12,12 +12,12 @@ export type ProductDef = {
 }
 
 local BY_KEY: { [string]: ProductDef } = {
-	CrystalExplorerUnlock = {
-		key = "CrystalExplorerUnlock",
+	GalactixRacerUnlock = {
+		key = "GalactixRacerUnlock",
 		kind = "GamePass",
 		id = 0,
-		displayName = "Crystal Explorer (instant unlock)",
-		grants = { ship = "CrystalExplorer" },
+		displayName = "Galactix Racer (instant unlock)",
+		grants = { ship = "GalactixRacer" },
 	},
 	AuroraTrailPack = {
 		key = "AuroraTrailPack",

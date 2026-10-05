@@ -5,7 +5,7 @@
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
 
-type ShipStats = typeof(Config.Ships.BY_ID.StarterShuttle.stats)
+type ShipStats = typeof(Config.Ships.BY_ID.MicroRecon.stats)
 
 local ShipStats = {}
 

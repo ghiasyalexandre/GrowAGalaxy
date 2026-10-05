@@ -118,7 +118,7 @@ return function(T, Loader)
 
 		T.test("catches a paid ship with no earnable path", function()
 			local broken = T.deepCopy(Config)
-			broken.Ships.BY_ID.CrystalExplorer.earn = nil
+			broken.Ships.BY_ID.GalactixRacer.earn = nil
 			T.truthy(hasProblem(ConfigCheck.run(broken), "no gameplay way to earn"))
 		end)
 	end)

@@ -66,7 +66,7 @@ return function(T, Loader)
 		end)
 
 		T.test("falls back to the starter ship when the active ship is not owned", function()
-			local data = { activeShip = "Prospector", ownedShips = {} }
+			local data = { activeShip = "RedFighter", ownedShips = {} }
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.activeShip, starter)
 		end)
@@ -79,6 +79,24 @@ return function(T, Loader)
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.loadouts[starter].equipment.Beam, "BeamMk2")
 			T.equal(data.loadouts[starter].equipment.Cargo, nil)
+		end)
+
+		T.test("v6: old ship ids become their ladder replacements", function()
+			local data = {
+				schemaVersion = 5,
+				activeShip = "Prospector",
+				ownedShips = { StarterShuttle = true, Prospector = true },
+				ownedEquipment = { BeamMk2 = true },
+				loadouts = { Prospector = { equipment = { Beam = "BeamMk2" } } },
+			}
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.activeShip, "RedFighter")
+			T.truthy(data.ownedShips.MicroRecon)
+			T.truthy(data.ownedShips.RedFighter)
+			T.equal(data.ownedShips.Prospector, nil)
+			T.equal(data.ownedShips.StarterShuttle, nil)
+			T.equal(data.loadouts.RedFighter.equipment.Beam, "BeamMk2")
+			T.equal(data.loadouts.Prospector, nil)
 		end)
 
 		T.test("v5: a level above the type's max level is lowered to it", function()

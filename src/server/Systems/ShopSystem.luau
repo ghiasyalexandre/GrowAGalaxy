@@ -33,6 +33,13 @@ local function buyShip(player: Player, profile: any, shipId: string): (boolean, 
 	if profile.ownedShips[shipId] then
 		return false, "You already own that ship."
 	end
+	if not Progression.shipUnlocked(shipId, profile.ownedShips) then
+		local previous = Progression.previousShip(shipId)
+		local name = if previous
+			then Config.Ships.BY_ID[previous].displayName
+			else "the ship before it"
+		return false, `Own the {name} first.`
+	end
 	if not DataSystem.spendStardust(player, cost) then
 		return false, `You need {cost} {CURRENCY} for that ship.`
 	end

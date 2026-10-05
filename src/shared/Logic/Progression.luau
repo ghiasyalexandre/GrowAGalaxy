@@ -56,6 +56,23 @@ function Progression.shipCost(shipId: string): number?
 	return def.earn.stardust
 end
 
+-- True when the ship may be bought: it's the first on the ladder or the
+-- player owns the ship before it in Config.Ships.ORDER.
+function Progression.shipUnlocked(shipId: string, ownedShips: { [string]: boolean }): boolean
+	local order = Config.Ships.ORDER
+	local index = table.find(order, shipId)
+	if index == nil then
+		return false
+	end
+	return index == 1 or ownedShips[order[index - 1]] == true
+end
+
+-- The ship before this one on the ladder, or nil for the first (or unknown).
+function Progression.previousShip(shipId: string): string?
+	local index = table.find(Config.Ships.ORDER, shipId)
+	return if index and index > 1 then Config.Ships.ORDER[index - 1] else nil
+end
+
 -- Stardust price of an equipment item on sale, or nil.
 function Progression.equipmentCost(itemId: string): number?
 	local def = Config.Equipment.BY_ID[itemId]

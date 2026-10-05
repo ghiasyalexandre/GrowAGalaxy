@@ -1,6 +1,9 @@
 --!strict
--- Ship models built from parts. Stage 2 has one greybox design, the Starter
--- Shuttle; every ship uses it until later stages add their own silhouettes.
+-- Ship models. A ship whose imported model exists (Util/ShipModel, under
+-- ReplicatedStorage/Assets/Ships) wears it as a "Skin" Model of massless,
+-- non-colliding parts welded to an invisible Hull; the engine glows, nozzles,
+-- laser muzzle and wing trails move to the model's measured extents. Without
+-- the model, the greybox shuttle below stands in.
 --
 -- The names below are the contract ShipSystem and the client rely on:
 --   Hull                  PrimaryPart. Every other part is welded to it.
@@ -22,6 +25,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ShipModel = require(ReplicatedStorage.Shared.Util.ShipModel)
 
 local COLORS = Config.World.COLORS
 
@@ -47,7 +51,87 @@ type PartSpec = {
 	collide: boolean?,
 }
 
--- Starter Shuttle: about 16 studs wide, 19 long and 7 tall.
+-- Where a ship's effects sit, in hull space (studs, -Z forward).
+type Layout = {
+	nozzleX: number, -- engines at +-nozzleX
+	nozzleY: number,
+	glowZ: number, -- engine glow discs
+	glowSize: number,
+	nozzleZ: number, -- exhaust attachments, just behind the glow
+	beamY: number,
+	beamZ: number, -- laser muzzle (BeamOrigin); the lens sits just behind it
+	wingX: number, -- wing trails at +-wingX
+	wingZ: number,
+	seatY: number,
+	exitX: number,
+	exitTop: number,
+}
+
+-- The greybox shuttle's layout.
+local SHUTTLE_LAYOUT: Layout = {
+	nozzleX = 1.8,
+	nozzleY = -0.2,
+	glowZ = 9.2,
+	glowSize = 2,
+	nozzleZ = 9.5,
+	beamY = -1.6,
+	beamZ = -10.7,
+	wingX = 7.8,
+	wingZ = 4.5,
+	seatY = 2.5,
+	exitX = 10,
+	exitTop = 8,
+}
+
+-- A layout fitted to a model's bounding box (centred on the hull).
+local function measuredLayout(size: Vector3): Layout
+	local hx, hy, hz = size.X / 2, size.Y / 2, size.Z / 2
+	local glow = math.clamp(size.Y * 0.5, 0.8, 2.2)
+	return {
+		nozzleX = math.max(hx * 0.2, glow * 0.6),
+		nozzleY = 0,
+		glowZ = hz - 0.1,
+		glowSize = glow,
+		nozzleZ = hz + 0.3,
+		beamY = -hy * 0.3,
+		beamZ = -hz - 0.6,
+		wingX = hx * 0.95,
+		wingZ = hz * 0.4,
+		seatY = hy,
+		exitX = hx + 4,
+		exitTop = hy + 6,
+	}
+end
+
+-- Neon parts every ship has, wherever its layout puts them.
+local function effectParts(layout: Layout): { PartSpec }
+	local specs: { PartSpec } = {}
+	for _, side in { -1, 1 } do
+		table.insert(specs, {
+			name = "EngineGlow",
+			shape = Enum.PartType.Cylinder,
+			size = Vector3.new(0.4, layout.glowSize, layout.glowSize),
+			offset = CFrame.new(side * layout.nozzleX, layout.nozzleY, layout.glowZ)
+				* CFrame.Angles(0, math.pi / 2, 0),
+			color = "#7FD4FF",
+			material = Enum.Material.Neon,
+			collide = false,
+		})
+	end
+	table.insert(specs, {
+		-- Mining laser lens, just behind the muzzle.
+		name = "BeamEmitter",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(1.6, 0.8, 0.8),
+		offset = CFrame.new(0, layout.beamY, layout.beamZ + 0.9) * CFrame.Angles(0, math.pi / 2, 0),
+		color = Config.Beam.COLOR,
+		material = Enum.Material.Neon,
+		collide = false,
+	})
+	return specs
+end
+
+-- Starter Shuttle greybox: about 16 studs wide, 19 long and 7 tall.
 local function shuttle(accent: string): { PartSpec }
 	return {
 		{
@@ -106,38 +190,10 @@ local function shuttle(accent: string): { PartSpec }
 			color = COLORS.truss,
 		},
 		{
-			name = "EngineGlow",
-			shape = Enum.PartType.Cylinder,
-			size = Vector3.new(0.4, 2, 2),
-			offset = CFrame.new(-1.8, -0.2, 9.2) * CFrame.Angles(0, math.pi / 2, 0),
-			color = "#7FD4FF",
-			material = Enum.Material.Neon,
-			collide = false,
-		},
-		{
-			name = "EngineGlow",
-			shape = Enum.PartType.Cylinder,
-			size = Vector3.new(0.4, 2, 2),
-			offset = CFrame.new(1.8, -0.2, 9.2) * CFrame.Angles(0, math.pi / 2, 0),
-			color = "#7FD4FF",
-			material = Enum.Material.Neon,
-			collide = false,
-		},
-		{
 			name = "TailFin",
 			size = Vector3.new(0.6, 3, 4),
 			offset = CFrame.new(0, 3.5, 4),
 			color = accent,
-		},
-		{
-			-- Mining laser lens, poking out of the nose's lower front.
-			name = "BeamEmitter",
-			shape = Enum.PartType.Cylinder,
-			size = Vector3.new(1.6, 0.8, 0.8),
-			offset = CFrame.new(0, -1.6, -9.8) * CFrame.Angles(0, math.pi / 2, 0),
-			color = Config.Beam.COLOR,
-			material = Enum.Material.Neon,
-			collide = false,
 		},
 	}
 end
@@ -170,14 +226,14 @@ local function exhaust(parent: Attachment)
 end
 
 -- A thin ribbon off a wing tip, between two attachments 0.6 studs apart.
-local function wingTrail(hull: BasePart, side: string, x: number, accent: string)
+local function wingTrail(hull: BasePart, side: string, x: number, z: number, accent: string)
 	local top = Instance.new("Attachment")
 	top.Name = `Trail{side}Top`
-	top.CFrame = CFrame.new(x, -0.3, 4.5)
+	top.CFrame = CFrame.new(x, -0.3, z)
 	top.Parent = hull
 	local bottom = Instance.new("Attachment")
 	bottom.Name = `Trail{side}Bottom`
-	bottom.CFrame = CFrame.new(x, -0.9, 4.5)
+	bottom.CFrame = CFrame.new(x, -0.9, z)
 	bottom.Parent = hull
 
 	local trail = Instance.new("Trail")
@@ -226,6 +282,9 @@ local function attachment(name: string, position: Vector3, parent: BasePart): At
 	return att
 end
 
+-- Imported models are shrunk if needed to fit inside this (within the berth).
+local SKIN_LIMIT = Vector3.new(19, 12, 23)
+
 local ShipBuilder = {}
 
 ShipBuilder.BOARD_TAG = BOARD_TAG
@@ -243,16 +302,36 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 	local model = Instance.new("Model")
 	model.Name = def.id
 
+	-- The imported model, if it's there, fitted inside the berth.
+	local source = ShipModel.find(def)
+	local skin: Model? = nil
+	local layout = SHUTTLE_LAYOUT
+	if source then
+		local ok, fitted, size = pcall(ShipModel.fit, source, def, SKIN_LIMIT)
+		if ok then
+			skin = fitted
+			layout = measuredLayout(size)
+		else
+			warn(`[ShipBuilder] Could not fit the {def.model} model: {fitted}`)
+		end
+	end
+
 	local hull = Instance.new("Part")
 	hull.Name = "Hull"
 	hull.Size = Vector3.new(6, 4, 12)
 	hull.CFrame = cframe
 	hull.Anchored = true
-	style(hull, COLORS.hull)
+	style(hull, COLORS.hull, nil, if skin then 1 else 0)
 	hull.Parent = model
 	model.PrimaryPart = hull
 
-	for _, spec in shuttle(accent) do
+	local specs = effectParts(layout)
+	if skin == nil then
+		for _, spec in shuttle(accent) do
+			table.insert(specs, spec)
+		end
+	end
+	for _, spec in specs do
 		local part = Instance.new(spec.className or "Part") :: BasePart
 		part.Name = spec.name
 		if spec.shape and part:IsA("Part") then
@@ -270,25 +349,26 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 	local seat = Instance.new("Seat")
 	seat.Name = "PilotSeat"
 	seat.Size = Vector3.new(2, 1, 2)
-	seat.CFrame = cframe * CFrame.new(0, 2.5, -1)
+	seat.CFrame = cframe * CFrame.new(0, layout.seatY, -1)
 	seat.Anchored = false
-	style(seat, COLORS.console)
+	style(seat, COLORS.console, nil, if skin then 1 else 0)
 	weld(hull, seat)
 	seat.Parent = model
 
 	local thrust = attachment("Thrust", Vector3.zero, hull)
-	attachment("ExitLeft", Vector3.new(-10, 2, -1), hull)
-	attachment("ExitRight", Vector3.new(10, 2, -1), hull)
-	attachment("ExitTop", Vector3.new(0, 8, 2), hull)
-	attachment("BeamOrigin", Vector3.new(0, -1.6, -10.7), hull)
-	for _, nozzle in { { name = "NozzleL", x = -1.8 }, { name = "NozzleR", x = 1.8 } } do
-		local att = attachment(nozzle.name, Vector3.new(nozzle.x, -0.2, 9.5), hull)
+	attachment("ExitLeft", Vector3.new(-layout.exitX, 2, -1), hull)
+	attachment("ExitRight", Vector3.new(layout.exitX, 2, -1), hull)
+	attachment("ExitTop", Vector3.new(0, layout.exitTop, 2), hull)
+	attachment("BeamOrigin", Vector3.new(0, layout.beamY, layout.beamZ), hull)
+	for _, nozzle in { { name = "NozzleL", side = -1 }, { name = "NozzleR", side = 1 } } do
+		local position = Vector3.new(nozzle.side * layout.nozzleX, layout.nozzleY, layout.nozzleZ)
+		local att = attachment(nozzle.name, position, hull)
 		-- Particle emitters on an attachment emit along its +Y: point it back.
 		att.CFrame *= CFrame.Angles(math.rad(90), 0, 0)
 		exhaust(att)
 	end
-	wingTrail(hull, "L", -7.8, accent)
-	wingTrail(hull, "R", 7.8, accent)
+	wingTrail(hull, "L", -layout.wingX, layout.wingZ, accent)
+	wingTrail(hull, "R", layout.wingX, layout.wingZ, accent)
 
 	local engine = Instance.new("LinearVelocity")
 	engine.Name = "Engine"
@@ -324,6 +404,25 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 		if part:IsA("BasePart") and part.Color == plain then
 			part.Color = paint
 		end
+	end
+
+	if skin then
+		-- Cosmetic only: the hidden Hull does the physics and collisions.
+		skin:PivotTo(cframe * skin:GetPivot())
+		for _, part in skin:GetDescendants() do
+			if part:IsA("BasePart") then
+				part.Anchored = false
+				part.CanCollide = false
+				part.CanTouch = false
+				part.CanQuery = false
+				part.Massless = true
+				if not ShipModel.textured(part) then
+					part.Color = paint
+				end
+				weld(hull, part)
+			end
+		end
+		skin.Parent = model
 	end
 	return model
 end
