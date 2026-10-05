@@ -1,7 +1,12 @@
 --!strict
--- Keeps the Stardust leaderboard's OrderedDataStore (Config.Leaderboard) up
--- to date with each player's current balance: written when their profile
--- loads, every WRITE_INTERVAL seconds if it changed, and when they leave.
+-- Stardust on the leaderboards:
+--
+--   In game     every player's "leaderstats" folder has a Stardust value,
+--               so Roblox's player list (top right) shows each balance live.
+--   Global      each player's current balance is written to the
+--               OrderedDataStore (Config.Leaderboard) a Roblox leaderboard
+--               reads: when their profile loads, every WRITE_INTERVAL
+--               seconds if it changed, and when they leave.
 --
 -- Writes run one player at a time in their own threads and are spread over
 -- the interval, so a full server stays far below Roblox's write budget. A
@@ -51,7 +56,46 @@ local function update(player: Player)
 	end
 end
 
+-- The player list's Stardust column.
+local function stat(player: Player): IntValue
+	local folder = player:FindFirstChild("leaderstats")
+	if folder == nil then
+		local made = Instance.new("Folder")
+		made.Name = "leaderstats"
+		made.Parent = player
+		folder = made
+	end
+	local value = (folder :: Instance):FindFirstChild(L.UNITS)
+	if value == nil or not value:IsA("IntValue") then
+		local made = Instance.new("IntValue")
+		made.Name = L.UNITS
+		made.Parent = folder
+		value = made
+	end
+	return value :: IntValue
+end
+
+local function showLive()
+	for _, player in Players:GetPlayers() do
+		local profile = DataSystem.getProfile(player)
+		if profile then
+			local value = math.floor(profile.stardust)
+			local holder = stat(player)
+			if holder.Value ~= value then
+				holder.Value = value
+			end
+		end
+	end
+end
+
 function LeaderboardSystem.start()
+	-- The player list works even where the data store doesn't (Studio).
+	task.spawn(function()
+		while true do
+			showLive()
+			task.wait(1)
+		end
+	end)
 	local ok, opened = pcall(function()
 		return DataStoreService:GetOrderedDataStore(L.STORE, L.SCOPE)
 	end)

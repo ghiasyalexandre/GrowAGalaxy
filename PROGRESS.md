@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 28 merged into `main`).
+Last updated: 2026-10-05 (stage 29 merged into `main`).
 
 ## Status by stage
 
@@ -34,7 +34,8 @@ Last updated: 2026-10-05 (stage 28 merged into `main`).
 | 26. Stardust leaderboard store (OrderedDataStore `StardustLeaderboard`, scope `global`, units Stardust; current balance) | Merged | Passing (178 tests) | **Not yet** |
 | 27. Store: repeat purchases never stick on Waiting, Small Stardust Pack = 25,000, compact phone layout, gamepad tabs/close | Merged | Passing (179 tests) | **Not yet** |
 | 28. Premium icon under panels, list scroll kept on refresh, orbit rings only for bought planets, Showcase Dock spin fix + white pads, redeemable codes (ILUVGHIASY = 5,000,000 Stardust) | Merged | Passing (180 tests) | **Not yet** |
-| 29+. Save hardening, tuning | Not started | | |
+| 29. Offline star income (up to 3 days, into the wallet on return), Stardust in the player list (leaderstats) | Merged | Passing (183 tests) | **Not yet** |
+| 30+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 
