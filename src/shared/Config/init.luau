@@ -9,6 +9,7 @@ return {
 	Beam = require(script.Beam),
 	Combat = require(script.Combat),
 	Daily = require(script.Daily),
+	Raids = require(script.Raids),
 	Asteroids = require(script.Asteroids),
 	Materials = require(script.Materials),
 	Zones = require(script.Zones),

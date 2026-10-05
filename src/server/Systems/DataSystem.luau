@@ -421,6 +421,21 @@ function DataSystem.claimDaily(player: Player, today: number): (number?, any)
 	return day, prize
 end
 
+-- Grants a raid reward (Config.Raids): fixed Stardust, plus boost time
+-- added to any running boost. No multiplier applies.
+function DataSystem.grantRaidReward(player: Player, reward: any)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return
+	end
+	DataSystem.addStardust(player, reward.stardust)
+	if reward.boost then
+		local source = reward.boost.source
+		profile.boosts[source] = RewardMath.extend(profile.boosts[source], reward.boost.seconds)
+		push(player, "boosts", table.clone(profile.boosts))
+	end
+end
+
 -- Player settings a client may change (all booleans).
 local BOOLEAN_SETTINGS = { stabilization = true, reducedEffects = true, pvp = true }
 

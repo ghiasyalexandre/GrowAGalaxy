@@ -277,6 +277,9 @@ local function explode(pivot: unknown, size: unknown, paint: unknown, _ownerUser
 	end
 end
 
+-- Also used for the Death Star's finale (RaidController).
+CombatController.explode = explode
+
 local function step(dt: number)
 	local now = os.clock()
 	for index = #blasts, 1, -1 do

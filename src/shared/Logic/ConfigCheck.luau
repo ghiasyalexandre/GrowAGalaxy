@@ -240,6 +240,40 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
+	-- Raids: harder difficulties pay more and have tougher bosses.
+	local raids = config.Raids
+	local lastStardust, lastHealth = 0, 0
+	for _, id in raids.ORDER do
+		local def = raids.BY_ID[id]
+		if def == nil or def.id ~= id then
+			fail(`Raid {id}: missing or misnamed`)
+			continue
+		end
+		if def.reward.stardust <= lastStardust or def.bossHealth <= lastHealth then
+			fail(`Raid {id}: must pay more and be tougher than the difficulty before it`)
+		end
+		lastStardust, lastHealth = def.reward.stardust, def.bossHealth
+		if def.volleyInterval <= 0 or def.boltsPerVolley < 1 or def.boltDamage <= 0 then
+			fail(`Raid {id}: needs a positive volley interval, bolts and damage`)
+		end
+		if def.superlaser and (def.superlaserInterval <= 0 or def.superlaserDamage <= 0) then
+			fail(`Raid {id}: a superlaser needs a positive interval and damage`)
+		end
+		local boost = def.reward.boost
+		if
+			boost and (boost.seconds <= 0 or (boost.source ~= "mining" and boost.source ~= "star"))
+		then
+			fail(`Raid {id}: bad boost reward`)
+		end
+	end
+	if
+		raids.MAX_RAIDERS < 1
+		or raids.QUEUE_COUNTDOWN < raids.FULL_COUNTDOWN
+		or raids.TIME_LIMIT <= 0
+	then
+		fail("Raids: bad queue or time settings")
+	end
+
 	-- Combat (opt-in PvP).
 	local combat = config.Combat
 	for _, name in

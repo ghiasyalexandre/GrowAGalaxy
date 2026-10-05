@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 18 merged into `main`).
+Last updated: 2026-10-05 (stage 19 merged into `main`).
 
 ## Status by stage
 
@@ -24,7 +24,8 @@ Last updated: 2026-10-05 (stage 18 merged into `main`).
 | 16. Hangar station rebuild, hangar upgrade pads, HUD Shipyard and Launch Ship buttons | Merged | Passing (129 tests) | **Not yet** |
 | 17. Optional Robux purchases: passes, boosts, packs, ship passes, Galaxy Store, boost HUD (all switched off, no ids) | Merged | Passing (145 tests) | **Not yet** |
 | 18. Daily prizes (14-day calendar), flashier Galaxy Store, premium shortcut (ship / black hole) | Merged | Passing (151 tests) | **Not yet** |
-| 19+. Save hardening, tuning | Not started | | |
+| 19. Roomier ISS (lounge, playground, showroom), Saturn V raid beacon, Death Star raids (Easy / Medium / Hard queues) | Merged | Passing (157 tests) | **Not yet** |
+| 20+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 

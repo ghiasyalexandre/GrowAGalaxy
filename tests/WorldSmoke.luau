@@ -75,12 +75,16 @@ local function requireModule(module)
 		NumberSequenceKeypoint = roblox.NumberSequenceKeypoint,
 		ColorSequence = roblox.ColorSequence,
 		ColorSequenceKeypoint = roblox.ColorSequenceKeypoint,
+		PhysicalProperties = roblox.PhysicalProperties,
 		warn = function(...)
 			local text = table.concat({ ... }, " ")
 			-- Lune can't fit imported ship models (no Model:GetBoundingBox or
 			-- ScaleTo), so ShipBuilder falls back to the greybox here. That path
 			-- needs a Studio playtest; the greybox path is what this checks.
-			if string.find(text, "Could not fit the", 1, true) then
+			if
+				string.find(text, "Could not fit the", 1, true)
+				or string.find(text, "Could not place the Saturn V", 1, true)
+			then
 				modelFallbacks += 1
 				return
 			end
@@ -198,14 +202,10 @@ end
 local arrival = WorldSystem.getMarker("ArrivalSpawn")
 check(arrival ~= nil and arrival:IsA("SpawnLocation"), "ArrivalSpawn is a SpawnLocation")
 check(count(tagged.WarpPrompt) == 2, "ISS has 2 airlock warp prompts")
-check(count(tagged.LaunchPrompt) == 1, "ISS has a hangar launch prompt")
+check(count(tagged.LaunchPrompt) == 0, "ISS has no hangar (raids replace the berths)")
 check(count(tagged.RoutePrompt) == 1, "ISS has a navigation route prompt")
-check(count(tagged.DockZone) == 1, "ISS has a docking zone")
-local issZone = WorldSystem.getMarker("DockZone")
-check(
-	issZone ~= nil and issZone:GetAttribute("OwnerUserId") == 0,
-	"ISS docking zone is open to everyone"
-)
+check(count(tagged.DockZone) == 0, "ISS has no docking zone")
+check(count(tagged.SafeZone) == 1, "ISS has a PvP safe zone")
 local workspace = game:GetService("Workspace")
 check(workspace.Gravity == 0, "the place has zero gravity")
 check(workspace.FallenPartsDestroyHeight <= -5000, "parts below the ISS are not destroyed")
@@ -242,7 +242,7 @@ for slot = 1, requireModule(shared.Config).World.MAX_PLAYERS do
 	table.insert(stations, { slot = slot, region = region, station = station })
 end
 check(count(tagged.WarpPrompt) == 2, "stations have no warp prompts (ships replace them)")
-check(count(tagged.LaunchPrompt) == 1, "stations have no launch consoles (HUD button)")
+check(count(tagged.LaunchPrompt) == 0, "stations have no launch consoles (HUD button)")
 check(count(tagged.RoutePrompt) == 1, "stations have no navigation consoles")
 check(count(tagged.TycoonPrompt) == 8, "every station has exactly one console (Collect)")
 
@@ -268,7 +268,39 @@ for _, id in HangarConfig.ORDER do
 	pad:Destroy()
 	building:Destroy()
 end
-check(count(tagged.DockZone) == 1 + 8, "every station has a docking zone")
+check(count(tagged.DockZone) == 8, "every station has a docking zone")
+
+-- Raids: the beacon, a pad per difficulty and the boss build at the ISS.
+print("Raids")
+local RaidBuilder = requireModule(server.World.RaidBuilder)
+local Raids = requireModule(shared.Config).Raids
+local beaconMarker = WorldSystem.getMarker("RaidBeacon")
+local raidArea = roblox.Instance.new("Model")
+local beacon = RaidBuilder.beacon(roblox.CFrame.new(beaconMarker.CFrame.Position), raidArea)
+check(beacon:FindFirstChild("SaturnV") ~= nil, "raid beacon has a Saturn V (asset or greybox)")
+local spinners = count(tagged.GaG_Spin)
+check(spinners >= 3, `raid beacon has spinning glow rings ({spinners} spinners)`)
+for _, id in Raids.ORDER do
+	local pad =
+		RaidBuilder.pad(Raids.BY_ID[id], roblox.CFrame.new(beaconMarker.CFrame.Position), raidArea)
+	local circle = pad:FindFirstChild("Circle")
+	check(
+		circle ~= nil and circle:FindFirstChild("JoinPrompt") ~= nil,
+		`{id}: raid pad has a circle with a Join prompt`
+	)
+	local sign = pad:FindFirstChild("Sign", true)
+	check(
+		sign ~= nil
+			and sign:FindFirstChild("Queue", true) ~= nil
+			and sign:FindFirstChild("Status", true) ~= nil,
+		`{id}: raid pad sign has Queue and Status labels`
+	)
+end
+local bossModel, bossBody, weakPoint = RaidBuilder.boss(roblox.CFrame.new(0, 1100, 0), raidArea)
+check(bossModel.Parent == raidArea and bossBody.Anchored, "boss is anchored and parented")
+check(weakPoint.Name == "WeakPoint" and weakPoint.Parent == bossModel, "boss has a weak point")
+check(#warnings == 0, `no raid warnings ({table.concat(warnings, "; ")})`)
+raidArea:Destroy()
 
 -- Ships
 print("Ships")
@@ -322,13 +354,6 @@ local function checkBerth(label: string, berth, zone, obstacles)
 	end
 	check(clear >= 2, `{label}: at least 2 of 3 exit points are clear ({clear})`)
 	return ship
-end
-
-local issSolid = solidParts(world.ISS)
-for index = 1, 3 do
-	local berth = WorldSystem.getMarker(`Berth{index}`)
-	check(berth.CFrame.LookVector.X > 0.99, `ISS Berth{index} faces away from the station`)
-	checkBerth(`ISS Berth{index}`, berth.CFrame, issZone, issSolid)
 end
 
 for _, entry in stations do
@@ -385,7 +410,7 @@ local steer = hull:FindFirstChild("Steer")
 check(engine ~= nil and engine:IsA("LinearVelocity"), "hull has the Engine LinearVelocity")
 check(steer ~= nil and steer:IsA("AlignOrientation"), "hull has the Steer AlignOrientation")
 check(engine.Attachment0 == hull:FindFirstChild("Thrust"), "Engine uses the Thrust attachment")
-check(count(tagged.BoardPrompt) == 1 + 3 + 8, "every ship has a tagged Board prompt")
+check(count(tagged.BoardPrompt) == 1 + 8, "every ship has a tagged Board prompt")
 local muzzle = hull:FindFirstChild("BeamOrigin")
 check(
 	muzzle ~= nil and muzzle:IsA("Attachment") and muzzle.CFrame.Position.Z < -hull.Size.Z / 2,

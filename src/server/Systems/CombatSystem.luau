@@ -27,6 +27,7 @@ local Types = require(ReplicatedStorage.Shared.Types)
 
 local C = Config.Combat
 local DOCK_ZONE_TAG = "DockZone"
+local SAFE_ZONE_TAG = "SafeZone" -- e.g. around the ISS: no PvP inside
 
 type Hull = { points: number, max: number, lastHit: number }
 
@@ -43,9 +44,11 @@ local function pvpOf(player: Player): boolean
 end
 
 local function inSafeZone(position: Vector3): boolean
-	for _, zone in CollectionService:GetTagged(DOCK_ZONE_TAG) do
-		if zone:IsA("BasePart") and FlightMath.insideBox(zone.CFrame, zone.Size, position) then
-			return true
+	for _, tag in { DOCK_ZONE_TAG, SAFE_ZONE_TAG } do
+		for _, zone in CollectionService:GetTagged(tag) do
+			if zone:IsA("BasePart") and FlightMath.insideBox(zone.CFrame, zone.Size, position) then
+				return true
+			end
 		end
 	end
 	return false
@@ -53,6 +56,41 @@ end
 
 local function publish(model: Model, hull: Hull)
 	model:SetAttribute("Health", math.floor(hull.points / hull.max * 100 + 0.5) / 100)
+end
+
+-- Takes `amount` off the hull of `victim`'s ship model `target`. Returns
+-- true if that destroyed it (ShipSystem.destroy has run).
+local function hit(victim: Player, target: Model, amount: number): boolean
+	local _, targetInfo = ShipSystem.getPiloted(victim)
+	local now = os.clock()
+	local state = hulls[target]
+	if state == nil then
+		local max = if targetInfo then targetInfo.hull else 100
+		state = { points = max, max = max, lastHit = now }
+		hulls[target] = state
+		target.Destroying:Once(function()
+			hulls[target] = nil
+		end)
+	end
+	state.points -= amount
+	state.lastHit = now
+	publish(target, state)
+	if state.points <= 0 then
+		hulls[target] = nil
+		ShipSystem.destroy(victim)
+		return true
+	end
+	return false
+end
+
+-- Damage from the game itself (raid bosses): no PvP rules apply. Returns
+-- true if the ship was destroyed.
+function CombatSystem.damageShip(victim: Player, amount: number): boolean
+	local target = ShipSystem.getPiloted(victim)
+	if target == nil or amount <= 0 then
+		return false
+	end
+	return hit(victim, target, amount)
 end
 
 -- Called by BeamSystem for each shot fired (after mining has had it).
@@ -70,11 +108,11 @@ function CombatSystem.shot(player: Player, model: Model, info: Types.ShipInfo, a
 	params.FilterType = Enum.RaycastFilterType.Exclude
 	params.FilterDescendantsInstances = exclude
 	local direction = hull.CFrame:VectorToWorldSpace(aim) * info.beamRange
-	local hit = Workspace:Raycast(muzzle.WorldPosition, direction, params)
-	if hit == nil then
+	local result = Workspace:Raycast(muzzle.WorldPosition, direction, params)
+	if result == nil then
 		return
 	end
-	local victim, target, piloted = ShipSystem.shipOf(hit.Instance)
+	local victim, target, piloted = ShipSystem.shipOf(result.Instance)
 	if victim == nil or target == nil or target.PrimaryPart == nil then
 		return
 	end
@@ -85,30 +123,15 @@ function CombatSystem.shot(player: Player, model: Model, info: Types.ShipInfo, a
 
 	local _, targetInfo = ShipSystem.getPiloted(victim)
 	local now = os.clock()
-	local state = hulls[target]
-	if state == nil then
-		local max = if targetInfo then targetInfo.hull else 100
-		state = { points = max, max = max, lastHit = now }
-		hulls[target] = state
-		target.Destroying:Once(function()
-			hulls[target] = nil
-		end)
-	end
-	state.points -= CombatMath.damage(info.beamPower)
-	state.lastHit = now
 	lastCombat[player] = now
 	lastCombat[victim] = now
-	publish(target, state)
-
-	if state.points <= 0 then
-		hulls[target] = nil
+	if hit(victim, target, CombatMath.damage(info.beamPower)) then
 		local lost = if targetInfo then targetInfo.displayName else "ship"
-		ShipSystem.destroy(victim)
 		DataSystem.addStat(player, "shipsDestroyed", 1)
 		Notify.send(player, `You destroyed {victim.DisplayName}'s {lost}!`)
 		Notify.send(
 			victim,
-			`{player.DisplayName} destroyed your {lost}. Launch it again from a hangar in {C.RELAUNCH_DELAY}s.`
+			`{player.DisplayName} destroyed your {lost}. Press Launch Ship again in {C.RELAUNCH_DELAY}s.`
 		)
 	end
 end
