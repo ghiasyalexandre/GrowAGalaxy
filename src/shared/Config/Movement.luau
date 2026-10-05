@@ -38,6 +38,14 @@ local Movement = {
 	-- second for every stud they sink.
 	SUIT_FLOOR_GAP = 0.6,
 	SUIT_FLOOR_PUSH = 10,
+	-- Suit sound (SuitSoundController): the default footsteps, jump, landing
+	-- and falling sounds are silenced (nobody walks in zero-g); instead a soft
+	-- thruster hiss follows each floating character's speed. The sound ships
+	-- with every Roblox client (content/sounds), so no upload is needed.
+	-- Empty string = silent.
+	SUIT_SOUND = "rbxasset://sounds/action_falling.ogg",
+	SUIT_SOUND_VOLUME = 0.35, -- at full suit speed; silent when still
+	SUIT_SOUND_PITCH = { 0.45, 0.75 } :: { number }, -- playback speed from still to full speed
 
 	-- Chase camera
 	CAMERA_HEIGHT = 7,

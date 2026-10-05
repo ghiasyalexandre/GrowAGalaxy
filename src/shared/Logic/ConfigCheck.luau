@@ -354,6 +354,14 @@ function ConfigCheck.run(config: any): { string }
 	if movement.SUIT_IDLE_LEAN_DEGREES > movement.SUIT_LEAN_DEGREES then
 		fail("Movement: SUIT_IDLE_LEAN_DEGREES must not exceed SUIT_LEAN_DEGREES")
 	end
+	if
+		movement.SUIT_SOUND_VOLUME < 0
+		or movement.SUIT_SOUND_VOLUME > 1
+		or movement.SUIT_SOUND_PITCH[1] <= 0
+		or movement.SUIT_SOUND_PITCH[2] < movement.SUIT_SOUND_PITCH[1]
+	then
+		fail("Movement: SUIT_SOUND_VOLUME must be 0 to 1 and SUIT_SOUND_PITCH a rising pair")
+	end
 	if movement.SUIT_FLOOR_GAP < 0 or movement.SUIT_FLOOR_PUSH <= 0 then
 		fail("Movement: SUIT_FLOOR_GAP must be 0 or more and SUIT_FLOOR_PUSH positive")
 	end
