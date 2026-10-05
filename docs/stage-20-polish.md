@@ -13,6 +13,15 @@ test). Not yet playtested in Studio.**
   0.6-stud gap, the suit pushes the player up. The reach shortens as they lean.
 - Tuning (`Config/Movement`): `SUIT_IDLE_LEAN_DEGREES`, `SUIT_LEAN_DEGREES`, `SUIT_FLOOR_GAP`,
   `SUIT_FLOOR_PUSH`.
+- **Sound** (`SuitSoundController`, added after the first stage 20 merge):
+  - Roblox's default walking sounds are silenced on every character, since nobody walks in
+    zero-g: footsteps, jump, landing, falling wind, get-up, climb and swim. The death sound
+    stays.
+  - In their place, each floating character makes a soft thruster hiss. It is Roblox's built-in
+    `rbxasset://sounds/action_falling.ogg`, pitched down. Its volume and pitch rise with speed,
+    and it is silent when still, seated or dead.
+  - The sound is 3D, so you hear other players' suits nearby.
+  - Tuning: `SUIT_SOUND`, `SUIT_SOUND_VOLUME`, `SUIT_SOUND_PITCH`.
 
 ## Showroom ships turn in place
 
