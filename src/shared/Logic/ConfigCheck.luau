@@ -295,6 +295,12 @@ function ConfigCheck.run(config: any): { string }
 		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
+	-- Leaderboard store.
+	local board = config.Leaderboard
+	if board.STORE == "" or board.SCOPE == "" or board.WRITE_INTERVAL < 6 then
+		fail("Leaderboard: needs a store name, a scope, and at least 6 s between writes")
+	end
+
 	-- Badges: a real id, a stat and a positive goal.
 	for key, badge in config.Badges.BY_KEY do
 		if badge.id <= 0 or badge.goal <= 0 or badge.stat == "" then
