@@ -17,6 +17,16 @@
 -- Looks: a rotating rainbow border, a twinkling star field, a gradient
 -- header with a shimmering gold title, cards that glow in their
 -- category's colour, and shine sweeps across every Buy button.
+--
+-- Repeat purchases: developer products (boosts, Stardust packs) can be
+-- bought again and again. While Roblox's prompt is open the card says
+-- "Waiting..."; it frees up when the prompt reports back, when the server
+-- delivers the purchase (Stardust or boost time arrives), or after
+-- PENDING_TIMEOUT, whichever comes first.
+--
+-- Phones: on a short screen the cards shrink to the essentials. Consoles:
+-- the first Buy button is selected, LB / RB switch tabs, B closes, and a
+-- hint line says so.
 
 local GuiService = game:GetService("GuiService")
 local MarketplaceService = game:GetService("MarketplaceService")
@@ -44,6 +54,8 @@ local MAGENTA = Color3.fromRGB(255, 110, 200)
 local NAVY = Color3.fromRGB(14, 18, 44)
 local DEEP_VIOLET = Color3.fromRGB(46, 22, 86)
 local STAR_COUNT = 40
+local PENDING_TIMEOUT = 20 -- seconds before a silent prompt frees its card
+local COMPACT_HEIGHT = 430 -- panel heights below this use compact cards
 
 type Tab = "pass" | "boost" | "pack" | "ship"
 type Price = { state: "loading" | "ok" | "failed", robux: number? }
@@ -71,8 +83,9 @@ local tabBar: Frame
 local noteLabel: TextLabel
 local tab: Tab = "pass"
 local prices: { [string]: Price } = {}
-local pending: { [string]: boolean } = {} -- prompt open for this key
+local pending: { [string]: number } = {} -- os.clock() a prompt opened, by key
 local firstButton: GuiButton? = nil
+local hintLabel: TextLabel
 
 local function configured(def: any): boolean
 	return P.PURCHASES_ENABLED and def.enabled and def.id > 0
@@ -89,10 +102,10 @@ local function iconFor(def: any): string
 	elseif grants.boost then
 		return if grants.boost.source == "mining" then "Rocket" else "RainbowStar"
 	elseif grants.stardust then
-		return if grants.stardust >= 40000
+		return if grants.stardust >= 400000
 			then "OpenChest"
-			elseif grants.stardust >= 10000 then "Chest"
-			else "Stardust"
+			elseif grants.stardust >= 100000 then "Chest"
+			else "CoinPile"
 	elseif grants.ship then
 		return "Ship"
 	end
@@ -144,6 +157,7 @@ local function statusLine(def: any): string
 end
 
 local refresh: () -> ()
+local buildTabs: () -> ()
 
 local function loadPrice(def: any)
 	if prices[def.key] ~= nil or not configured(def) then
@@ -173,7 +187,15 @@ local function prompt(def: any)
 	if not configured(def) or owned(def) or price == nil or price.state ~= "ok" then
 		return
 	end
-	pending[def.key] = true
+	local opened = os.clock()
+	pending[def.key] = opened
+	-- Free the card even if Roblox never reports back.
+	task.delay(PENDING_TIMEOUT, function()
+		if pending[def.key] == opened then
+			pending[def.key] = nil
+			refresh()
+		end
+	end)
 	local player = Players.LocalPlayer
 	local ok = pcall(function()
 		if def.kind == "GamePass" then
@@ -189,8 +211,14 @@ local function prompt(def: any)
 	refresh()
 end
 
+-- Short screens (phones in landscape) get smaller cards with the essentials.
+local function compact(): boolean
+	return panel.AbsoluteSize.Y > 0 and panel.AbsoluteSize.Y < COMPACT_HEIGHT
+end
+
 local function card(order: number, def: any)
-	local frame = Theme.row(list, 112, order)
+	local small = compact()
+	local frame = Theme.row(list, if small then 84 else 112, order)
 	-- Deep navy fading into violet, edged in the category's colour.
 	local accent = if def.kind == "GamePass"
 		then VIOLET
@@ -207,7 +235,7 @@ local function card(order: number, def: any)
 	edge.Parent = frame
 	Theme.pulse(edge, 0.1, 0.7, 2 + (order % 3) * 0.4)
 	local isOwned = owned(def)
-	local icon = Theme.icon(frame, iconFor(def), 64)
+	local icon = Theme.icon(frame, iconFor(def), if small then 48 else 64)
 	local inset = 14
 	if icon then
 		icon.AnchorPoint = Vector2.new(0, 0.5)
@@ -228,7 +256,7 @@ local function card(order: number, def: any)
 		Size = UDim2.new(1, -inset - right, 0, 34),
 		Text = def.benefit,
 		Font = Enum.Font.Gotham,
-		TextSize = 13,
+		TextSize = if small then 12 else 13,
 		TextColor3 = Theme.COLORS.text,
 	})
 	benefit.TextWrapped = true
@@ -243,8 +271,9 @@ local function card(order: number, def: any)
 	})
 	status.TextWrapped = true
 	status.TextYAlignment = Enum.TextYAlignment.Top
+	status.Visible = not small
 	local path = playPath(def)
-	if path then
+	if path and not small then
 		Theme.label(frame, {
 			Position = UDim2.fromOffset(inset, 92),
 			Size = UDim2.new(1, -inset - right, 0, 16),
@@ -278,7 +307,7 @@ local function card(order: number, def: any)
 	end
 	Theme.label(frame, {
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, -12, 0, 18),
+		Position = UDim2.new(1, -12, 0, if small then 6 else 18),
 		Size = UDim2.fromOffset(150, 22),
 		Text = priceText,
 		TextSize = 18,
@@ -289,8 +318,8 @@ local function card(order: number, def: any)
 	local style: Theme.ButtonStyle = if action then "buy" else "disabled"
 	local button = Theme.button(frame, buttonText, style, action)
 	button.AnchorPoint = Vector2.new(1, 0)
-	button.Position = UDim2.new(1, -12, 0, 46)
-	button.Size = UDim2.fromOffset(150, 38)
+	button.Position = UDim2.new(1, -12, 0, if small then 32 else 46)
+	button.Size = UDim2.fromOffset(150, if small then 42 else 38)
 	if action then
 		Theme.shine(button)
 	end
@@ -308,6 +337,9 @@ refresh = function()
 	noteLabel.Text = if P.PURCHASES_ENABLED
 		then NOTES[tab]
 		else "The Store isn't open yet. " .. NOTES[tab]
+	hintLabel.Visible = Input.device() == "gamepad"
+	-- The controls hint takes the note's place on a gamepad.
+	noteLabel.Visible = not hintLabel.Visible
 	local order = 0
 	for _, key in P.ORDER do
 		local def = P.BY_KEY[key]
@@ -322,6 +354,20 @@ refresh = function()
 	end
 end
 
+-- The tab next to the current one (LB / RB on a gamepad).
+local function cycleTab(step: number)
+	local index = 1
+	for i, entry in TABS do
+		if entry.id == tab then
+			index = i
+		end
+	end
+	tab = TABS[(index - 1 + step) % #TABS + 1].id
+	list.CanvasPosition = Vector2.zero
+	buildTabs()
+	refresh()
+end
+
 local function close()
 	gui.Enabled = false
 	if GuiService.SelectedObject and GuiService.SelectedObject:IsDescendantOf(gui) then
@@ -329,7 +375,7 @@ local function close()
 	end
 end
 
-local function buildTabs()
+buildTabs = function()
 	Theme.clear(tabBar)
 	local layout = Instance.new("UIListLayout")
 	layout.FillDirection = Enum.FillDirection.Horizontal
@@ -487,9 +533,29 @@ local function build()
 	})
 	noteLabel.TextWrapped = true
 
+	hintLabel = Theme.label(panel, {
+		Position = UDim2.fromOffset(16, 92),
+		Size = UDim2.new(1, -32, 0, 30),
+		Text = "LB / RB: switch tabs  ·  A: buy  ·  B: close",
+		Font = Enum.Font.GothamBold,
+		TextSize = 13,
+		TextColor3 = GOLD,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		Visible = false,
+	})
+
 	list = Theme.list(panel, 6)
 	list.Position = UDim2.fromOffset(14, 126)
 	list.Size = UDim2.new(1, -28, 1, -138)
+	-- Re-lay the cards when the panel changes size (rotating a phone).
+	local wasCompact: boolean? = nil
+	panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		local now = compact()
+		if now ~= wasCompact then
+			wasCompact = now
+			refresh()
+		end
+	end)
 end
 
 local function finished(key: string?, purchased: boolean)
@@ -501,6 +567,25 @@ local function finished(key: string?, purchased: boolean)
 	end
 	-- A successful purchase is announced by the server once it's granted.
 	refresh()
+end
+
+-- The server delivered a purchase (Stardust or boost time arrived): free any
+-- card still waiting on that kind of grant.
+local function delivered(field: string)
+	local changed = false
+	for key in pending do
+		local grants = P.BY_KEY[key] and P.BY_KEY[key].grants
+		if
+			grants
+			and ((field == "stardust" and grants.stardust) or (field == "boosts" and grants.boost))
+		then
+			pending[key] = nil
+			changed = true
+		end
+	end
+	if changed then
+		refresh()
+	end
 end
 
 local function keyFor(kind: string, id: number): string?
@@ -551,13 +636,29 @@ function StoreController.start()
 		end
 	end)
 	ClientState.profileChanged:Connect(function(field)
+		if field == "stardust" or field == "boosts" then
+			delivered(field)
+		end
 		if field == "passes" or field == "ownedShips" or field == "boosts" or field == "*" then
 			refresh()
 		end
 	end)
 	UserInputService.InputBegan:Connect(function(input, processed)
-		if not processed and gui.Enabled and input.KeyCode == Enum.KeyCode.Backspace then
+		if not gui.Enabled then
+			return
+		end
+		local key = input.KeyCode
+		if key == Enum.KeyCode.ButtonB or (not processed and key == Enum.KeyCode.Backspace) then
 			close()
+		elseif key == Enum.KeyCode.ButtonL1 then
+			cycleTab(-1)
+		elseif key == Enum.KeyCode.ButtonR1 then
+			cycleTab(1)
+		end
+	end)
+	Input.deviceChanged:Connect(function()
+		if gui.Enabled then
+			refresh()
 		end
 	end)
 end

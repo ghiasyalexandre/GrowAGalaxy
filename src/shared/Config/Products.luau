@@ -11,7 +11,7 @@
 --
 -- Connected (Creator Hub ids): Meteor Slicer ship pass 2005413560, 2x Star
 -- Production pass 2006121509, Automatic Collection pass 2005767573, Mining
--- Boost product 3716697618, Stardust Pouch product 3716697789.
+-- Boost product 3716697618, Small Stardust Pack product 3716697789.
 -- ConfigCheck refuses PURCHASES_ENABLED with an enabled product whose id is
 -- 0. See docs/monetization-setup.md for creating the passes and products.
 --
@@ -196,32 +196,33 @@ local BY_KEY: { [string]: ProductDef } = {
 		"boost"
 	),
 
-	-- Stardust packs (fixed amounts, never multiplied; need balance review)
+	-- Stardust packs (fixed amounts, never multiplied). Developer products:
+	-- buy them as often as you like; each purchase is granted exactly once.
 	StardustSmall = product(
 		"StardustSmall",
 		3716697789,
-		"Stardust Pouch",
-		"Adds exactly 2,500 Stardust to your wallet.",
-		"Fixed amount: multipliers and boosts don't apply.",
-		{ stardust = 2500 },
+		"Small Stardust Pack",
+		"Adds exactly 25,000 Stardust to your wallet.",
+		"Buy as often as you like. Fixed amount: multipliers and boosts don't apply.",
+		{ stardust = 25000 },
 		"pack"
 	),
 	StardustMedium = product(
 		"StardustMedium",
 		0,
 		"Stardust Crate",
-		"Adds exactly 12,000 Stardust to your wallet.",
-		"Fixed amount: multipliers and boosts don't apply.",
-		{ stardust = 12000 },
+		"Adds exactly 120,000 Stardust to your wallet.",
+		"Buy as often as you like. Fixed amount: multipliers and boosts don't apply.",
+		{ stardust = 120000 },
 		"pack"
 	),
 	StardustLarge = product(
 		"StardustLarge",
 		0,
 		"Stardust Vault",
-		"Adds exactly 50,000 Stardust to your wallet.",
-		"Fixed amount: multipliers and boosts don't apply.",
-		{ stardust = 50000 },
+		"Adds exactly 500,000 Stardust to your wallet.",
+		"Buy as often as you like. Fixed amount: multipliers and boosts don't apply.",
+		{ stardust = 500000 },
 		"pack"
 	),
 
