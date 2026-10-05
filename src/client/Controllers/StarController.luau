@@ -266,6 +266,12 @@ local function rowText(row: Frame, titleText: string, detail: string?, indent: n
 	end
 end
 
+-- Marks an action button for an icon, added once it has its size.
+local function tagIcon(button: TextButton, icon: string): TextButton
+	button:SetAttribute("Icon", icon)
+	return button
+end
+
 local refreshPanel: () -> ()
 
 local function showPicker(model: Model, typeId: string)
@@ -337,9 +343,12 @@ refreshPanel = function()
 	if upgradeCost then
 		table.insert(
 			buttons,
-			priceButton(actions, "Level up", upgradeCost, function()
-				request("upgrade", starId)
-			end)
+			tagIcon(
+				priceButton(actions, "Level up", upgradeCost, function()
+					request("upgrade", starId)
+				end),
+				"LevelUp"
+			)
 		)
 	end
 	local target = StarMath.evolveTarget(typeId)
@@ -347,24 +356,34 @@ refreshPanel = function()
 		local targetDef = S.BY_ID[target]
 		table.insert(
 			buttons,
-			priceButton(actions, `Evolve: {targetDef.displayName}`, targetDef.cost, function()
-				request("evolve", starId)
-			end, "special")
+			tagIcon(
+				priceButton(actions, `Evolve: {targetDef.displayName}`, targetDef.cost, function()
+					request("evolve", starId)
+				end, "special"),
+				"RainbowStar"
+			)
 		)
 	end
 	table.insert(
 		buttons,
-		Theme.button(actions, "Move", "primary", function()
-			panel.Visible = false
-			panelStar = nil
-			if type(starId) == "string" then
-				PlacementController.begin({ mode = "move", starId = starId })
-			end
-		end)
+		tagIcon(
+			Theme.button(actions, "Move", "primary", function()
+				panel.Visible = false
+				panelStar = nil
+				if type(starId) == "string" then
+					PlacementController.begin({ mode = "move", starId = starId })
+				end
+			end),
+			"Rocket"
+		)
 	)
 	for index, button in buttons do
 		button.Size = UDim2.new(1 / #buttons, -6, 1, 0)
 		button.Position = UDim2.new((index - 1) / #buttons, 3, 0, 0)
+		local icon = button:GetAttribute("Icon")
+		if type(icon) == "string" then
+			Theme.buttonIcon(button, icon)
+		end
 	end
 
 	if picking then
@@ -475,10 +494,7 @@ local function buildPanel()
 		TextSize = 14,
 		TextColor3 = C.subtle,
 	})
-	local close = Theme.button(panel, "Close", "primary", closePanel)
-	close.AnchorPoint = Vector2.new(1, 0)
-	close.Position = UDim2.new(1, -12, 0, 10)
-	close.Size = UDim2.fromOffset(80, 28)
+	Theme.closeButton(panel, closePanel)
 
 	actions = Instance.new("Frame")
 	actions.Name = "Actions"

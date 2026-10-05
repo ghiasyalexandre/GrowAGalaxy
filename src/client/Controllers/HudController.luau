@@ -132,21 +132,7 @@ local function buildWallet(gui: ScreenGui)
 	padding.PaddingBottom = UDim.new(0, 6)
 	padding.Parent = panel
 
-	-- Sprite sheet: the wide panel frame and the Stardust icon on the left.
 	local inset = 0
-	if Sprites.enabled() then
-		padding.PaddingLeft = UDim.new(0, 18) -- clear of the frame art
-	end
-	if Sprites.skin(panel, "PanelWide", 0.45) then
-		local icon = Sprites.icon(panel, "Stardust", 48)
-		if icon then
-			icon.AnchorPoint = Vector2.new(0, 0.5)
-			icon.Position = UDim2.fromScale(0, 0.5)
-			icon.ZIndex = 2
-			inset = 52
-		end
-	end
-
 	makeLabel(panel, {
 		Name = "StardustTitle",
 		Position = UDim2.fromOffset(inset, 0),
@@ -191,6 +177,23 @@ local function buildWallet(gui: ScreenGui)
 		Font = Enum.Font.Gotham,
 		TextColor3 = Color3.fromRGB(180, 190, 220),
 	})
+
+	-- Sprite sheet: the Stardust HUD panel, whose art has the Stardust star on
+	-- its left; the text keeps clear of it as the panel resizes.
+	if Sprites.skin(panel, "PanelHud") then
+		constraint.MinSize = Vector2.new(240, 64)
+		constraint.MaxSize = Vector2.new(360, 96)
+		local title = panel:FindFirstChild("StardustTitle") :: TextLabel
+		local function fit()
+			local cap = math.max(0, Sprites.leftCap("PanelHud", panel.AbsoluteSize.Y) - 10)
+			for _, label in { title, stardustLabel, sectorLabel } do
+				label.Position = UDim2.new(0, cap, label.Position.Y.Scale, 0)
+				label.Size = UDim2.new(1, -cap, label.Size.Y.Scale, 0)
+			end
+		end
+		fit()
+		panel:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
+	end
 end
 
 -- Gives a HUD button the sprite sheet's art and an icon, moving its text to
@@ -285,8 +288,8 @@ local function makeGauge(
 	fill.Parent = track
 	corner(fill, 5)
 	local cyan = style == "cyan"
-	Sprites.skin(track, if cyan then "TrackGrey" else "TrackOrange")
-	Sprites.skin(fill, if cyan then "FillCyan" else "FillOrange")
+	Sprites.skin(track, if cyan then "TrackCyan" else "TrackHeat")
+	Sprites.skin(fill, if cyan then "FillCyan" else "FillHeat")
 	local icon = if iconName then Sprites.icon(panel, iconName, 30) else nil
 	if icon then
 		-- The icon sits left of the gauge, which moves over to make room.
@@ -323,6 +326,12 @@ local function build()
 		Visible = false,
 	})
 	corner(tutorialLabel, 8)
+	-- Sprite sheet: an info tile just left of the hint.
+	local infoIcon = Sprites.icon(tutorialLabel, "Info", 34)
+	if infoIcon then
+		infoIcon.AnchorPoint = Vector2.new(1, 0.5)
+		infoIcon.Position = UDim2.new(0, -4, 0.5, 0)
+	end
 
 	hintLabel = makeLabel(gui, {
 		Name = "Hint",
@@ -363,7 +372,8 @@ local function build()
 	padding.PaddingTop = UDim.new(0, 8)
 	padding.PaddingBottom = UDim.new(0, 8)
 	padding.Parent = recoverButton
-	dressButton(recoverButton, "ButtonBlue", "Ship")
+	dressButton(recoverButton, "ButtonBlue", "Station")
+	Theme.hover(recoverButton)
 
 	-- Settings toggle under the wallet.
 	effectsButton = Instance.new("TextButton")
@@ -378,6 +388,7 @@ local function build()
 	effectsButton.Parent = gui
 	corner(effectsButton, 6)
 	setEffectsText = dressButton(effectsButton, "ButtonDark", "Gear")
+	Theme.hover(effectsButton)
 
 	-- Opens the Star Shop from anywhere (also the B key).
 	shopButton = Instance.new("TextButton")
@@ -398,15 +409,8 @@ local function build()
 		ColorSequence.new(Color3.fromRGB(255, 176, 50), Color3.fromRGB(255, 120, 60))
 	shopGradient.Rotation = 90
 	shopGradient.Parent = shopButton
-	dressButton(shopButton, "ButtonGold", "StarPlus")
-	local shopScale = Instance.new("UIScale")
-	shopScale.Parent = shopButton
-	shopButton.MouseEnter:Connect(function()
-		TweenService:Create(shopScale, TweenInfo.new(0.1), { Scale = 1.06 }):Play()
-	end)
-	shopButton.MouseLeave:Connect(function()
-		TweenService:Create(shopScale, TweenInfo.new(0.1), { Scale = 1 }):Play()
-	end)
+	dressButton(shopButton, "ButtonGold", "Shop")
+	Theme.hover(shopButton)
 
 	-- Next goal: the next star tier, with progress towards its price. Opens
 	-- the Star Shop when clicked.
@@ -428,8 +432,8 @@ local function build()
 	goalEdge.Parent = goalButton
 	-- Sprite sheet: a wide panel frame with the Stardust icon.
 	local goalInset = 10
-	if Sprites.skin(goalButton, "PanelWide", 0.4) then
-		local icon = Sprites.icon(goalButton, "Stardust", 34)
+	if Sprites.panelSkin(goalButton) then
+		local icon = Sprites.icon(goalButton, "StarPlus", 34)
 		if icon then
 			icon.Position = UDim2.fromOffset(8, 4)
 			icon.ZIndex = 2
@@ -463,9 +467,9 @@ local function build()
 	heatPanel, heatFill, heatLabel =
 		makeGauge(gui, "LaserHeat", -108, "LASER HEAT", HEAT_COOL, "orange")
 	boostPanel, boostFill, boostLabel =
-		makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY, "cyan", "Ship")
+		makeGauge(gui, "Boost", -142, "BOOST", BOOST_READY, "cyan", "Energy")
 	extractPanel, extractFill, extractLabel =
-		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Laser")
+		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Mining")
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -694,6 +698,7 @@ function HudController.init()
 	shopButton.Activated:Connect(function()
 		ClientState.openStarShop:Fire()
 	end)
+	Theme.hover(goalButton)
 	goalButton.Activated:Connect(function()
 		ClientState.openStarShop:Fire()
 	end)

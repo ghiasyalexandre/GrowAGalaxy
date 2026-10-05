@@ -382,7 +382,7 @@ local function findCollector()
 	})
 	local scale = Instance.new("UIScale")
 	scale.Parent = text
-	local icon = Sprites.icon(billboard, "Stardust", 40)
+	local icon = Sprites.icon(billboard, "CoinPile", 40)
 	if icon then
 		text.Position = UDim2.fromOffset(42, 0)
 		text.Size = UDim2.new(1, -42, 1, 0)
@@ -458,7 +458,11 @@ function RewardController.start()
 		if flash then
 			screenFlash(color)
 		end
-		local icon = if string.find(header, "WORLD") then "PlanetUp" else "StarPlus"
+		local icon = if string.find(header, "WORLD")
+			then "PlanetUp"
+			elseif string.find(header, "EVOLVED") then "RainbowStar"
+			elseif string.find(header, "LEVEL") then "LevelUp"
+			else "StarPlus"
 		showBanner(header, name, details, color, icon)
 	end)
 	ClientState.profileChanged:Connect(function(field)

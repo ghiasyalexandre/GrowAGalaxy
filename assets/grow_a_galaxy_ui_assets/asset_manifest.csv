@@ -1,0 +1,63 @@
+sheet,filename,category,description,width_px,height_px
+sheet_1_core_kit,01_stardust_icon.png,icon,Golden Stardust four-point star,204,208
+sheet_1_core_kit,02_spaceship_icon.png,icon,Mining spaceship,256,213
+sheet_1_core_kit,03_mining_asteroid_icon.png,icon,Laser striking purple asteroid,211,202
+sheet_1_core_kit,04_star_creation_icon.png,icon,Golden star with plus,196,186
+sheet_1_core_kit,05_planet_upgrade_icon.png,icon,Ringed planet with upgrade arrow,226,178
+sheet_1_core_kit,06_galaxy_expansion_icon.png,icon,Spiral galaxy with expansion arrows,218,202
+sheet_1_core_kit,07_achievement_medal_icon.png,icon,Space achievement medal,167,206
+sheet_1_core_kit,08_settings_gear_icon.png,icon,Futuristic settings gear,183,182
+sheet_1_core_kit,09_primary_cyan_button.png,button,Blank cyan/blue action button,386,144
+sheet_1_core_kit,10_upgrade_purple_button.png,button,Blank violet/pink upgrade button,390,138
+sheet_1_core_kit,11_reward_gold_button.png,button,Blank gold/orange reward button,376,138
+sheet_1_core_kit,12_secondary_indigo_button.png,button,Blank indigo button with cyan border,401,140
+sheet_1_core_kit,13_stardust_hud_panel.png,panel,Wide compact Stardust HUD panel,723,228
+sheet_1_core_kit,14_large_space_panel.png,panel,Large rounded ship/upgrade panel,780,230
+sheet_1_core_kit,15_mining_progress_empty.png,progress,Mining progress empty track,727,82
+sheet_1_core_kit,16_mining_progress_fill.png,progress,Mining progress cyan fill,724,85
+sheet_1_core_kit,17_beam_heat_empty.png,progress,Beam heat empty track,732,83
+sheet_1_core_kit,18_beam_heat_fill.png,progress,Beam heat orange-red fill,729,83
+sheet_1_core_kit,19_play_button_icon.png,action,Green play action tile,151,140
+sheet_1_core_kit,20_close_button_icon.png,action,Red close/delete action tile,152,140
+sheet_1_core_kit,21_info_button_icon.png,action,Blue information action tile,150,142
+sheet_1_core_kit,22_level_up_button_icon.png,action,Purple level-up action tile,149,140
+sheet_1_core_kit,23_shop_button_icon.png,action,Gold shopping cart action tile,152,151
+sheet_1_core_kit,24_wood_crate_icon.png,crate,Wooden crate,169,181
+sheet_1_core_kit,25_green_crate_icon.png,crate,Green crate,206,181
+sheet_1_core_kit,26_purple_crate_icon.png,crate,Purple sci-fi crate,226,181
+sheet_1_core_kit,27_treasure_chest_icon.png,crate,Golden treasure chest,222,191
+sheet_1_core_kit,28_cash_currency_icon.png,resource,Cash bundle currency,151,136
+sheet_1_core_kit,29_coin_currency_icon.png,resource,Gold coin currency,168,128
+sheet_1_core_kit,30_purple_crystal_icon.png,resource,Purple crystal cluster,176,141
+sheet_1_core_kit,31_blue_crystal_icon.png,resource,Blue crystal cluster,151,129
+sheet_1_core_kit,32_rainbow_star_icon.png,resource,Rainbow star resource,144,142
+sheet_1_core_kit,33_moon_icon.png,resource,Moon resource,142,159
+sheet_1_core_kit,34_earth_planet_icon.png,resource,Earth-like planet,147,161
+sheet_1_core_kit,35_ringed_planet_icon.png,resource,Ringed planet,260,155
+sheet_1_core_kit,36_galaxy_orb_icon.png,resource,Galaxy orb,170,164
+sheet_2_extra_kit,01_purple_crystal_formation.png,icon,Large purple crystal formation,193,208
+sheet_2_extra_kit,02_launch_rocket_icon.png,icon,Rocket launching from asteroid,211,179
+sheet_2_extra_kit,03_ringed_planet_icon.png,icon,Purple ringed planet,226,168
+sheet_2_extra_kit,04_telescope_icon.png,icon,Space telescope,226,182
+sheet_2_extra_kit,05_space_station_icon.png,icon,Compact space station/base,251,157
+sheet_2_extra_kit,06_planet_shield_badge.png,icon,Planet shield badge,187,179
+sheet_2_extra_kit,07_gift_box_icon.png,icon,Purple gift/reward box,193,176
+sheet_2_extra_kit,08_vertical_inventory_panel.png,panel,Tall blank navy inventory panel,296,578
+sheet_2_extra_kit,09_alert_button.png,button,Red alert/exclamation button,229,122
+sheet_2_extra_kit,10_confirm_button.png,button,Green confirmation button,237,123
+sheet_2_extra_kit,11_search_button.png,button,Blue search button,241,123
+sheet_2_extra_kit,12_energy_button.png,button,Purple energy/lightning button,229,122
+sheet_2_extra_kit,13_stardust_coin_pile.png,resource,Golden Stardust coin pile,224,185
+sheet_2_extra_kit,14_open_stardust_chest.png,crate,Open chest filled with glowing Stardust,325,266
+sheet_2_extra_kit,15_energy_canister.png,resource,Green energy canister,224,180
+sheet_2_extra_kit,16_blue_portal_icon.png,icon,Blue space portal/vortex,296,201
+sheet_2_extra_kit,17_small_blank_panel_left.png,panel,Small blank navy panel,313,101
+sheet_2_extra_kit,18_small_blank_panel_right.png,panel,Small blank navy panel,276,100
+sheet_2_extra_kit,19_progress_empty_blue_top.png,progress,Empty blue progress track,331,75
+sheet_2_extra_kit,20_progress_cyan_top.png,progress,Cyan progress fill,319,74
+sheet_2_extra_kit,21_progress_empty_heat_top.png,progress,Empty heat track,334,75
+sheet_2_extra_kit,22_progress_orange_top.png,progress,Orange heat fill,321,75
+sheet_2_extra_kit,23_progress_empty_blue_bottom.png,progress,Second empty blue progress track,331,80
+sheet_2_extra_kit,24_progress_cyan_bottom.png,progress,Second cyan progress fill,318,80
+sheet_2_extra_kit,25_progress_empty_heat_bottom.png,progress,Second empty heat track,334,79
+sheet_2_extra_kit,26_progress_red_bottom.png,progress,Red heat fill,322,79

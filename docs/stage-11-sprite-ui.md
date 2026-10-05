@@ -1,5 +1,8 @@
 # Stage 11: Sprite sheet UI
 
+> Superseded by [stage 12](stage-12-ui-kit.md): the UI now uses the packed UI kit atlas. The
+> skinning code below still applies; the sprite names and the image to upload changed.
+
 **Status: code complete, CI-verified (format, lint, strict types, 107 unit tests, build, smoke
 test). The art only appears in game once the sheet is uploaded to Roblox (below). Not yet seen
 in Studio.**

@@ -106,6 +106,23 @@ function Theme.row(parent: Instance, height: number, order: number): Frame
 	frame.BorderSizePixel = 0
 	frame.Parent = parent
 	corner(frame, 8)
+	-- Rows light up under the pointer.
+	frame.MouseEnter:Connect(function()
+		if frame.BackgroundTransparency < 1 then
+			TweenService:Create(frame, QUICK, {
+				BackgroundColor3 = Theme.COLORS.row:Lerp(Theme.COLORS.edge, 0.25),
+				BackgroundTransparency = 0,
+			}):Play()
+		end
+	end)
+	frame.MouseLeave:Connect(function()
+		if frame.BackgroundTransparency < 1 then
+			TweenService:Create(frame, QUICK, {
+				BackgroundColor3 = Theme.COLORS.row,
+				BackgroundTransparency = 0.15,
+			}):Play()
+		end
+	end)
 	return frame
 end
 
@@ -194,23 +211,146 @@ function Theme.button(
 		padding.Parent = label
 		button.Text = ""
 	end
-	local scale = Instance.new("UIScale")
-	scale.Parent = button
 	if style ~= "disabled" and onClick then
-		button.MouseEnter:Connect(function()
-			TweenService:Create(scale, QUICK, { Scale = 1.06 }):Play()
-		end)
-		button.MouseLeave:Connect(function()
-			TweenService:Create(scale, QUICK, { Scale = 1 }):Play()
-		end)
-		button.Activated:Connect(function()
-			scale.Scale = 0.9
-			TweenService:Create(scale, POP, { Scale = 1 }):Play()
-			onClick()
-		end)
+		Theme.hover(button, onClick)
 	else
 		button.Selectable = false
 	end
+	return button
+end
+
+local HOVER = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local SWEEP = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+-- A one-off bright band across `target` (on hover).
+local function sweep(target: GuiObject)
+	local overlay = target:FindFirstChild("HoverShine") :: Frame?
+	if overlay == nil then
+		local made = Instance.new("Frame")
+		made.Name = "HoverShine"
+		made.BackgroundColor3 = Color3.new(1, 1, 1)
+		made.BorderSizePixel = 0
+		made.ZIndex = 4
+		made.Active = false
+		if target:FindFirstChild("Skin") then
+			made.AnchorPoint = Vector2.new(0.5, 0.5)
+			made.Position = UDim2.fromScale(0.5, 0.5)
+			made.Size = UDim2.fromScale(0.82, 0.6)
+		else
+			made.Size = UDim2.fromScale(1, 1)
+		end
+		corner(made, 8)
+		local band = Instance.new("UIGradient")
+		band.Rotation = 20
+		band.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 1),
+			NumberSequenceKeypoint.new(0.42, 1),
+			NumberSequenceKeypoint.new(0.5, 0.35),
+			NumberSequenceKeypoint.new(0.58, 1),
+			NumberSequenceKeypoint.new(1, 1),
+		})
+		band.Parent = made
+		made.Parent = target
+		overlay = made
+	end
+	local band = (overlay :: Frame):FindFirstChildOfClass("UIGradient")
+	if band then
+		band.Offset = Vector2.new(-1, 0)
+		TweenService:Create(band, SWEEP, { Offset = Vector2.new(1, 0) }):Play()
+	end
+end
+
+-- Hover and press feel for any button: it springs up with a little tilt, a
+-- shine sweeps across, its icon (an "Icon_*" child) bounces; pressing
+-- squashes it and it pops back as `onClick` runs. Gamepad selection counts
+-- as hovering.
+function Theme.hover(button: GuiButton, onClick: (() -> ())?)
+	local scale = button:FindFirstChildOfClass("UIScale")
+	if scale == nil then
+		local made = Instance.new("UIScale")
+		made.Parent = button
+		scale = made
+	end
+	local s = scale :: UIScale
+	local function icon(): ImageLabel?
+		for _, child in button:GetChildren() do
+			if child:IsA("ImageLabel") and string.sub(child.Name, 1, 5) == "Icon_" then
+				return child
+			end
+		end
+		return nil
+	end
+	local function enter()
+		TweenService:Create(s, HOVER, { Scale = 1.08 }):Play()
+		TweenService:Create(button, HOVER, { Rotation = if math.random() < 0.5 then -2 else 2 })
+			:Play()
+		sweep(button)
+		local image = icon()
+		if image then
+			image.Rotation = -15
+			TweenService:Create(image, HOVER, { Rotation = 0 }):Play()
+		end
+	end
+	local function leave()
+		TweenService:Create(s, QUICK, { Scale = 1 }):Play()
+		TweenService:Create(button, QUICK, { Rotation = 0 }):Play()
+	end
+	button.MouseEnter:Connect(enter)
+	button.MouseLeave:Connect(leave)
+	button.SelectionGained:Connect(enter)
+	button.SelectionLost:Connect(leave)
+	button.MouseButton1Down:Connect(function()
+		TweenService:Create(s, QUICK, { Scale = 0.92 }):Play()
+	end)
+	button.Activated:Connect(function()
+		s.Scale = 0.9
+		TweenService:Create(s, POP, { Scale = 1.04 }):Play()
+		if onClick then
+			onClick()
+		end
+	end)
+end
+
+-- Puts a sprite icon at the left of a sprite-skinned button, its text moved
+-- over. Does nothing without the sheet.
+function Theme.buttonIcon(button: TextButton, name: string)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local height = math.max(button.AbsoluteSize.Y, 30)
+	local image = Sprites.icon(button, name, math.floor(height * 1.15))
+	if image == nil or label == nil then
+		return
+	end
+	image.AnchorPoint = Vector2.new(0, 0.5)
+	image.Position = UDim2.new(0, 0, 0.5, 0)
+	image.Size = UDim2.new(1, 0, 1.15, 0)
+	image.SizeConstraint = Enum.SizeConstraint.RelativeYY
+	image.ZIndex = 3
+	label.Position = UDim2.new(0.22, 0, 0, 0)
+	label.Size = UDim2.new(0.78, 0, 1, 0)
+end
+
+-- The red close tile in a panel's top-right corner (a "Close" button
+-- without the sheet). Positions itself.
+function Theme.closeButton(parent: GuiObject, onClick: () -> ()): GuiButton
+	if Sprites.enabled() then
+		local button = Instance.new("ImageButton")
+		button.Name = "Close"
+		button.BackgroundTransparency = 1
+		button.AnchorPoint = Vector2.new(1, 0)
+		button.Position = UDim2.new(1, -8, 0, 6)
+		button.Size = UDim2.fromOffset(42, 42)
+		button.ZIndex = 3
+		button.Parent = parent
+		local image = Sprites.icon(button, "Close", 42) :: ImageLabel
+		image.Size = UDim2.fromScale(1, 1)
+		image.ZIndex = 3
+		Theme.hover(button, onClick)
+		return button
+	end
+	local button = Theme.button(parent, "Close", "primary", onClick)
+	button.AnchorPoint = Vector2.new(1, 0)
+	button.Position = UDim2.new(1, -12, 0, 10)
+	button.Size = UDim2.fromOffset(80, 30)
 	return button
 end
 
@@ -473,8 +613,8 @@ function Theme.progress(
 	corner(fill, 3)
 	gradient(fill, color:Lerp(Color3.new(1, 1, 1), 0.35), color)
 	local cyan = style == "cyan"
-	Sprites.skin(track, if cyan then "TrackGrey" else "TrackOrange")
-	Sprites.skin(fill, if cyan then "FillCyan" else "FillOrange")
+	Sprites.skin(track, if cyan then "TrackCyan" else "TrackHeat")
+	Sprites.skin(fill, if cyan then "FillCyan" else "FillHeat")
 	return fill
 end
 

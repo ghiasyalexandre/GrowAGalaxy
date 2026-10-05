@@ -147,6 +147,9 @@ local function refresh()
 		button.AnchorPoint = Vector2.new(1, 0.5)
 		button.Position = UDim2.new(1, -8, 0.5, 0)
 		button.Size = UDim2.fromOffset(170, 38)
+		if affordable then
+			Theme.buttonIcon(button, "Shop")
+		end
 	end
 	if Input.device() == "gamepad" and first then
 		GuiService.SelectedObject = first
@@ -198,10 +201,7 @@ function StarShopController.init()
 		TextSize = 14,
 		TextColor3 = C.subtle,
 	})
-	local closeButton = Theme.button(panel, "Close", "primary", close)
-	closeButton.AnchorPoint = Vector2.new(1, 0)
-	closeButton.Position = UDim2.new(1, -12, 0, 10)
-	closeButton.Size = UDim2.fromOffset(80, 30)
+	Theme.closeButton(panel, close)
 	list = Theme.list(panel, 6)
 	list.Position = UDim2.fromOffset(14, 66)
 	list.Size = UDim2.new(1, -28, 1, -78)
