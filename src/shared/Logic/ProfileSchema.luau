@@ -44,7 +44,10 @@ local ProfileSchema = {}
 --    2..MAX_LEVEL). Older planets are level 1.
 -- 13: redeemed codes (Config.Codes), so each works once per player.
 --    Older profiles have redeemed none.
-ProfileSchema.VERSION = 13
+-- 14: offline earnings: the last time the player was online (unix
+--    seconds). Older profiles start at 0, so the first visit after this
+--    update pays nothing extra.
+ProfileSchema.VERSION = 14
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -85,6 +88,7 @@ function ProfileSchema.default(): Profile
 		showcase = {},
 		ownedTrails = {},
 		redeemedCodes = {},
+		lastOnline = 0,
 		trail = nil,
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
@@ -433,6 +437,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	-- Trails: known ids only for the one equipped, which must be owned.
 	data.ownedTrails = flags(data.ownedTrails)
 	data.redeemedCodes = flags(data.redeemedCodes)
+	data.lastOnline = count(data.lastOnline) or 0
 	if
 		type(data.trail) ~= "string"
 		or not data.ownedTrails[data.trail]

@@ -75,6 +75,7 @@ export type Profile = {
 	showcase: { string },
 	ownedTrails: { [string]: boolean }, -- Config.Trails ids bought
 	redeemedCodes: { [string]: boolean }, -- Config.Codes codes already used
+	lastOnline: number, -- unix seconds the player was last seen in a server; 0 = never
 	trail: string?, -- the equipped trail, if any
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.

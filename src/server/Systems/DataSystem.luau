@@ -17,6 +17,8 @@ local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Notify = require(script.Parent.Parent.Util.Notify)
+local OfflineMath = require(ReplicatedStorage.Shared.Logic.OfflineMath)
 local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
@@ -42,6 +44,12 @@ local sessions: { [Player]: any } = {}
 local function keyFor(player: Player): string
 	return `Player_{player.UserId}`
 end
+
+-- Offline earnings (Logic/OfflineMath): what the player's stars made while
+-- they were away, at their rate now with the passes Roblox last confirmed
+-- and their trail (boosts don't run offline), up to OFFLINE_CAP_SECONDS,
+-- straight into the wallet. Then they count as online from now.
+local payOffline: (player: Player, profile: Profile) -> ()
 
 local function load(player: Player)
 	local session = store:StartSessionAsync(keyFor(player), {
@@ -81,11 +89,41 @@ local function load(player: Player)
 		return
 	end
 	sessions[player] = session
+	payOffline(player, session.Data)
 	DataSystem.profileLoaded:Fire(player, session.Data)
 end
 
 local function push(player: Player, field: string, value: any)
 	Net.ProfileChanged:FireClient(player, field, value)
+end
+
+payOffline = function(player: Player, profile: Profile)
+	local now = os.time()
+	local rate = ProfileSchema.incomeRate(profile)
+		* RewardMath.permanent("star", profile.verifiedPasses)
+		* ProfileSchema.trailMultiplier(profile)
+	local amount, seconds = OfflineMath.earned(rate, profile.lastOnline, now)
+	profile.lastOnline = now
+	if amount <= 0 then
+		return
+	end
+	profile.stardust += amount
+	DataSystem.addStat(player, "offlineStardust", amount)
+	local hours = math.floor(seconds / 3600)
+	local away = if hours >= 1 then `{hours} h` else `{math.floor(seconds / 60)} min`
+	-- After the client has loaded, so the message isn't missed.
+	task.delay(6, function()
+		if player.Parent then
+			push(player, "stardust", profile.stardust)
+			Notify.send(
+				player,
+				`Welcome back! Your stars made {amount} Stardust while you were away ({away}{if seconds
+						>= Config.Economy.OFFLINE_CAP_SECONDS
+					then ", the 3-day maximum"
+					else ""}).`
+			)
+		end
+	end)
 end
 
 local function wholePositive(amount: number): number?
@@ -205,6 +243,8 @@ function DataSystem.accrueIncome(player: Player, dt: number, passes: { [string]:
 	if profile == nil or dt <= 0 then
 		return
 	end
+	-- Seen online now: offline earnings count from the last of these.
+	profile.lastOnline = os.time()
 	local boosts = profile.boosts
 	local rate = ProfileSchema.incomeRate(profile)
 	if rate > 0 then
