@@ -12,7 +12,14 @@
 --   Attacks      RaidEvent "bolt": a green turbolaser bolt flying to where
 --                it was aimed. "charge": the dish glows and a thin aiming
 --                line appears, with a warning banner. "superlaser": a huge
---                beam down that line, shaking nearby cameras.
+--                beam down that line, shaking nearby cameras. "drone": a
+--                drone bursts. "shockCharge": the plane a shockwave will
+--                sweep glows red; "shockwave": a ring of light races out
+--                along it. "bombard": red zones swell where blasts will
+--                land; "bombardBlast": they explode.
+--   Boss         "weakMoved": a streak from the old weak point to the new
+--                one and a WEAK POINT MOVED banner. "enraged": a banner and a
+--                shake; the boss bar says ENRAGED.
 --   Finale       "bossDown": a chain of explosions over the Death Star and a
 --                blinding flash. "result": a victory or defeat banner.
 
@@ -42,10 +49,20 @@ local BOLT_LENGTH = 22
 local REFRESH = 0.2
 
 type Bolt = { part: Part, from: Vector3, to: Vector3, started: number, travel: number }
+type Ring = {
+	segments: { Part },
+	center: Vector3,
+	u: Vector3,
+	w: Vector3,
+	normal: Vector3,
+	started: number,
+}
 
 local RaidController = {}
 
 local bolts: { Bolt } = {}
+local rings: { Ring } = {}
+local warningToken = 0
 local fx: Folder? = nil
 local gui: ScreenGui
 local chip: Frame
@@ -115,6 +132,23 @@ local function shakeFrom(at: Vector3, amount: number, radius: number)
 	end
 end
 
+-- A flashing banner mid-screen, for raiders only. A newer one replaces it.
+local function showWarning(text: string, color: Color3, seconds: number)
+	if player:GetAttribute("Raid") == nil then
+		return
+	end
+	warningToken += 1
+	local token = warningToken
+	warning.Text = text
+	warning.TextColor3 = color
+	warning.Visible = true
+	task.delay(seconds, function()
+		if warningToken == token then
+			warning.Visible = false
+		end
+	end)
+end
+
 -- Attacks ------------------------------------------------------------------
 
 local function onBolt(from: unknown, to: unknown, travel: unknown)
@@ -157,12 +191,7 @@ local function onCharge(from: unknown, to: unknown, seconds: unknown)
 		orb:Destroy()
 		aim:Destroy()
 	end)
-	if player:GetAttribute("Raid") ~= nil then
-		warning.Visible = true
-		task.delay(seconds, function()
-			warning.Visible = false
-		end)
-	end
+	showWarning("SUPERLASER CHARGING: MOVE!", DANGER, seconds)
 end
 
 local function onSuperlaser(from: unknown, to: unknown)
@@ -237,6 +266,158 @@ local function onResult(won: unknown, difficulty: unknown)
 	end
 end
 
+local DRONE_RED = Color3.fromRGB(255, 70, 60)
+local WAVE_COLOR = Color3.fromRGB(255, 120, 90)
+local RING_SEGMENTS = 36
+
+local function onDrone(at: unknown)
+	if typeof(at) ~= "Vector3" then
+		return
+	end
+	CombatController.explode(CFrame.new(at), Vector3.new(10, 6, 10), "#FF4A3D", 0)
+end
+
+-- Two unit vectors spanning the plane with this normal.
+local function planeBasis(normal: Vector3): (Vector3, Vector3)
+	local other = if math.abs(normal.Y) < 0.9 then Vector3.yAxis else Vector3.xAxis
+	local u = normal:Cross(other).Unit
+	return u, normal:Cross(u).Unit
+end
+
+local function onShockCharge(center: unknown, normal: unknown, seconds: unknown)
+	if typeof(center) ~= "Vector3" or typeof(normal) ~= "Vector3" or type(seconds) ~= "number" then
+		return
+	end
+	-- The plane the ring will sweep, shown as a faint red disc.
+	local disc = glowPart(Enum.PartType.Cylinder, DANGER, Vector3.one)
+	disc.Material = Enum.Material.ForceField
+	disc.Size = Vector3.new(1, R.SHOCKWAVE_RANGE * 2, R.SHOCKWAVE_RANGE * 2)
+	local u, w = planeBasis(normal)
+	-- A cylinder's axis is X: lay it along the normal.
+	disc.CFrame = CFrame.fromMatrix(center, normal, u, w)
+	disc.Transparency = 0.35
+	TweenService:Create(disc, TweenInfo.new(seconds), { Transparency = 0.1 }):Play()
+	task.delay(seconds, function()
+		disc:Destroy()
+	end)
+	showWarning("SHOCKWAVE: GET OUT OF THE RED PLANE!", WAVE_COLOR, seconds + 0.6)
+end
+
+local function onShockwave(center: unknown, normal: unknown)
+	if typeof(center) ~= "Vector3" or typeof(normal) ~= "Vector3" then
+		return
+	end
+	local u, w = planeBasis(normal)
+	local segments: { Part } = {}
+	for _ = 1, if ClientState.reducedEffects then RING_SEGMENTS // 2 else RING_SEGMENTS do
+		table.insert(segments, glowPart(Enum.PartType.Block, WAVE_COLOR, Vector3.one))
+	end
+	table.insert(rings, {
+		segments = segments,
+		center = center,
+		u = u,
+		w = w,
+		normal = normal,
+		started = os.clock(),
+	})
+	shakeFrom(center, 2, 1200)
+end
+
+-- Grows every shockwave ring at SHOCKWAVE_SPEED, fading as it goes.
+local function stepRings()
+	local now = os.clock()
+	for i = #rings, 1, -1 do
+		local ring = rings[i]
+		local radius = (now - ring.started) * R.SHOCKWAVE_SPEED
+		if radius > R.SHOCKWAVE_RANGE then
+			for _, segment in ring.segments do
+				segment:Destroy()
+			end
+			table.remove(rings, i)
+			continue
+		end
+		local count = #ring.segments
+		local length = 2 * math.pi * math.max(radius, 1) / count
+		local fade = radius / R.SHOCKWAVE_RANGE
+		for index, segment in ring.segments do
+			local angle = (index - 1) / count * 2 * math.pi
+			local out = ring.u * math.cos(angle) + ring.w * math.sin(angle)
+			local tangent = ring.normal:Cross(out)
+			segment.Size = Vector3.new(length * 1.05, R.SHOCKWAVE_THICKNESS, R.SHOCKWAVE_BAND)
+			segment.CFrame = CFrame.fromMatrix(ring.center + out * radius, tangent, ring.normal)
+			segment.Transparency = 0.15 + 0.75 * fade
+		end
+	end
+end
+
+local function onBombard(spots: unknown, seconds: unknown)
+	if type(spots) ~= "table" or type(seconds) ~= "number" then
+		return
+	end
+	for _, spot in spots :: { any } do
+		if typeof(spot) ~= "Vector3" then
+			continue
+		end
+		local zone = glowPart(Enum.PartType.Ball, DRONE_RED, Vector3.one * 4)
+		zone.Material = Enum.Material.ForceField
+		zone.CFrame = CFrame.new(spot)
+		TweenService:Create(zone, TweenInfo.new(seconds, Enum.EasingStyle.Linear), {
+			Size = Vector3.one * R.BOMBARD_RADIUS * 2,
+		}):Play()
+		local core = glowPart(Enum.PartType.Ball, DRONE_RED, Vector3.one * 3)
+		core.CFrame = CFrame.new(spot)
+		Theme.animate(core, function(now)
+			core.Transparency = if math.floor(now * 8) % 2 == 0 then 0 else 0.7
+		end)
+		task.delay(seconds, function()
+			zone:Destroy()
+			core:Destroy()
+		end)
+	end
+	showWarning("BOMBARDMENT INCOMING: MOVE!", DRONE_RED, seconds)
+end
+
+local function onBombardBlast(spots: unknown)
+	if type(spots) ~= "table" then
+		return
+	end
+	for _, spot in spots :: { any } do
+		if typeof(spot) == "Vector3" then
+			CombatController.explode(
+				CFrame.new(spot),
+				Vector3.new(R.BOMBARD_RADIUS, R.BOMBARD_RADIUS / 2, R.BOMBARD_RADIUS),
+				"#FF6A3D",
+				0
+			)
+		end
+	end
+end
+
+local function onWeakMoved(from: unknown, to: unknown)
+	if typeof(from) ~= "Vector3" or typeof(to) ~= "Vector3" then
+		return
+	end
+	local streak = glowPart(Enum.PartType.Cylinder, LASER_GREEN, Vector3.one)
+	beamBetween(streak, from, to, 3)
+	fadeAway(streak, 0.7)
+	local flash = glowPart(Enum.PartType.Ball, LASER_CORE, Vector3.one * 10)
+	flash.CFrame = CFrame.new(to)
+	TweenService:Create(flash, TweenInfo.new(0.6), { Size = Vector3.one * 60, Transparency = 1 })
+		:Play()
+	task.delay(0.65, function()
+		flash:Destroy()
+	end)
+	showWarning("WEAK POINT MOVED!", LASER_GREEN, 1.4)
+end
+
+local function onEnraged(at: unknown)
+	if typeof(at) ~= "Vector3" then
+		return
+	end
+	shakeFrom(at, 3, 1500)
+	showWarning("THE DEATH STAR IS ENRAGED!", DANGER, 2.5)
+end
+
 local function onEvent(kind: unknown, ...: unknown)
 	if kind == "bolt" then
 		onBolt(...)
@@ -248,6 +429,20 @@ local function onEvent(kind: unknown, ...: unknown)
 		onBossDown(...)
 	elseif kind == "result" then
 		onResult(...)
+	elseif kind == "drone" then
+		onDrone(...)
+	elseif kind == "shockCharge" then
+		onShockCharge(...)
+	elseif kind == "shockwave" then
+		onShockwave(...)
+	elseif kind == "bombard" then
+		onBombard(...)
+	elseif kind == "bombardBlast" then
+		onBombardBlast(...)
+	elseif kind == "weakMoved" then
+		onWeakMoved(...)
+	elseif kind == "enraged" then
+		onEnraged(...)
 	end
 end
 
@@ -312,7 +507,9 @@ local function refresh()
 		local endsAt = boss:GetAttribute("EndsAt")
 		local raiders = boss:GetAttribute("Raiders")
 		local share = if type(health) == "number" then math.clamp(health, 0, 1) else 1
-		barTitle.Text = `DEATH STAR  ·  {string.upper(raid)}`
+		local enraged = boss:GetAttribute("Enraged") == true
+		barTitle.Text =
+			`DEATH STAR  ·  {string.upper(raid)}{if enraged then "  ·  ENRAGED" else ""}`
 		barTitle.TextColor3 = colorOf(raid)
 		barFill.Size = UDim2.fromScale(share, 1)
 		barPercent.Text = `{math.ceil(share * 100)}%`
@@ -474,6 +671,7 @@ function RaidController.start()
 	Net.RaidEvent.OnClientEvent:Connect(onEvent)
 	RunService.Heartbeat:Connect(function(dt)
 		stepBolts()
+		stepRings()
 		sinceRefresh += dt
 		if sinceRefresh >= REFRESH then
 			sinceRefresh = 0

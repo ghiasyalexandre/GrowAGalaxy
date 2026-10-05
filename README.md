@@ -29,6 +29,7 @@ hierarchy, setup, manual test steps, acceptance criteria and known limitations.
 | 17. Optional Robux purchases (off until configured): passes, boosts, packs, ship passes, Galaxy Store | [Merged](docs/stage-17-monetization.md) |
 | 18. Daily prizes (14 days), flashier Galaxy Store, premium shortcut | [Merged](docs/stage-18-daily-premium.md) |
 | 19. Roomier ISS, Saturn V raid beacon, Death Star raids in three difficulties | [Merged](docs/stage-19-iss-raids.md) |
+| 20. Polish: floating posture, Death Star overhaul, random asteroid groups, curved progression | [Merged](docs/stage-20-polish.md) |
 | 7. Polish | Not started |
 | 8. Monetization | Not started |
 | 9. Expansion | Not started |

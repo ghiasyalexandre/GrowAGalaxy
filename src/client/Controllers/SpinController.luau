@@ -3,8 +3,10 @@
 -- doesn't replicate every frame:
 --
 --   GaG_Spin   Parts or models with a SpinSpeed attribute (radians per
---              second) turn about the world's up axis through their pivot
---              (the ISS hologram, showroom ships, the raid beacon's rings).
+--              second) turn about the world's up axis through their centre
+--              (a model's bounding-box centre, not its pivot, which an
+--              imported model may have far off to one side): the ISS
+--              hologram, showroom ships, the raid beacon's rings.
 --   GaG_Pulse  Parts whose Transparency breathes between their PulseFrom and
 --              PulseTo attributes (the raid pads' light columns).
 --
@@ -19,7 +21,7 @@ local SPIN_TAG = "GaG_Spin"
 local PULSE_TAG = "GaG_Pulse"
 local PULSE_SPEED = 2.2 -- radians per second
 
-type Spinner = { base: CFrame, speed: number }
+type Spinner = { base: CFrame, center: Vector3, speed: number }
 
 local SpinController = {}
 
@@ -33,11 +35,20 @@ local function pivotOf(instance: Instance): CFrame?
 	return nil
 end
 
+-- The point a spinner turns about.
+local function centerOf(instance: Instance, pivot: CFrame): Vector3
+	if instance:IsA("Model") then
+		local box = instance:GetBoundingBox()
+		return box.Position
+	end
+	return pivot.Position
+end
+
 local function addSpinner(instance: Instance)
 	local base = pivotOf(instance)
 	local speed = instance:GetAttribute("SpinSpeed")
 	if base and type(speed) == "number" then
-		spinners[instance] = { base = base, speed = speed }
+		spinners[instance] = { base = base, center = centerOf(instance, base), speed = speed }
 	end
 end
 
@@ -56,10 +67,10 @@ local function step()
 		if instance.Parent == nil then
 			continue
 		end
-		local turned = CFrame.new(spinner.base.Position)
-			* CFrame.Angles(0, (now * spinner.speed) % (2 * math.pi), 0)
-			* spinner.base.Rotation;
-		(instance :: PVInstance):PivotTo(turned)
+		-- Turn the starting pivot about the vertical axis through the centre.
+		local turn = CFrame.Angles(0, (now * spinner.speed) % (2 * math.pi), 0)
+		local center = CFrame.new(spinner.center);
+		(instance :: PVInstance):PivotTo(center * turn * center:Inverse() * spinner.base)
 	end
 	local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED)
 	for part in pulsers do

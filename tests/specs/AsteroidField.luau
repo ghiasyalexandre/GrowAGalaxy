@@ -54,6 +54,47 @@ return function(T, Loader)
 			end
 		end)
 
+		T.test("groups vary: lone rocks, clumps and streams", function()
+			local seed = 11
+			local function rng(): number
+				seed = (seed * 1103515245 + 12345) % 2147483648
+				return seed / 2147483648
+			end
+			local sizes, streams, singles = {}, 0, 0
+			for _ = 1, 400 do
+				local plan = AsteroidField.groupPlan(rng)
+				T.truthy(plan.members >= A.CLUSTER_MIN and plan.members <= A.CLUSTER_MAX)
+				T.truthy(
+					plan.spread >= A.CLUSTER_SPREAD_MIN and plan.spread <= A.CLUSTER_SPREAD_MAX
+				)
+				sizes[plan.members] = true
+				if plan.stream then
+					streams += 1
+					local s = plan.stream
+					T.near(math.sqrt(s.x * s.x + s.y * s.y + s.z * s.z), 1, 1e-6)
+				end
+				if plan.members == 1 then
+					singles += 1
+				end
+			end
+			T.truthy(streams > 0 and singles > 0, "both streams and lone rocks appear")
+			T.truthy(sizes[A.CLUSTER_MAX] ~= nil, "big groups still appear")
+		end)
+
+		T.test("rocks vary in size, worth and durability together", function()
+			local base = A.SIZES.Medium
+			for i = 0, 10 do
+				local value = i / 10
+				local size = AsteroidField.varied(base, function()
+					return value
+				end)
+				local scale = size.radius / base.radius
+				T.truthy(scale >= 1 - A.SIZE_JITTER - 1e-9 and scale <= 1 + A.SIZE_JITTER + 1e-9)
+				T.near(size.reward, math.max(1, math.floor(base.reward * scale * scale + 0.5)))
+				T.equal(base.radius, A.SIZES.Medium.radius, "the config is not changed")
+			end
+		end)
+
 		T.test("asteroids keep MIN_GAP between surfaces", function()
 			local other = { position = open, radius = 10 }
 			local touching = { x = open.x + 20 + A.MIN_GAP - 1, y = open.y, z = open.z }
@@ -101,12 +142,15 @@ return function(T, Loader)
 			end
 		)
 
-		T.test("cluster members stay within the spread of their centre", function()
+		T.test("group members stay within reach of their centre", function()
 			local rng = lcg(3)
 			for _ = 1, 100 do
-				local p = AsteroidField.near(open, A.CLUSTER_SPREAD, rng)
+				local plan = AsteroidField.groupPlan(rng)
+				-- A stream reaches 2 x spread along its line, plus 0.3 x spread jitter.
+				local reach = plan.spread * (if plan.stream then 2.3 else 1)
+				local p = AsteroidField.inGroup(open, plan, rng)
 				local d = math.sqrt((p.x - open.x) ^ 2 + (p.y - open.y) ^ 2 + (p.z - open.z) ^ 2)
-				T.truthy(d <= A.CLUSTER_SPREAD + 1e-6)
+				T.truthy(d <= reach + 1e-6)
 			end
 		end)
 	end)

@@ -4,7 +4,9 @@
 --
 -- The ladder: ships unlock in ORDER. A ship can be bought once you own the
 -- one before it (Logic/Progression.shipUnlocked). A ship with a productKey can
--- also be unlocked with Robux (Config.Products) and has the same stats.
+-- also be unlocked with Robux (Config.Products) and has the same stats. Beam
+-- power and hull climb on a curve (each step up adds more than the last),
+-- like the prices.
 --
 -- Models: ShipBuilder dresses a ship with ReplicatedStorage/Assets/Ships/<model>
 -- (imported in Studio, see assets/roblox/Ships/README.md), scaled so its
@@ -123,7 +125,7 @@ local SPECS: { [string]: Spec } = {
 		size = 17,
 		yaw = 180, -- nose at +Z in the export
 		cost = 45000,
-		stats = { 150, 80, 110, 2.5, 22, 155, 160, 38, 1.8, 4, 5 },
+		stats = { 150, 80, 110, 2.5, 23, 155, 160, 38, 1.8, 4, 5 },
 	},
 	InfraredFurtive = {
 		name = "Infrared Furtive",
@@ -133,7 +135,7 @@ local SPECS: { [string]: Spec } = {
 		size = 18,
 		yaw = 180, -- nose at +Z in the export
 		cost = 90000,
-		stats = { 170, 95, 125, 2.7, 25, 165, 170, 42, 2.0, 4.5, 4.5 },
+		stats = { 170, 95, 125, 2.7, 28, 165, 170, 42, 2.0, 4.5, 4.5 },
 	},
 	InterstellarRunner = {
 		name = "Interstellar Runner",
@@ -144,7 +146,7 @@ local SPECS: { [string]: Spec } = {
 		size = 18,
 		yaw = 180, -- nose at +Z in the export
 		cost = 160000,
-		stats = { 195, 110, 135, 2.6, 26, 170, 180, 45, 2.2, 5, 4.5 },
+		stats = { 195, 110, 135, 2.6, 32, 170, 180, 45, 2.2, 5, 4.5 },
 	},
 	Transtellar = {
 		name = "Transtellar",
@@ -154,7 +156,7 @@ local SPECS: { [string]: Spec } = {
 		size = 20,
 		yaw = 180, -- nose at +Z in the export
 		cost = 280000,
-		stats = { 185, 100, 135, 2.4, 30, 185, 200, 48, 2.0, 5, 4.5 },
+		stats = { 185, 100, 135, 2.4, 44, 185, 200, 48, 2.0, 5, 4.5 },
 	},
 	DualStriker = {
 		name = "Dual Striker",
@@ -163,7 +165,7 @@ local SPECS: { [string]: Spec } = {
 		paint = "#F28C28",
 		size = 22,
 		cost = 450000,
-		stats = { 180, 100, 130, 2.3, 36, 190, 230, 50, 1.9, 5, 4.5 },
+		stats = { 180, 100, 130, 2.3, 54, 190, 230, 50, 1.9, 5, 4.5 },
 	},
 	UltravioletIntruder = {
 		name = "Ultraviolet Intruder",
@@ -172,7 +174,7 @@ local SPECS: { [string]: Spec } = {
 		paint = "#8C4DE0",
 		size = 20,
 		cost = 700000,
-		stats = { 210, 120, 145, 2.8, 38, 205, 240, 55, 2.3, 5.5, 4 },
+		stats = { 210, 120, 145, 2.8, 57, 205, 240, 55, 2.3, 5.5, 4 },
 	},
 	MeteorSlicer = {
 		name = "Meteor Slicer",
@@ -181,7 +183,7 @@ local SPECS: { [string]: Spec } = {
 		paint = "#C9C2B8",
 		size = 20,
 		cost = 1000000,
-		stats = { 240, 135, 160, 3.0, 42, 220, 260, 60, 2.5, 6, 4 },
+		stats = { 240, 135, 160, 3.0, 70, 220, 260, 60, 2.5, 6, 4 },
 	},
 }
 
@@ -209,7 +211,8 @@ for index, id in ORDER do
 			heatCapacity = s[7],
 			coolingRate = s[8],
 			cargoCapacity = 60 + 30 * (index - 1),
-			hull = 100 + 30 * (index - 1),
+			-- Rises on a curve: 100, 124, 156 ... 700 for the flagship.
+			hull = 100 + 20 * (index - 1) + 4 * (index - 1) ^ 2,
 			boostMultiplier = s[9],
 			boostDuration = s[10],
 			boostRecharge = s[11],
