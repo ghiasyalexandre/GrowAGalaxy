@@ -518,6 +518,34 @@ function DataSystem.setShipLook(
 	return true
 end
 
+-- Redeems a code (Config.Codes, already upper-cased and trimmed) for the
+-- player: grants its fixed reward and records it. Returns the code's
+-- definition, or nil and why not.
+function DataSystem.redeemCode(player: Player, code: string): (any, string?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil, "Your save isn't loaded yet."
+	end
+	local def = Config.Codes.BY_CODE[code]
+	if def == nil then
+		return nil, "That code doesn't exist."
+	end
+	if profile.redeemedCodes[code] then
+		return nil, "You've already redeemed that code."
+	end
+	profile.redeemedCodes[code] = true
+	if def.stardust then
+		DataSystem.addStardust(player, def.stardust)
+	end
+	local boost = def.boost
+	if boost then
+		profile.boosts[boost.source] =
+			RewardMath.extend(profile.boosts[boost.source], boost.seconds)
+		push(player, "boosts", table.clone(profile.boosts))
+	end
+	return def, nil
+end
+
 -- Gives the player a trail (the caller has paid).
 function DataSystem.grantTrail(player: Player, trailId: string)
 	local profile = DataSystem.getProfile(player)

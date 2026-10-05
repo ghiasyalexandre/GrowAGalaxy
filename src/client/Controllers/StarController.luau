@@ -215,13 +215,11 @@ local function buildPlanets(v: Visual)
 		local slotDef = S.SLOTS[slot]
 		local planetId = planets[slot]
 		local def = if planetId then P.BY_ID[planetId] else nil
-		-- Open orbits show as rings even before a planet is bought.
-		for _, item in
-			ring(v.core, slotDef.orbit, slotDef.tilt, RING_COLOR, if def then 0.35 else 0.2)
-		do
-			table.insert(v.rings, item)
-		end
 		if def then
+			-- An orbit's ring shows once a planet has been bought for it.
+			for _, item in ring(v.core, slotDef.orbit, slotDef.tilt, RING_COLOR, 0.35) do
+				table.insert(v.rings, item)
+			end
 			local planetLevel = levels[slot] or 1
 			local radius = StarMath.planetRadius(def.id, planetLevel)
 			local part = Instance.new("Part")

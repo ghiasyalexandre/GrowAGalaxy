@@ -294,5 +294,19 @@ return function(T, Loader)
 			T.equal(levels["3"], nil, "no planet in slot 3")
 			T.equal(levels["4"], nil)
 		end)
+
+		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()
+			local data = ProfileSchema.default()
+			data.schemaVersion = 12
+			data.redeemedCodes = nil :: any
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(next(data.redeemedCodes), nil, "none redeemed yet")
+			data.redeemedCodes = { ILUVGHIASY = true, BAD = 5 } :: any
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.redeemedCodes.ILUVGHIASY, true)
+			T.equal(data.redeemedCodes.BAD, nil)
+			local code = Config.Codes.BY_CODE.ILUVGHIASY
+			T.equal(code and code.stardust, 500000, "the code gives 500,000 Stardust")
+		end)
 	end)
 end

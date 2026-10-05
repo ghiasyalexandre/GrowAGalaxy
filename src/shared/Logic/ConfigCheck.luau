@@ -295,6 +295,16 @@ function ConfigCheck.run(config: any): { string }
 		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
+	-- Codes: upper case (players' input is upper-cased), each with a reward.
+	for code, def in config.Codes.BY_CODE do
+		if code ~= string.upper(code) or #code > config.Codes.MAX_LENGTH then
+			fail(`Code {code}: must be upper case and at most MAX_LENGTH letters`)
+		end
+		if (def.stardust or 0) <= 0 and def.boost == nil then
+			fail(`Code {code}: needs a reward`)
+		end
+	end
+
 	-- Leaderboard store.
 	local board = config.Leaderboard
 	if board.STORE == "" or board.SCOPE == "" or board.WRITE_INTERVAL < 6 then

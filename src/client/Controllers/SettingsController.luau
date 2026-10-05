@@ -8,6 +8,7 @@
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
+--   Codes           a box to redeem codes for rewards (CodeSystem)
 --
 -- Sliders preview live and save when released.
 
@@ -28,6 +29,7 @@ local gui: ScreenGui
 local panel: Frame
 local list: ScrollingFrame
 local refresh: () -> ()
+local codeRow: (order: number) -> ()
 -- The slider being dragged, if any.
 local drag: { follow: (number) -> (), release: () -> () }? = nil
 
@@ -175,6 +177,51 @@ local function applyBounds()
 	end
 end
 
+-- A code box: type a code, press Redeem (or Enter); the server answers.
+codeRow = function(order: number)
+	local row = rowFrame(order, "Codes", "Got a code? Redeem it for rewards")
+	local box = Instance.new("TextBox")
+	box.Name = "CodeBox"
+	box.AnchorPoint = Vector2.new(1, 0.5)
+	box.Position = UDim2.new(1, -116, 0.5, 0)
+	box.Size = UDim2.new(0.42, -70, 0, 34)
+	box.BackgroundColor3 = Color3.fromRGB(10, 12, 26)
+	box.BorderSizePixel = 0
+	box.ClearTextOnFocus = false
+	box.PlaceholderText = "Enter code"
+	box.PlaceholderColor3 = Theme.COLORS.subtle
+	box.Text = ""
+	box.Font = Enum.Font.GothamBold
+	box.TextSize = 15
+	box.TextColor3 = Theme.COLORS.text
+	box.Parent = row
+	local round = Instance.new("UICorner")
+	round.CornerRadius = UDim.new(0, 8)
+	round.Parent = box
+	local busy = false
+	local function redeem()
+		if busy or box.Text == "" then
+			return
+		end
+		busy = true
+		local ok, message = Net.CodeRequest:InvokeServer(box.Text)
+		busy = false
+		ClientState.notify:Fire(if type(message) == "string" then message else "Try again.")
+		if ok then
+			box.Text = ""
+		end
+	end
+	local button = Theme.button(row, "Redeem", "buy", redeem)
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -10, 0.5, 0)
+	button.Size = UDim2.fromOffset(100, 36)
+	box.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			redeem()
+		end
+	end)
+end
+
 refresh = function()
 	if not gui.Enabled then
 		return
@@ -221,6 +268,7 @@ refresh = function()
 			applyBounds()
 		end
 	)
+	codeRow(6)
 end
 
 local function build()
@@ -230,9 +278,9 @@ local function build()
 	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0.9, 0, 0, 420)
+	panel.Size = UDim2.new(0.9, 0, 0, 480)
 	local size = Instance.new("UISizeConstraint")
-	size.MaxSize = Vector2.new(520, 420)
+	size.MaxSize = Vector2.new(520, 480)
 	size.Parent = panel
 	Theme.label(panel, {
 		Position = UDim2.fromOffset(16, 10),

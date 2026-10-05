@@ -42,7 +42,9 @@ local ProfileSchema = {}
 --    equipped; the controls hint setting. Older profiles start with none.
 -- 12: planets level up in their slots: stars save planetLevels (slot ->
 --    2..MAX_LEVEL). Older planets are level 1.
-ProfileSchema.VERSION = 12
+-- 13: redeemed codes (Config.Codes), so each works once per player.
+--    Older profiles have redeemed none.
+ProfileSchema.VERSION = 13
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -82,6 +84,7 @@ function ProfileSchema.default(): Profile
 		hangar = {},
 		showcase = {},
 		ownedTrails = {},
+		redeemedCodes = {},
 		trail = nil,
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
@@ -429,6 +432,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 
 	-- Trails: known ids only for the one equipped, which must be owned.
 	data.ownedTrails = flags(data.ownedTrails)
+	data.redeemedCodes = flags(data.redeemedCodes)
 	if
 		type(data.trail) ~= "string"
 		or not data.ownedTrails[data.trail]
