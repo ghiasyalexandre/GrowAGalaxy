@@ -295,6 +295,13 @@ function ConfigCheck.run(config: any): { string }
 		fail("Raids: drones, shockwaves and bombardment need positive speeds and delays")
 	end
 
+	-- Badges: a real id, a stat and a positive goal.
+	for key, badge in config.Badges.BY_KEY do
+		if badge.id <= 0 or badge.goal <= 0 or badge.stat == "" then
+			fail(`Badge {key}: needs a Creator Hub id, a stat and a positive goal`)
+		end
+	end
+
 	-- Trails: known colours, multipliers above 1.
 	for _, id in config.Trails.ORDER do
 		local def = config.Trails.BY_ID[id]

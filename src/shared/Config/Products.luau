@@ -6,8 +6,12 @@
 -- Nothing can be bought until it is configured:
 --   * PURCHASES_ENABLED is the master switch (false = the Store shows every
 --     offer as "Not available yet" and the server ignores purchases);
---   * each product needs its real `id` from the Creator Hub (0 = not set up)
---     and `enabled = true`.
+--   * each product needs its real `id` from the Creator Hub. An id of 0 means
+--     not set up: the product is disabled (hidden, never fulfilled).
+--
+-- Connected (Creator Hub ids): Meteor Slicer ship pass 2005413560, 2x Star
+-- Production pass 2006121509, Automatic Collection pass 2005767573, Mining
+-- Boost product 3716697618, Stardust Pouch product 3716697789.
 -- ConfigCheck refuses PURCHASES_ENABLED with an enabled product whose id is
 -- 0. See docs/monetization-setup.md for creating the passes and products.
 --
@@ -55,6 +59,7 @@ export type ProductDef = {
 
 local function pass(
 	key: string,
+	id: number,
 	name: string,
 	benefit: string,
 	stacking: string,
@@ -64,8 +69,8 @@ local function pass(
 	return {
 		key = key,
 		kind = "GamePass",
-		id = 0,
-		enabled = true,
+		id = id,
+		enabled = id > 0,
 		category = category or "pass",
 		displayName = name,
 		benefit = benefit,
@@ -76,6 +81,7 @@ end
 
 local function product(
 	key: string,
+	id: number,
 	name: string,
 	benefit: string,
 	stacking: string,
@@ -85,8 +91,8 @@ local function product(
 	return {
 		key = key,
 		kind = "DeveloperProduct",
-		id = 0,
-		enabled = true,
+		id = id,
+		enabled = id > 0,
 		category = category,
 		displayName = name,
 		benefit = benefit,
@@ -101,6 +107,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	-- Permanent passes
 	MiningMultiplier = pass(
 		"MiningMultiplier",
+		0,
 		"2x Mining Stardust",
 		"Doubles the Stardust you get for breaking asteroids. Star income is not affected.",
 		"Stacks with a Mining Boost: 4x while both are active.",
@@ -108,6 +115,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	StarMultiplier = pass(
 		"StarMultiplier",
+		2006121509,
 		"2x Star Production",
 		"Doubles the Stardust your stars make from now on. Mining and Stardust already made are not affected.",
 		"Stacks with a Star Production Boost: 4x while both are active.",
@@ -115,6 +123,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	EnhancedBeam = pass(
 		"EnhancedBeam",
+		0,
 		"Enhanced Mining Beam",
 		"25% more extraction power on every ship, so asteroids break faster. Stardust per asteroid and PvP damage are unchanged.",
 		"Stacks with equipment and the Mining Lab.",
@@ -122,6 +131,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	AutoCollect = pass(
 		"AutoCollect",
+		2005767573,
 		"Automatic Stardust Collection",
 		"Your stars' income goes straight into your wallet while you play, so you never need the Collect console. No offline income, no extra Stardust.",
 		"Works with every production multiplier; adds nothing itself.",
@@ -131,6 +141,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	-- Ships (identical to the versions bought with Stardust in the Shipyard)
 	GalactixRacerShip = pass(
 		"GalactixRacerShip",
+		0,
 		"Galactix Racer",
 		"Unlocks the Galactix Racer (ship 3) at once. Same stats as the Stardust version.",
 		"Permanent. Already own it? Nothing to buy.",
@@ -139,14 +150,25 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	CamoStellarShip = pass(
 		"CamoStellarShip",
+		0,
 		"Camo Stellar",
 		"Unlocks the Camo Stellar (ship 5) at once. Same stats as the Stardust version.",
 		"Permanent. Already own it? Nothing to buy.",
 		{ ship = "CamoStellar" },
 		"ship"
 	),
+	MeteorSlicerShip = pass(
+		"MeteorSlicerShip",
+		2005413560,
+		"Meteor Slicer",
+		"Unlocks the Meteor Slicer (ship 11, the flagship) at once. Same stats as the Stardust version.",
+		"Permanent. Already own it? Nothing to buy.",
+		{ ship = "MeteorSlicer" },
+		"ship"
+	),
 	InterstellarRunnerShip = pass(
 		"InterstellarRunnerShip",
+		0,
 		"Interstellar Runner",
 		"Unlocks the Interstellar Runner (ship 7) at once. Same stats as the Stardust version.",
 		"Permanent. Already own it? Nothing to buy.",
@@ -157,6 +179,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	-- Temporary boosts
 	MiningBoost = product(
 		"MiningBoost",
+		3716697618,
 		"Mining Boost",
 		"2x Stardust from asteroids for 15 minutes of play time.",
 		"Buying again adds 15 more minutes (the boost stays 2x). The timer pauses while you're offline.",
@@ -165,6 +188,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	StarBoost = product(
 		"StarBoost",
+		0,
 		"Star Production Boost",
 		"2x Stardust from your stars for 15 minutes of play time.",
 		"Buying again adds 15 more minutes (the boost stays 2x). The timer pauses while you're offline.",
@@ -175,6 +199,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	-- Stardust packs (fixed amounts, never multiplied; need balance review)
 	StardustSmall = product(
 		"StardustSmall",
+		3716697789,
 		"Stardust Pouch",
 		"Adds exactly 2,500 Stardust to your wallet.",
 		"Fixed amount: multipliers and boosts don't apply.",
@@ -183,6 +208,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	StardustMedium = product(
 		"StardustMedium",
+		0,
 		"Stardust Crate",
 		"Adds exactly 12,000 Stardust to your wallet.",
 		"Fixed amount: multipliers and boosts don't apply.",
@@ -191,6 +217,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	StardustLarge = product(
 		"StardustLarge",
+		0,
 		"Stardust Vault",
 		"Adds exactly 50,000 Stardust to your wallet.",
 		"Fixed amount: multipliers and boosts don't apply.",
@@ -226,11 +253,14 @@ local ORDER: { string } = {
 	"GalactixRacerShip",
 	"CamoStellarShip",
 	"InterstellarRunnerShip",
+	"MeteorSlicerShip",
 	"AuroraTrailPack",
 }
 
 return {
-	PURCHASES_ENABLED = false,
+	-- Live: products with a Roblox id below can be bought; the rest (id 0)
+	-- are hidden until they're set up.
+	PURCHASES_ENABLED = true,
 	ORDER = ORDER,
 	BY_KEY = BY_KEY,
 	BOOST_MULTIPLIER = 2, -- strength of a temporary boost; more time never makes it stronger

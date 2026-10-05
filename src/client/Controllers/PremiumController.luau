@@ -3,13 +3,15 @@
 -- spinning rainbow ring that shows, alternating every SWAP_SECONDS, a
 -- late-game ship (its imported model, turning) or a black hole with a
 -- swirling accretion disk. Clicking opens the Galaxy Store on that offer's
--- tab (Ships or Passes). It never opens anything by itself.
+-- tab (Ships or Passes). It never opens anything by itself. A small gold
+-- tag on its corner shows the offer's current Robux price (UI/Prices).
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
+local Prices = require(script.Parent.Parent.UI.Prices)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -18,20 +20,28 @@ local ShipModel = require(Shared:WaitForChild("Util"):WaitForChild("ShipModel"))
 
 local SWAP_SECONDS = 15
 local SIZE = 96
-local SHIP_ID = "InterstellarRunner" -- the latest ship with a Robux pass
+local SHIP_ID = "MeteorSlicer" -- the flagship, sold as a Robux pass
 local GOLD = Color3.fromRGB(255, 211, 107)
 local CYAN = Color3.fromRGB(95, 227, 255)
 local VIOLET = Color3.fromRGB(176, 120, 255)
 local MAGENTA = Color3.fromRGB(255, 110, 200)
 local FADE = TweenInfo.new(0.6, Enum.EasingStyle.Quad)
 
-type Slide = { view: ViewportFrame, title: string, tab: string, spin: (number) -> () }
+type Slide = {
+	view: ViewportFrame,
+	title: string,
+	tab: string,
+	product: string, -- Config.Products key whose price the tag shows
+	spin: (number) -> (),
+}
 
 local PremiumController = {}
 
 local slides: { Slide } = {}
+local refreshPrice: () -> ()
 local current = 1
 local caption: TextLabel
+local priceTag: TextLabel
 
 local function viewport(parent: Instance): ViewportFrame
 	local view = Instance.new("ViewportFrame")
@@ -107,6 +117,7 @@ local function blackHoleSlide(parent: Instance): Slide
 		view = view,
 		title = "2x Star Production",
 		tab = "pass",
+		product = "StarMultiplier",
 		spin = function(t)
 			disk.CFrame = CFrame.Angles(math.rad(14), t * 1.6, 0) * tilt
 			outer.CFrame = CFrame.Angles(math.rad(14), -t * 0.9, 0) * tilt
@@ -146,6 +157,7 @@ local function shipSlide(parent: Instance): Slide
 		view = view,
 		title = if def then def.displayName else "Ships",
 		tab = "ship",
+		product = if def and def.productKey then def.productKey else "",
 		spin = function(t)
 			if ok and model then
 				model:PivotTo(
@@ -156,6 +168,14 @@ local function shipSlide(parent: Instance): Slide
 			end
 		end,
 	}
+end
+
+-- The price tag: the current offer's Robux price, hidden until it loads.
+refreshPrice = function()
+	local slide = slides[current]
+	local robux = if slide then Prices.get(slide.product) else nil
+	priceTag.Visible = robux ~= nil
+	priceTag.Text = if robux then `R$ {robux}` else ""
 end
 
 local function show(index: number)
@@ -170,6 +190,7 @@ local function show(index: number)
 		end
 	end
 	caption.Text = slides[index].title
+	refreshPrice()
 end
 
 local function build()
@@ -237,6 +258,31 @@ local function build()
 	local tagFill = Instance.new("UIGradient")
 	tagFill.Color = ColorSequence.new(MAGENTA, VIOLET)
 	tagFill.Parent = tag
+	priceTag = Theme.label(button, {
+		Name = "Price",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 8, 0, -6),
+		Size = UDim2.fromOffset(54, 20),
+		BackgroundColor3 = GOLD,
+		BackgroundTransparency = 0,
+		Text = "",
+		Font = Enum.Font.GothamBlack,
+		TextSize = 12,
+		TextColor3 = Color3.fromRGB(40, 24, 0),
+		TextXAlignment = Enum.TextXAlignment.Center,
+		ZIndex = 6,
+		Visible = false,
+	})
+	local priceRound = Instance.new("UICorner")
+	priceRound.CornerRadius = UDim.new(1, 0)
+	priceRound.Parent = priceTag
+	local priceEdge = Instance.new("UIStroke")
+	priceEdge.Color = Color3.new(1, 1, 1)
+	priceEdge.Thickness = 1.5
+	priceEdge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	priceEdge.Parent = priceTag
+	Prices.changed:Connect(refreshPrice)
+
 	caption = Theme.label(button, {
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, 0, 1, 4),
