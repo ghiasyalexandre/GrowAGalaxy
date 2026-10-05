@@ -34,6 +34,7 @@
 --   DodgeballEvent   RemoteEvent     server -> client  ("throw" | "end" | "hit", ...) Zero G Dodgeball
 --   RocketRequest    RemoteEvent     client -> server  (direction: Vector3) fire your ship's rocket
 --   RocketEvent      RemoteEvent     server -> all     ("launch" | "boom", ...) rocket effects
+--   CodeRequest      RemoteFunction  client -> server  (code: string) -> (ok: boolean, message: string)
 --   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
 --                                                       "bossDown" | "result", ...) raid effects
 
@@ -64,6 +65,7 @@ local Net = {
 	DodgeballEvent = folder:WaitForChild("DodgeballEvent") :: RemoteEvent,
 	RocketRequest = folder:WaitForChild("RocketRequest") :: RemoteEvent,
 	RocketEvent = folder:WaitForChild("RocketEvent") :: RemoteEvent,
+	CodeRequest = folder:WaitForChild("CodeRequest") :: RemoteFunction,
 }
 
 return Net

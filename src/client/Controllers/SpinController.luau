@@ -21,35 +21,41 @@ local SPIN_TAG = "GaG_Spin"
 local PULSE_TAG = "GaG_Pulse"
 local PULSE_SPEED = 2.2 -- radians per second
 
-type Spinner = { base: CFrame, center: Vector3, speed: number }
-
 local SpinController = {}
+
+-- Speed in radians per second, and where the model's centre sits relative to
+-- its pivot (measured again whenever its part count changes, e.g. as parts
+-- stream in), so it turns on the spot without drifting.
+type Spinner = { speed: number, offset: Vector3?, parts: number }
 
 local spinners: { [Instance]: Spinner } = {}
 local pulsers: { [BasePart]: true } = {}
 
-local function pivotOf(instance: Instance): CFrame?
-	if instance:IsA("PVInstance") then
-		return (instance :: PVInstance):GetPivot()
-	end
-	return nil
-end
-
--- The point a spinner turns about.
-local function centerOf(instance: Instance, pivot: CFrame): Vector3
-	if instance:IsA("Model") then
-		local box = instance:GetBoundingBox()
-		return box.Position
-	end
-	return pivot.Position
-end
-
 local function addSpinner(instance: Instance)
-	local base = pivotOf(instance)
 	local speed = instance:GetAttribute("SpinSpeed")
-	if base and type(speed) == "number" then
-		spinners[instance] = { base = base, center = centerOf(instance, base), speed = speed }
+	if instance:IsA("PVInstance") and type(speed) == "number" then
+		spinners[instance] = { speed = speed, offset = nil, parts = -1 }
 	end
+end
+
+-- The point a spinner turns about, where it is now.
+local function centerOf(instance: Instance, spinner: Spinner): Vector3?
+	if instance:IsA("BasePart") then
+		return instance.Position
+	elseif not instance:IsA("Model") then
+		return nil
+	end
+	local parts = #instance:GetDescendants()
+	if parts == 0 then
+		return nil
+	end
+	local pivot = instance:GetPivot()
+	if parts ~= spinner.parts or spinner.offset == nil then
+		spinner.parts = parts
+		local box = instance:GetBoundingBox()
+		spinner.offset = pivot:PointToObjectSpace(box.Position)
+	end
+	return pivot:PointToWorldSpace(spinner.offset :: Vector3)
 end
 
 local function addPulser(instance: Instance)
@@ -58,19 +64,23 @@ local function addPulser(instance: Instance)
 	end
 end
 
-local function step()
+local function step(dt: number)
 	if ClientState.reducedEffects then
 		return
 	end
 	local now = os.clock()
 	for instance, spinner in spinners do
-		if instance.Parent == nil then
-			continue
+		-- Turned a little each frame from wherever it is now, so a model whose
+		-- parts stream in late (or that the server moves) is never snapped
+		-- back to an old position.
+		local center = if instance.Parent then centerOf(instance, spinner) else nil
+		if center then
+			local pivot = CFrame.new(center)
+			local turn = CFrame.Angles(0, spinner.speed * dt, 0);
+			(instance :: PVInstance):PivotTo(
+				pivot * turn * pivot:Inverse() * (instance :: PVInstance):GetPivot()
+			)
 		end
-		-- Turn the starting pivot about the vertical axis through the centre.
-		local turn = CFrame.Angles(0, (now * spinner.speed) % (2 * math.pi), 0)
-		local center = CFrame.new(spinner.center);
-		(instance :: PVInstance):PivotTo(center * turn * center:Inverse() * spinner.base)
 	end
 	local wave = 0.5 + 0.5 * math.sin(now * PULSE_SPEED)
 	for part in pulsers do

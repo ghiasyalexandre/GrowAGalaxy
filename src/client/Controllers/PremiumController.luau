@@ -197,6 +197,9 @@ local function build()
 	local gui = Instance.new("ScreenGui")
 	gui.Name = "Premium"
 	gui.ResetOnSpawn = false
+	-- Below every panel (they're DisplayOrder 0 and up): the icon never
+	-- covers a panel the player opened.
+	gui.DisplayOrder = -1
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	local button = Instance.new("TextButton")

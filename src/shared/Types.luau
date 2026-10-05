@@ -74,6 +74,7 @@ export type Profile = {
 	-- Config.Paint.SHOWCASE_SLOTS), in slot order.
 	showcase: { string },
 	ownedTrails: { [string]: boolean }, -- Config.Trails ids bought
+	redeemedCodes: { [string]: boolean }, -- Config.Codes codes already used
 	trail: string?, -- the equipped trail, if any
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.

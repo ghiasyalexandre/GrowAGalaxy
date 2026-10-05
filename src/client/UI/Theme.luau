@@ -384,11 +384,25 @@ function Theme.list(parent: Instance, padding: number): ScrollingFrame
 	return list
 end
 
+-- Empties a list for rebuilding. A scrolling list keeps where it was
+-- scrolled to: emptied, its automatic canvas shrinks and would snap back to
+-- the top, so the position is put back once the new rows are laid out.
 function Theme.clear(list: Instance)
+	local scroll = if list:IsA("ScrollingFrame") then list.CanvasPosition else nil
 	for _, child in list:GetChildren() do
 		if not child:IsA("UIListLayout") then
 			child:Destroy()
 		end
+	end
+	if scroll and scroll.Magnitude > 0 then
+		local frame = list :: ScrollingFrame
+		local function restore()
+			if frame.Parent then
+				frame.CanvasPosition = scroll
+			end
+		end
+		task.defer(restore)
+		task.delay(0, restore) -- again after the next layout pass
 	end
 end
 

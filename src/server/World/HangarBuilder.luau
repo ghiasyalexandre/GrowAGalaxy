@@ -646,9 +646,9 @@ builders.ShowcaseDock = function(model, floor)
 			model
 		)
 		cradle.Name = `Cradle{index}`
-		local rim = flat("CradleGlow", 6.4, 0.2, floor * CFrame.new(0, 1, z), "#5FE3FF", model)
+		local rim = flat("CradleGlow", 6.4, 0.2, floor * CFrame.new(0, 1, z), "#FFFFFF", model)
 		pulse(rim, 0.1, 0.6)
-		light(rim, "#5FE3FF", 22)
+		light(rim, "#FFFFFF", 22)
 	end
 	local sign = Build.sign({
 		name = "DockSign",

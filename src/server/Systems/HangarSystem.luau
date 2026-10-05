@@ -43,6 +43,9 @@ local refresh: (player: Player, justBuilt: string?) -> ()
 
 local SHOWCASE_ID = "ShowcaseDock"
 local DISPLAY_SPIN = 0.25 -- radians per second
+-- Each showcased ship is shrunk so it turns inside its cradle's glow pad.
+local PAD_DIAMETER = 12 -- studs (the white glow ring is 12.8 across)
+local PAD_CLEARANCE = 1 -- studs between the pad and the ship's underside
 
 -- A ship for show: the real ship model in its colours, with everything
 -- that makes it flyable or boardable removed, anchored, turning slowly.
@@ -68,6 +71,8 @@ local function display(shipId: string, look: Types.ShipLook, at: CFrame, accent:
 		end
 	end
 	model.Name = `Display_{shipId}`
+	-- Sent to clients whole, so it never turns with half its parts missing.
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic
 	model:SetAttribute("SpinSpeed", DISPLAY_SPIN)
 	CollectionService:AddTag(model, "GaG_Spin")
 	local def = Config.Ships.BY_ID[shipId]
@@ -92,6 +97,22 @@ local function display(shipId: string, look: Types.ShipLook, at: CFrame, accent:
 		label.Parent = tag
 	end
 	return model
+end
+
+-- Shrinks a display ship so it turns inside its cradle's glow pad (its
+-- widest turning circle, the box's diagonal, fits PAD_DIAMETER) and sets it
+-- just above the pad, centred.
+local function fitOnPad(ship: Model, cradle: BasePart)
+	local _, size = ship:GetBoundingBox()
+	local reach = math.sqrt(size.X * size.X + size.Z * size.Z)
+	if reach > PAD_DIAMETER then
+		ship:ScaleTo(ship:GetScale() * PAD_DIAMETER / reach)
+	end
+	local box, scaled = ship:GetBoundingBox()
+	local top = cradle.Position.Y + cradle.Size.X / 2 -- the cradle stands on its X axis
+	local goal =
+		Vector3.new(cradle.Position.X, top + PAD_CLEARANCE + scaled.Y / 2, cradle.Position.Z)
+	ship:PivotTo(ship:GetPivot() + (goal - box.Position))
 end
 
 -- Rebuilds the ships on the player's Showcase Dock, if it's built.
@@ -123,7 +144,9 @@ function HangarSystem.refreshShowcase(player: Player)
 				laserColor = loadout and loadout.laserColor,
 				boostColor = loadout and loadout.boostColor,
 			}
-			display(shipId, look, at, accent).Parent = dock
+			local ship = display(shipId, look, at, accent)
+			fitOnPad(ship, cradle)
+			ship.Parent = dock
 		end
 	end
 end
