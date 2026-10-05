@@ -12,6 +12,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local DailyMath = require(ReplicatedStorage.Shared.Logic.DailyMath)
 local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
@@ -393,6 +394,31 @@ end
 -- Tells the client which passes are active (Store and HUD).
 function DataSystem.showPasses(player: Player, passes: { [string]: boolean })
 	push(player, "passes", table.clone(passes))
+end
+
+-- Claims today's daily prize (Config.Daily) if it hasn't been claimed.
+-- Returns the calendar day claimed and its prize, or nil. Prizes are fixed:
+-- no multiplier applies.
+function DataSystem.claimDaily(player: Player, today: number): (number?, any)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil, nil
+	end
+	local day, record = DailyMath.claim(profile.daily, today)
+	if day == nil then
+		return nil, nil
+	end
+	profile.daily = record
+	local prize = Config.Daily.PRIZES[day]
+	if prize.stardust then
+		DataSystem.addStardust(player, prize.stardust)
+	elseif prize.boost then
+		local source = prize.boost.source
+		profile.boosts[source] = RewardMath.extend(profile.boosts[source], prize.boost.seconds)
+		push(player, "boosts", table.clone(profile.boosts))
+	end
+	push(player, "daily", table.clone(profile.daily))
+	return day, prize
 end
 
 -- Player settings a client may change (all booleans).

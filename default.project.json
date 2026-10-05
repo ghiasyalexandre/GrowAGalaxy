@@ -54,6 +54,9 @@
         },
         "ShipDestroyed": {
           "$className": "RemoteEvent"
+        },
+        "DailyRequest": {
+          "$className": "RemoteFunction"
         }
       }
     },

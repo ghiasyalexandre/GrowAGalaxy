@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 17 merged into `main`).
+Last updated: 2026-10-05 (stage 18 merged into `main`).
 
 ## Status by stage
 
@@ -23,7 +23,8 @@ Last updated: 2026-10-05 (stage 17 merged into `main`).
 | 15. Opt-in PvP, hull points, ship explosions with debris, over-the-shoulder camera (Alt), slower laser bolts | Merged | Passing (125 tests) | **Not yet** |
 | 16. Hangar station rebuild, hangar upgrade pads, HUD Shipyard and Launch Ship buttons | Merged | Passing (129 tests) | **Not yet** |
 | 17. Optional Robux purchases: passes, boosts, packs, ship passes, Galaxy Store, boost HUD (all switched off, no ids) | Merged | Passing (145 tests) | **Not yet** |
-| 18+. Save hardening, tuning | Not started | | |
+| 18. Daily prizes (14-day calendar), flashier Galaxy Store, premium shortcut (ship / black hole) | Merged | Passing (151 tests) | **Not yet** |
+| 19+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -77,6 +78,10 @@ place, and the next content (more achievements for the new tiers, sounds once au
 exist, monetization only after saves are proven).
 
 ## Open issues and debts
+
+- During stages 17 and 18 files on disk were repeatedly reverted to older versions while a
+  Rojo server (with Studio connected) and other tools were running. Commits were verified
+  before they were made; if Studio shows stale scripts, check the Rojo plugin's two-way sync.
 
 - `Config.Materials`, `Config.Recipes`, `Config.Zones`, `Config.Celestials`, `Config.SolarSystems`
   and the profile's `materials`/`cargo` are unused leftovers of the original design (still
