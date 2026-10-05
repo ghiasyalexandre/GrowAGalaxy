@@ -12,6 +12,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
+local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
 local Net = require(ReplicatedStorage.Shared.Net)
 local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
@@ -180,23 +182,48 @@ function DataSystem.updateStar(player: Player, id: string, changes: StarChanges)
 	pushIncome(player, profile)
 end
 
--- Adds `dt` seconds of star income to "uncollected", up to the cap.
-function DataSystem.accrueIncome(player: Player, dt: number)
+-- Advances `dt` seconds of play for an online player:
+--   * star income made in that time goes to "uncollected" (up to the cap),
+--     multiplied by the star pass and by the star boost for the part of
+--     `dt` the boost still covers (RewardMath.starIncome);
+--   * with the Automatic Collection pass it moves straight to the wallet;
+--   * boost timers count down (they only run while the player is online).
+-- `passes` are the server-verified passes (MonetizationSystem).
+function DataSystem.accrueIncome(player: Player, dt: number, passes: { [string]: boolean })
 	local profile = DataSystem.getProfile(player)
-	if profile == nil then
+	if profile == nil or dt <= 0 then
 		return
 	end
+	local boosts = profile.boosts
 	local rate = ProfileSchema.incomeRate(profile)
-	if rate <= 0 then
-		return
+	if rate > 0 then
+		local made = RewardMath.starIncome(rate, dt, boosts.star, passes)
+		-- The cap grows with the permanent pass, not with a temporary boost.
+		local cap = rate
+			* RewardMath.permanent("star", passes)
+			* Config.Economy.UNCOLLECTED_CAP_SECONDS
+			* HangarMath.storageMultiplier(profile.hangar)
+		local before = profile.uncollected
+		profile.uncollected = StarMath.accrue(before, made, 1, cap)
+		if RewardMath.autoCollect(passes) and profile.uncollected >= 1 then
+			DataSystem.collectIncome(player)
+			-- Counts as having collected once, for the tutorial.
+			if (profile.stats.collections or 0) < 1 then
+				DataSystem.addStat(player, "collections", 1)
+			end
+		elseif math.floor(profile.uncollected) ~= math.floor(before) then
+			push(player, "uncollected", math.floor(profile.uncollected))
+		end
 	end
-	local cap = rate
-		* Config.Economy.UNCOLLECTED_CAP_SECONDS
-		* HangarMath.storageMultiplier(profile.hangar)
-	local before = profile.uncollected
-	profile.uncollected = StarMath.accrue(before, rate, dt, cap)
-	if math.floor(profile.uncollected) ~= math.floor(before) then
-		push(player, "uncollected", math.floor(profile.uncollected))
+	local mining, star = boosts.mining, boosts.star
+	if mining > 0 or star > 0 then
+		boosts.mining = RewardMath.tick(mining, dt)
+		boosts.star = RewardMath.tick(star, dt)
+		-- The HUD counts down by itself; resync every 10 s and when one ends.
+		local ended = (mining > 0 and boosts.mining == 0) or (star > 0 and boosts.star == 0)
+		if ended or mining // 10 ~= boosts.mining // 10 or star // 10 ~= boosts.star // 10 then
+			push(player, "boosts", table.clone(boosts))
+		end
 	end
 end
 
@@ -311,6 +338,61 @@ function DataSystem.grantCosmetic(player: Player, cosmeticId: string)
 	if profile then
 		profile.ownedCosmetics[cosmeticId] = true
 	end
+end
+
+-- Fulfils a developer product: its fixed reward and its PurchaseId are
+-- written together (ReceiptFlow.applyTo). Returns "granted", "duplicate"
+-- (already done for this PurchaseId) or "invalid".
+function DataSystem.applyPurchase(player: Player, purchaseId: string, grants: any): string
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		error("profile not loaded")
+	end
+	local result = ReceiptFlow.applyTo(profile, purchaseId, grants)
+	if result == "granted" then
+		push(player, "stardust", profile.stardust)
+		push(player, "boosts", table.clone(profile.boosts))
+	end
+	return result
+end
+
+-- Yields until the saved copy of the profile contains `purchaseId` (true),
+-- or the session ends or `timeout` seconds pass (false). Asks ProfileStore
+-- to save now rather than waiting for the next autosave.
+function DataSystem.waitForSave(player: Player, purchaseId: string, timeout: number): boolean
+	local session = sessions[player]
+	local deadline = os.clock() + timeout
+	local function saved(): boolean
+		local data = session and session.LastSavedData
+		return data ~= nil
+			and type(data.receipts) == "table"
+			and table.find(data.receipts, purchaseId) ~= nil
+	end
+	while session and session:IsActive() and os.clock() < deadline do
+		if saved() then
+			return true
+		end
+		session:Save()
+		local waitUntil = math.min(os.clock() + 10, deadline)
+		while os.clock() < waitUntil and session:IsActive() and not saved() do
+			task.wait(0.25)
+		end
+	end
+	return saved()
+end
+
+-- Remembers what Roblox last said about the player's passes (a fallback
+-- while a later check fails).
+function DataSystem.setVerifiedPasses(player: Player, passes: { [string]: boolean })
+	local profile = DataSystem.getProfile(player)
+	if profile then
+		profile.verifiedPasses = table.clone(passes)
+	end
+end
+
+-- Tells the client which passes are active (Store and HUD).
+function DataSystem.showPasses(player: Player, passes: { [string]: boolean })
+	push(player, "passes", table.clone(passes))
 end
 
 -- Player settings a client may change (all booleans).

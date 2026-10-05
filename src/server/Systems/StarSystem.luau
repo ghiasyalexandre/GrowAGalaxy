@@ -27,6 +27,7 @@ local Workspace = game:GetService("Workspace")
 local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
+local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local PlacementRules = require(ReplicatedStorage.Shared.Logic.PlacementRules)
@@ -367,7 +368,7 @@ function StarSystem.start()
 			return
 		end
 		for _, player in Players:GetPlayers() do
-			DataSystem.accrueIncome(player, elapsed)
+			DataSystem.accrueIncome(player, elapsed, Entitlements.passes(player))
 		end
 		elapsed = 0
 	end)

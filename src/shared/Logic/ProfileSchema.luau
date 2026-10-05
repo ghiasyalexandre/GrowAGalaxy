@@ -15,7 +15,7 @@ local Types = require(script.Parent.Parent.Types)
 type Profile = Types.Profile
 type Vec3 = Types.Vec3
 
-local MAX_RECEIPTS = 50
+local MAX_RECEIPTS = Config.Products.MAX_RECEIPTS
 
 local ProfileSchema = {}
 
@@ -28,7 +28,10 @@ local ProfileSchema = {}
 --    (Config.Ships.RENAMED) in owned ships, the active ship and loadouts.
 -- 7: hangar upgrades (Config.Hangar), saved as built ids; older profiles start
 --    with none (normalize fills it in).
-ProfileSchema.VERSION = 7
+-- 8: optional purchases: boost time left per source and the passes Roblox
+--    last confirmed; receipts keep up to Config.Products.MAX_RECEIPTS ids.
+--    Older profiles start with no boosts (normalize fills them in).
+ProfileSchema.VERSION = 8
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -63,6 +66,8 @@ function ProfileSchema.default(): Profile
 		stats = {},
 		settings = defaultSettings(),
 		hangar = {},
+		boosts = { mining = 0, star = 0 },
+		verifiedPasses = {},
 		receipts = {},
 	}
 end
@@ -306,6 +311,9 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 
 	data.ownedEquipment = flags(data.ownedEquipment)
 	data.hangar = flags(data.hangar)
+	data.verifiedPasses = flags(data.verifiedPasses)
+	local boosts = if type(data.boosts) == "table" then data.boosts else {}
+	data.boosts = { mining = amount(boosts.mining) or 0, star = amount(boosts.star) or 0 }
 	data.ownedCosmetics = flags(data.ownedCosmetics)
 
 	local loadouts: { [string]: Types.Loadout } = {}
@@ -413,6 +421,8 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		ownedEquipment = table.clone(profile.ownedEquipment),
 		tutorialStep = if profile.tutorial.done then 0 else Progression.tutorialStep(profile.stats),
 		settings = table.clone(profile.settings),
+		boosts = table.clone(profile.boosts),
+		passes = table.clone(profile.verifiedPasses),
 	}
 end
 

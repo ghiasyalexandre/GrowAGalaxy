@@ -25,7 +25,9 @@ local Workspace = game:GetService("Workspace")
 local AsteroidSystem = require(script.Parent.AsteroidSystem)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
+local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local MiningMath = require(ReplicatedStorage.Shared.Logic.MiningMath)
+local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local Reward = require(script.Parent.Parent.Util.Reward)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -84,7 +86,7 @@ local function busy(player: Player, now: number)
 end
 
 local function payOut(player: Player, asteroid: AsteroidSystem.Asteroid)
-	local reward = MiningMath.reward(
+	local base = MiningMath.reward(
 		asteroid.size.reward,
 		asteroid.weakProgress,
 		asteroid.progress,
@@ -93,21 +95,27 @@ local function payOut(player: Player, asteroid: AsteroidSystem.Asteroid)
 	if not AsteroidSystem.breakAsteroid(asteroid) then
 		return
 	end
+	-- Mining pass and boost multiply the reward here, once (RewardMath).
+	local profile = DataSystem.getProfile(player)
+	local entitlements: RewardMath.Entitlements = {
+		passes = Entitlements.passes(player),
+		boosts = if profile then profile.boosts else RewardMath.none().boosts,
+	}
+	local multiplier = RewardMath.multiplier("mining", entitlements)
+	local reward = RewardMath.miningReward(base, entitlements)
 	DataSystem.addStardust(player, reward)
 	DataSystem.addStat(player, "asteroidsMined", 1)
 	if overheatedOn[player] ~= asteroid.id then
 		DataSystem.addStat(player, "coolExtractions", 1)
 	end
-	local bonus = reward - asteroid.size.reward
-	Reward.send(
-		player,
-		"mine",
-		reward,
-		asteroid.position,
-		if bonus > 0
-			then `{asteroid.size.displayName}  ·  +{bonus} precision`
-			else asteroid.size.displayName
-	)
+	local bonus = base - asteroid.size.reward
+	local label = if bonus > 0
+		then `{asteroid.size.displayName}  ·  +{bonus} precision`
+		else asteroid.size.displayName
+	if multiplier > 1 then
+		label ..= `  ·  x{multiplier}`
+	end
+	Reward.send(player, "mine", reward, asteroid.position, label)
 end
 
 -- Clears the readout once the player hasn't hit their asteroid for as long
@@ -144,7 +152,9 @@ function MiningSystem.shot(player: Player, model: Model, info: Types.ShipInfo, a
 
 	currentTarget[player] = asteroid.id
 	local onWeakPoint = hit.Instance == asteroid.weakPoint
-	local gained = MiningMath.rate(info.beamPower, onWeakPoint, A.ROCK_EFFICIENCY) * SHOT_POWER
+	-- The Enhanced Beam pass speeds up extraction only (never the payout).
+	local power = info.beamPower * RewardMath.beamPower(Entitlements.passes(player))
+	local gained = MiningMath.rate(power, onWeakPoint, A.ROCK_EFFICIENCY) * SHOT_POWER
 	asteroid.progress += gained
 	if onWeakPoint then
 		asteroid.weakProgress += gained

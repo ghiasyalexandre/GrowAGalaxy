@@ -7,6 +7,11 @@
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "launch")  -- ship at an ISS berth
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "asteroids")  -- how many exist
 --   game.ServerStorage.DevCommand:Invoke(game.Players:GetPlayers()[1], "grantCosmetic", "GoldenBeam")
+-- Mock purchases (no Robux; same server code paths, Config.Products keys):
+--   ...:Invoke(player, "mockReceipt", "MiningBoost")           -- a developer product receipt
+--   ...:Invoke(player, "mockReceipt", "StardustSmall", "R1")  -- twice with the same id grants once
+--   ...:Invoke(player, "mockPass", "MiningMultiplier", true)   -- a pass, this session only
+--   ...:Invoke(player, "boosts")                               -- boost seconds left
 --
 -- A BindableFunction is used because modules required from the command bar
 -- are separate copies that don't share state with the running game.
@@ -17,6 +22,7 @@ local ServerStorage = game:GetService("ServerStorage")
 
 local AsteroidSystem = require(script.Parent.AsteroidSystem)
 local DataSystem = require(script.Parent.DataSystem)
+local MonetizationSystem = require(script.Parent.MonetizationSystem)
 local RegionSystem = require(script.Parent.RegionSystem)
 local ShipSystem = require(script.Parent.ShipSystem)
 
@@ -34,6 +40,22 @@ local COMMANDS: { [string]: (player: Player, ...any) -> any } = {
 	region = function(player)
 		local region = RegionSystem.getRegion(player)
 		return if region then region.slot else nil
+	end,
+	mockReceipt = function(player, key, purchaseId)
+		return MonetizationSystem.mockReceipt(
+			player,
+			tostring(key),
+			if purchaseId then tostring(purchaseId) else nil
+		)
+	end,
+	mockPass = function(player, key, on)
+		return MonetizationSystem.mockPass(player, tostring(key), on ~= false)
+	end,
+	boosts = function(player)
+		local profile = DataSystem.getProfile(player)
+		return if profile
+			then `mining {profile.boosts.mining}s, star {profile.boosts.star}s`
+			else nil
 	end,
 	grantCosmetic = function(player, cosmeticId)
 		DataSystem.grantCosmetic(player, tostring(cosmeticId))

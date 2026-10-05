@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 16 merged into `main`).
+Last updated: 2026-10-05 (stage 17 merged into `main`).
 
 ## Status by stage
 
@@ -22,7 +22,8 @@ Last updated: 2026-10-05 (stage 16 merged into `main`).
 | 14. 11-ship ladder in unlock order, imported ship models, Shipyard Ships tab with previews | Merged | Passing (120 tests) | **Not yet** |
 | 15. Opt-in PvP, hull points, ship explosions with debris, over-the-shoulder camera (Alt), slower laser bolts | Merged | Passing (125 tests) | **Not yet** |
 | 16. Hangar station rebuild, hangar upgrade pads, HUD Shipyard and Launch Ship buttons | Merged | Passing (129 tests) | **Not yet** |
-| 17+. Save hardening, tuning, monetization | Not started | | |
+| 17. Optional Robux purchases: passes, boosts, packs, ship passes, Galaxy Store, boost HUD (all switched off, no ids) | Merged | Passing (145 tests) | **Not yet** |
+| 18+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -44,6 +45,11 @@ Last updated: 2026-10-05 (stage 16 merged into `main`).
   `[Config]` warnings. ProfileStore runs in mock mode (API services off), so nothing saves.
 
 ## Needs the user
+
+- Optional purchases (stage 17) are built but off. To launch them: create the passes and
+  developer products, fill in the ids and review prices, following
+  [docs/monetization-setup.md](docs/monetization-setup.md). Test first with the Studio mocks
+  there. A real purchase test spends Robux.
 
 0. Upload `assets/ui/GaG_UI_Atlas.png` to Roblox and put its id in
    `src/shared/Config/Sprites.luau` (`IMAGE`) in VS Code; see [stage 12](docs/stage-12-ui-kit.md).

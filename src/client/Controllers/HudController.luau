@@ -24,6 +24,9 @@ local StarMath =
 local Format =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Util"):WaitForChild("Format"))
 local Input = require(script.Parent.Parent.Input)
+local RewardMath = require(
+	ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("RewardMath")
+)
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 
 local READOUT_INTERVAL = 0.1
@@ -55,6 +58,9 @@ local reticle: TextLabel
 local recoverButton: TextButton
 local effectsButton: TextButton
 local shipyardButton: TextButton
+local storeButton: TextButton
+local boostBar: Frame
+local boostsAt = 0 -- os.clock() when the boost times last arrived
 local launchButton: TextButton
 local pvpButton: TextButton
 local setPvpText: (string) -> ()
@@ -461,6 +467,63 @@ local function build()
 	dressButton(shipyardButton, "ButtonPurple", "Ship")
 	Theme.hover(shipyardButton)
 
+	-- Opens the optional Galaxy Store. Only ever opened by the player.
+	storeButton = Instance.new("TextButton")
+	storeButton.Name = "Store"
+	storeButton.Position = UDim2.new(0, 348, 0, 152)
+	storeButton.Size = UDim2.new(0, 120, 0, 40)
+	storeButton.BackgroundColor3 = Color3.new(1, 1, 1)
+	storeButton.AutoButtonColor = false
+	storeButton.Font = Enum.Font.GothamBlack
+	storeButton.TextSize = 15
+	storeButton.TextColor3 = Color3.new(1, 1, 1)
+	storeButton.TextStrokeTransparency = 0.6
+	storeButton.Text = "Store"
+	storeButton.Parent = gui
+	corner(storeButton, 8)
+	local storeGradient = Instance.new("UIGradient")
+	storeGradient.Color =
+		ColorSequence.new(Color3.fromRGB(95, 227, 255), Color3.fromRGB(150, 90, 255))
+	storeGradient.Rotation = 90
+	storeGradient.Parent = storeButton
+	dressButton(storeButton, "ButtonBlue", "Gift")
+	Theme.hover(storeButton)
+
+	-- Active boosts with their time left, under the goal panel.
+	boostBar = Instance.new("Frame")
+	boostBar.Name = "Boosts"
+	boostBar.Position = UDim2.new(0, 16, 0, 258)
+	boostBar.Size = UDim2.new(0, 300, 0, 26)
+	boostBar.BackgroundTransparency = 1
+	boostBar.Parent = gui
+	local boostLayout = Instance.new("UIListLayout")
+	boostLayout.FillDirection = Enum.FillDirection.Horizontal
+	boostLayout.Padding = UDim.new(0, 6)
+	boostLayout.Parent = boostBar
+	for _, source in { "mining", "star" } do
+		local chip = makeLabel(boostBar, {
+			Name = source,
+			Size = UDim2.new(0, 146, 1, 0),
+			BackgroundColor3 = Color3.fromRGB(16, 20, 44),
+			BackgroundTransparency = 0.15,
+			Text = "",
+			TextScaled = false,
+			TextSize = 13,
+			Font = Enum.Font.GothamBlack,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			TextColor3 = if source == "mining"
+				then Color3.fromRGB(95, 227, 255)
+				else Color3.fromRGB(196, 150, 255),
+			Visible = false,
+		})
+		corner(chip, 13)
+		local edge = Instance.new("UIStroke")
+		edge.Color = chip.TextColor3
+		edge.Thickness = 1.5
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Parent = chip
+	end
+
 	-- Spawns your ship at your station's berth and seats you in it.
 	launchButton = Instance.new("TextButton")
 	launchButton.Name = "LaunchShip"
@@ -676,6 +739,22 @@ local function refreshExtraction(flying: boolean)
 		else "EXTRACTING: AIM AT THE GLOWING WEAK POINT"
 end
 
+-- Boost times come from the server; between updates they count down here.
+local function refreshBoosts()
+	local profile = ClientState.profile
+	local boosts = profile and profile.boosts
+	local since = os.clock() - boostsAt
+	for _, source in { "mining", "star" } do
+		local chip = boostBar:FindFirstChild(source) :: TextLabel
+		local left = if boosts then math.max((boosts :: any)[source] - since, 0) else 0
+		chip.Visible = left > 0
+		if left > 0 then
+			local name = if source == "mining" then "MINING" else "STARS"
+			chip.Text = `2x {name}  {RewardMath.clock(left)}`
+		end
+	end
+end
+
 -- Hull comes from the server (CombatSystem's Health attribute on your ship).
 local function refreshHull()
 	local ship = ClientState.ship
@@ -769,6 +848,10 @@ function HudController.init()
 		if field == "tutorialStep" or field == "*" then
 			refreshTutorial()
 		end
+		if field == "boosts" or field == "*" then
+			boostsAt = os.clock()
+			refreshBoosts()
+		end
 	end)
 	ClientState.regionsChanged:Connect(refreshSector)
 	ClientState.modeChanged:Connect(refreshReadout)
@@ -806,6 +889,9 @@ function HudController.init()
 	shipyardButton.Activated:Connect(function()
 		ClientState.openShipyard:Fire()
 	end)
+	storeButton.Activated:Connect(function()
+		ClientState.openStore:Fire()
+	end)
 	launchButton.Activated:Connect(function()
 		Net.ShipRequest:FireServer("launch")
 	end)
@@ -825,6 +911,12 @@ function HudController.start()
 		while true do
 			refreshGoal()
 			task.wait(GOAL_INTERVAL)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			refreshBoosts()
+			task.wait(1)
 		end
 	end)
 	task.spawn(function()

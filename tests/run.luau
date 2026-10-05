@@ -21,6 +21,7 @@ local SPECS = {
 	"Progression",
 	"CombatMath",
 	"HangarMath",
+	"Monetization",
 }
 
 for _, name in SPECS do
