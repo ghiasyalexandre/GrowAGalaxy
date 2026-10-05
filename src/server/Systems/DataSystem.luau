@@ -198,7 +198,13 @@ function DataSystem.accrueIncome(player: Player, dt: number, passes: { [string]:
 	local boosts = profile.boosts
 	local rate = ProfileSchema.incomeRate(profile)
 	if rate > 0 then
-		local made = RewardMath.starIncome(rate, dt, boosts.star, passes)
+		local made = RewardMath.starIncome(
+			rate,
+			dt,
+			boosts.star,
+			passes,
+			ProfileSchema.trailMultiplier(profile)
+		)
 		-- The cap grows with the permanent pass, not with a temporary boost.
 		local cap = rate
 			* RewardMath.permanent("star", passes)
@@ -450,8 +456,13 @@ function DataSystem.grantRaidReward(player: Player, reward: any)
 end
 
 -- Player settings a client may change (all booleans).
-local BOOLEAN_SETTINGS =
-	{ stabilization = true, reducedEffects = true, pvp = true, showBounds = true }
+local BOOLEAN_SETTINGS = {
+	stabilization = true,
+	reducedEffects = true,
+	pvp = true,
+	showBounds = true,
+	showControls = true,
+}
 -- Player settings that are volumes, 0 to 1.
 local VOLUME_SETTINGS = { sfxVolume = true, musicVolume = true }
 
@@ -472,29 +483,48 @@ function DataSystem.setSetting(player: Player, name: unknown, value: unknown)
 	push(player, "settings", table.clone(profile.settings))
 end
 
--- Sets an owned ship's paint job (Config.Paint): `paint` a swatch colour or
--- nil for factory colours, `finish` a finish id or nil. False if the ship
--- isn't owned or a value isn't offered.
+-- Sets an owned ship's colours (Config.Paint): swatch colours, or nil for
+-- the standard laser / engines. False if the ship isn't owned or a colour
+-- isn't offered.
 function DataSystem.setShipLook(
 	player: Player,
 	shipId: string,
-	paint: string?,
-	finish: string?
+	laserColor: string?,
+	boostColor: string?
 ): boolean
 	local profile = DataSystem.getProfile(player)
 	local loadout = profile and profile.loadouts[shipId]
 	if profile == nil or loadout == nil or not profile.ownedShips[shipId] then
 		return false
 	end
-	if paint ~= nil and not ProfileSchema.validPaint(paint) then
-		return false
+	for _, color in { laserColor, boostColor } do
+		if color ~= nil and not ProfileSchema.validColor(color) then
+			return false
+		end
 	end
-	if finish ~= nil and Config.Paint.FINISHES[finish] == nil then
-		return false
-	end
-	loadout.paint = paint
-	loadout.finish = finish
+	loadout.laserColor = laserColor
+	loadout.boostColor = boostColor
 	push(player, "looks", ProfileSchema.looks(profile))
+	return true
+end
+
+-- Gives the player a trail (the caller has paid).
+function DataSystem.grantTrail(player: Player, trailId: string)
+	local profile = DataSystem.getProfile(player)
+	if profile then
+		profile.ownedTrails[trailId] = true
+		push(player, "ownedTrails", table.clone(profile.ownedTrails))
+	end
+end
+
+-- Equips an owned trail, or none with nil. False if it isn't owned.
+function DataSystem.equipTrail(player: Player, trailId: string?): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or (trailId ~= nil and not profile.ownedTrails[trailId]) then
+		return false
+	end
+	profile.trail = trailId
+	push(player, "trail", trailId or false)
 	return true
 end
 

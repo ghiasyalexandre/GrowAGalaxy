@@ -1,12 +1,13 @@
 --!strict
 -- The Shipyard panel, opened from the HUD's Shipyard button (or a Shipyard
--- console, if a place has one). Three tabs:
+-- console, if a place has one). Four tabs:
 --   Ships     the 11-ship ladder as cards with a spinning preview of each
 --             ship's model, its stats, and Buy / Select. A ship can be bought
 --             once you own the one before it (Progression.shipUnlocked).
 --   Upgrades  equipment (5 levels each) and galaxy expansion.
---   Paint     each owned ship's colour and finish (Config.Paint) on a big
+--   Colors    each owned ship's laser and boost colours (Config.Paint) by a
 --             turning preview, and which three are on the Showcase Dock.
+--   Trails    trails that multiply all Stardust earned (Config.Trails).
 -- Prices and ownership come from config and your profile view; the server
 -- (ShopSystem) checks and performs every purchase.
 
@@ -18,7 +19,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
-local TextureTint = require(script.Parent.Parent.Fx.TextureTint)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -26,7 +26,6 @@ local Config = require(Shared:WaitForChild("Config"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local Progression = require(Shared:WaitForChild("Logic"):WaitForChild("Progression"))
-local ShipLook = require(Shared:WaitForChild("Util"):WaitForChild("ShipLook"))
 local ShipModel = require(Shared:WaitForChild("Util"):WaitForChild("ShipModel"))
 local Ships = require(Shared:WaitForChild("Config"):WaitForChild("Ships"))
 
@@ -58,7 +57,7 @@ local CARD_STATS: { { label: string, stat: string, color: Color3 } } = {
 local CARD_HEIGHT = 124
 local PREVIEW_SIZE = 108
 
-type Tab = "ships" | "upgrades" | "paint"
+type Tab = "ships" | "upgrades" | "colors" | "trails"
 
 local ShopController = {}
 
@@ -120,7 +119,7 @@ local function row(
 	detail: string,
 	buttonText: string,
 	onClick: (() -> ())?
-)
+): Frame
 	local frame = Theme.row(list, 54, order)
 	Theme.label(frame, {
 		Position = UDim2.fromOffset(12, 6),
@@ -146,6 +145,7 @@ local function row(
 	if onClick then
 		remember(button)
 	end
+	return frame
 end
 
 local function priceText(cost: number, stardust: number): string
@@ -504,11 +504,11 @@ end
 
 local refresh: () -> ()
 
--- Paint tab ----------------------------------------------------------------
+-- Colors tab ---------------------------------------------------------------
 
-local paintShip: string? = nil -- the ship being painted
-local paintView: ViewportFrame? = nil
-local paintViewShip: string? = nil
+local colorShip: string? = nil -- the ship being coloured
+local colorView: ViewportFrame? = nil
+local colorViewShip: string? = nil
 
 local function customize(action: string, shipId: string, value: any)
 	local ok, message = Net.CustomizeRequest:InvokeServer(action, shipId, value)
@@ -517,67 +517,18 @@ local function customize(action: string, shipId: string, value: any)
 	)
 end
 
--- A big turning preview of the ship in its paint job.
-local function paintPreview(def: ShipDef, look: { paint: string?, finish: string? }): ViewportFrame
-	if paintView == nil or paintViewShip ~= def.id then
-		if paintView then
-			paintView:Destroy()
-		end
-		local view = Instance.new("ViewportFrame")
-		view.Name = "PaintPreview"
-		view.BackgroundColor3 = Color3.fromRGB(8, 10, 24)
-		view.BorderSizePixel = 0
-		view.Ambient = Color3.fromRGB(150, 155, 185)
-		view.LightColor = Color3.new(1, 1, 1)
-		view.LightDirection = Vector3.new(-1, -2, -1)
-		local c = Instance.new("UICorner")
-		c.CornerRadius = UDim.new(0, 12)
-		c.Parent = view
-		local source = ShipModel.find(def)
-		local ok, model, size = false, nil :: Model?, Vector3.one
-		if source then
-			ok, model, size = pcall(ShipModel.fit, source, def, nil)
-		end
-		if ok and model then
-			local paintParts: { BasePart } = {}
-			for _, part in model:GetDescendants() do
-				if part:IsA("BasePart") and not ShipModel.textured(part) then
-					part.Color = Color3.fromHex(def.paint)
-					table.insert(paintParts, part)
-				end
-			end
-			ShipLook.mark(model, paintParts)
-			model.Parent = view
-			local camera = Instance.new("Camera")
-			camera.FieldOfView = 35
-			local reach = math.max(size.X, size.Y, size.Z)
-			camera.CFrame =
-				CFrame.lookAt(Vector3.new(0.9, 0.55, -1).Unit * reach * 1.6, Vector3.zero)
-			camera.Parent = view
-			view.CurrentCamera = camera
-		else
-			Theme.label(view, {
-				Size = UDim2.fromScale(1, 1),
-				Text = `{def.displayName}\n(model not imported yet: paint shows on its greybox in game)`,
-				TextWrapped = true,
-				TextXAlignment = Enum.TextXAlignment.Center,
-				TextColor3 = Theme.COLORS.subtle,
-			})
-		end
-		paintView = view
-		paintViewShip = def.id
+-- A big turning preview of the ship, cached per ship.
+local function colorPreview(def: ShipDef): ViewportFrame
+	if colorView and colorViewShip == def.id then
+		return colorView
 	end
-	local view = paintView :: ViewportFrame
-	local model = view:FindFirstChildOfClass("Model")
-	if model then
-		ShipLook.apply(model, look)
-		local tint = if look.paint then Color3.fromHex(look.paint) else nil
-		for _, part in model:GetDescendants() do
-			if part:IsA("MeshPart") and part:GetAttribute(ShipLook.TINTABLE) then
-				task.spawn(TextureTint.tint, part, tint)
-			end
-		end
+	if colorView then
+		colorView:Destroy()
 	end
+	local view = makePreview(def)
+	view.Name = "ColorPreview"
+	colorView = view
+	colorViewShip = def.id
 	return view
 end
 
@@ -593,17 +544,49 @@ local function grid(order: number, height: number, cell: Vector2): Frame
 	return holder
 end
 
-local function paintTab(profile: any)
+-- A row of colour swatches (plus "Standard") for one of the ship's colours.
+local function swatchRow(order: number, shipId: string, action: string, current: string?)
+	local swatches = grid(order, 2 * 40, Vector2.new(34, 34))
+	local standard = Theme.button(
+		swatches,
+		"S",
+		if current == nil then "buy" else "primary",
+		function()
+			customize(action, shipId, nil)
+		end
+	)
+	standard.LayoutOrder = 0
+	for index, hex in Config.Paint.SWATCHES do
+		local swatch = Instance.new("TextButton")
+		swatch.LayoutOrder = index
+		swatch.Text = ""
+		swatch.AutoButtonColor = false
+		swatch.BackgroundColor3 = Color3.fromHex(hex)
+		swatch.Parent = swatches
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = swatch
+		local ring = Instance.new("UIStroke")
+		ring.Color = if current == hex then Theme.COLORS.gold else Color3.fromRGB(20, 22, 40)
+		ring.Thickness = if current == hex then 3 else 2
+		ring.Parent = swatch
+		Theme.hover(swatch, function()
+			customize(action, shipId, hex)
+		end)
+	end
+end
+
+local function colorsTab(profile: any)
 	local owned: { string } = {}
 	for _, shipId in Config.Ships.ORDER do
 		if profile.ownedShips[shipId] then
 			table.insert(owned, shipId)
 		end
 	end
-	if paintShip == nil or not profile.ownedShips[paintShip] then
-		paintShip = profile.activeShip
+	if colorShip == nil or not profile.ownedShips[colorShip] then
+		colorShip = profile.activeShip
 	end
-	local shipId = paintShip :: string
+	local shipId = colorShip :: string
 	local def = Config.Ships.BY_ID[shipId]
 	local looks = profile.looks or {}
 	local look = looks[shipId] or {}
@@ -622,7 +605,7 @@ local function paintTab(profile: any)
 			Config.Ships.BY_ID[id].displayName,
 			if id == shipId then "buy" else "primary",
 			function()
-				paintShip = id
+				colorShip = id
 				refresh()
 			end
 		)
@@ -630,60 +613,34 @@ local function paintTab(profile: any)
 		remember(button)
 	end
 
-	local stage = Theme.row(list, 210, nextOrder())
+	-- The ship turning, with its two colours glowing beside it.
+	local stage = Theme.row(list, 170, nextOrder())
 	stage.BackgroundTransparency = 1
-	local view = paintPreview(def, look)
-	view.Size = UDim2.new(1, 0, 1, 0)
+	local view = colorPreview(def)
+	view.Size = UDim2.new(0, 160, 0, 160)
+	view.Position = UDim2.fromOffset(0, 5)
 	view.Parent = stage
 	spin(view)
-
-	heading("Colour", nextOrder(), "CrystalPurple")
-	local swatches = grid(nextOrder(), 2 * 40, Vector2.new(34, 34))
-	local factory = Theme.button(
-		swatches,
-		"F",
-		if look.paint == nil then "buy" else "primary",
-		function()
-			customize("paint", shipId, nil)
-		end
-	)
-	factory.LayoutOrder = 0
-	for index, hex in Config.Paint.SWATCHES do
-		local swatch = Instance.new("TextButton")
-		swatch.LayoutOrder = index
-		swatch.Text = ""
-		swatch.AutoButtonColor = false
-		swatch.BackgroundColor3 = Color3.fromHex(hex)
-		swatch.Parent = swatches
-		local round = Instance.new("UICorner")
-		round.CornerRadius = UDim.new(1, 0)
-		round.Parent = swatch
-		local ring = Instance.new("UIStroke")
-		ring.Color = if look.paint == hex then Theme.COLORS.gold else Color3.fromRGB(20, 22, 40)
-		ring.Thickness = if look.paint == hex then 3 else 2
-		ring.Parent = swatch
-		Theme.hover(swatch, function()
-			customize("paint", shipId, hex)
-		end)
+	for index, entry in
+		{
+			{ name = "Laser", hex = look.laserColor or Config.Beam.COLOR },
+			{ name = "Boost", hex = look.boostColor or Config.Paint.DEFAULT_BOOST },
+		}
+	do
+		local chip = Theme.swatch(stage, Color3.fromHex(entry.hex), 46, true)
+		chip.Position = UDim2.fromOffset(186, 20 + (index - 1) * 70)
+		Theme.label(stage, {
+			Position = UDim2.fromOffset(244, 28 + (index - 1) * 70),
+			Size = UDim2.new(1, -250, 0, 24),
+			Text = `{entry.name} colour`,
+			TextColor3 = Color3.fromHex(entry.hex):Lerp(Color3.new(1, 1, 1), 0.3),
+		})
 	end
 
-	heading("Finish", nextOrder(), "Gear")
-	local finishes = grid(nextOrder(), 38, Vector2.new(128, 32))
-	local entries: { { id: string?, name: string } } = { { id = nil, name = "Factory" } }
-	for _, id in Config.Paint.FINISH_ORDER do
-		table.insert(entries, { id = id, name = Config.Paint.FINISHES[id].displayName })
-	end
-	for index, entry in entries do
-		local button = Theme.button(
-			finishes,
-			entry.name,
-			if look.finish == entry.id then "buy" else "primary",
-			function()
-				customize("finish", shipId, entry.id)
-			end
-		)
-		button.LayoutOrder = index
-	end
+	heading("Laser colour (also your rocket blasts)", nextOrder(), "Energy")
+	swatchRow(nextOrder(), shipId, "laser", look.laserColor)
+	heading("Boost colour (engines, exhaust, wing trails)", nextOrder(), "Rocket")
+	swatchRow(nextOrder(), shipId, "boost", look.boostColor)
 
 	heading("Showcase Dock", nextOrder(), "Medal")
 	local shown = table.find(showcase, shipId) ~= nil
@@ -705,6 +662,62 @@ local function paintTab(profile: any)
 	)
 end
 
+-- Trails tab ---------------------------------------------------------------
+
+local function trailsTab(profile: any)
+	heading("Trails: equip one to multiply all the Stardust you earn", 1, "Stardust")
+	local owned = profile.ownedTrails or {}
+	local equipped = if type(profile.trail) == "string" then profile.trail else nil
+	for index, id in Config.Trails.ORDER do
+		local def = Config.Trails.BY_ID[id]
+		local detail = `x{def.multiplier} Stardust from mining and stars  ·  on your suit and ship`
+		local frame
+		if equipped == id then
+			frame = row(index + 1, `{def.displayName}  ·  equipped`, detail, "Unequip", function()
+				request("equipTrail", "")
+			end)
+		elseif owned[id] then
+			frame = row(index + 1, def.displayName, detail, "Equip", function()
+				request("equipTrail", id)
+			end)
+		else
+			frame = row(
+				index + 1,
+				def.displayName,
+				detail,
+				priceText(def.cost, profile.stardust),
+				function()
+					request("buyTrail", id)
+				end
+			)
+		end
+		-- A strip of the trail's colours along the row's left edge.
+		local strip = Instance.new("Frame")
+		strip.Size = UDim2.new(0, 5, 1, -10)
+		strip.Position = UDim2.fromOffset(3, 5)
+		strip.BackgroundColor3 = Color3.new(1, 1, 1)
+		strip.BorderSizePixel = 0
+		strip.Parent = frame
+		local keys = {}
+		for k, hex in def.colors do
+			table.insert(
+				keys,
+				ColorSequenceKeypoint.new(
+					(k - 1) / math.max(#def.colors - 1, 1),
+					Color3.fromHex(hex)
+				)
+			)
+		end
+		if #keys == 1 then
+			table.insert(keys, ColorSequenceKeypoint.new(1, keys[1].Value))
+		end
+		local gradient = Instance.new("UIGradient")
+		gradient.Color = ColorSequence.new(keys)
+		gradient.Rotation = 90
+		gradient.Parent = strip
+	end
+end
+
 local function buildTabs()
 	Theme.clear(tabBar)
 	local layout = Instance.new("UIListLayout")
@@ -716,7 +729,8 @@ local function buildTabs()
 		{
 			{ id = "ships", text = "Ships", icon = "Rocket" },
 			{ id = "upgrades", text = "Upgrades", icon = "Gear" },
-			{ id = "paint", text = "Paint", icon = "RainbowStar" },
+			{ id = "colors", text = "Colors", icon = "RainbowStar" },
+			{ id = "trails", text = "Trails", icon = "Stardust" },
 		}
 	do
 		local selected = tab == entry.id
@@ -734,7 +748,7 @@ local function buildTabs()
 			end
 		)
 		button.LayoutOrder = order
-		button.Size = UDim2.fromOffset(130, 34)
+		button.Size = UDim2.fromOffset(112, 34)
 		Theme.buttonIcon(button, entry.icon)
 	end
 end
@@ -748,15 +762,17 @@ function refresh()
 	for _, view in previews do
 		view.Parent = nil
 	end
-	if paintView then
-		paintView.Parent = nil
+	if colorView then
+		colorView.Parent = nil
 	end
 	Theme.clear(list)
 	firstButton = nil
 	if tab == "ships" then
 		shipsTab(profile)
-	elseif tab == "paint" then
-		paintTab(profile)
+	elseif tab == "colors" then
+		colorsTab(profile)
+	elseif tab == "trails" then
+		trailsTab(profile)
 	else
 		upgradesTab(profile)
 	end
@@ -861,6 +877,8 @@ function ShopController.start()
 			or field == "equipmentLevels"
 			or field == "looks"
 			or field == "showcase"
+			or field == "ownedTrails"
+			or field == "trail"
 			or field == "expansion"
 			or field == "*"
 		then

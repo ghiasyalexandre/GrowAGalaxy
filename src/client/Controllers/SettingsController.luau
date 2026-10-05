@@ -7,6 +7,7 @@
 --   Sound effects   SFX volume, 0 to 100% (AudioController)
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
+--   Controls hint   whether the list of controls along the bottom shows
 --
 -- Sliders preview live and save when released.
 
@@ -197,6 +198,18 @@ refresh = function()
 	slider(2, "Sound effects", "Lasers, explosions, your suit", "sfxVolume", current.sfxVolume)
 	slider(3, "Music", "Space music; disco in boss fights", "musicVolume", current.musicVolume)
 	toggle(
+		5,
+		"Controls hint",
+		"The list of controls along the bottom of the screen",
+		current.showControls ~= false,
+		"Shown",
+		"Hidden",
+		function()
+			save("showControls", current.showControls == false)
+			ClientState.profileChanged:Fire("settings")
+		end
+	)
+	toggle(
 		4,
 		"Galaxy boundary",
 		"The glowing box around your region",
@@ -217,9 +230,9 @@ local function build()
 	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0.9, 0, 0, 360)
+	panel.Size = UDim2.new(0.9, 0, 0, 420)
 	local size = Instance.new("UISizeConstraint")
-	size.MaxSize = Vector2.new(520, 360)
+	size.MaxSize = Vector2.new(520, 420)
 	size.Parent = panel
 	Theme.label(panel, {
 		Position = UDim2.fromOffset(16, 10),

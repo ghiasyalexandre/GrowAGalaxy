@@ -444,8 +444,13 @@ local function updateVisual(v: Visual, dt: number)
 	end
 	v.power = FlightMath.smooth(v.power, target, POWER_RESPONSE, dt)
 	local overdrive = math.clamp(v.power - 1, 0, 0.6) / 0.6
+	-- A chosen boost colour (BoostColor) tints the engines.
+	local boostHex = v.model:GetAttribute("BoostColor")
+	local tint = if type(boostHex) == "string" then Color3.fromHex(boostHex) else nil
+	local full = if tint then tint:Lerp(Color3.new(1, 1, 1), 0.45) else GLOW_FULL
+	local hot = if tint then tint:Lerp(Color3.new(1, 1, 1), 0.15) else GLOW_BOOST
 	for _, glow in v.glows do
-		glow.Color = GLOW_IDLE:Lerp(GLOW_FULL, math.min(v.power, 1)):Lerp(GLOW_BOOST, overdrive)
+		glow.Color = GLOW_IDLE:Lerp(full, math.min(v.power, 1)):Lerp(hot, overdrive)
 		glow.Transparency = 0.5 * (1 - math.min(v.power, 1))
 	end
 	local rate = if v.power > IDLE_POWER + 0.05

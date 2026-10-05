@@ -584,7 +584,8 @@ local function buildHud()
 	-- Boss bar, top centre.
 	bar = Theme.panel(gui, "BossBar")
 	bar.AnchorPoint = Vector2.new(0.5, 0)
-	bar.Position = UDim2.new(0.5, 0, 0, 64)
+	-- Below the flight gauges at the top of the screen.
+	bar.Position = UDim2.new(0.5, 0, 0, 104)
 	bar.Size = UDim2.new(0.5, 0, 0, 74)
 	bar.Visible = false
 	local limit = Instance.new("UISizeConstraint")

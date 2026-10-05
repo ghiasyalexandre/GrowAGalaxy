@@ -26,6 +26,7 @@ local AsteroidSystem = require(script.Parent.AsteroidSystem)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local Entitlements = require(script.Parent.Parent.Util.Entitlements)
+local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local MiningMath = require(ReplicatedStorage.Shared.Logic.MiningMath)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local Notify = require(script.Parent.Parent.Util.Notify)
@@ -100,6 +101,7 @@ local function payOut(player: Player, asteroid: AsteroidSystem.Asteroid)
 	local entitlements: RewardMath.Entitlements = {
 		passes = Entitlements.passes(player),
 		boosts = if profile then profile.boosts else RewardMath.none().boosts,
+		trail = if profile then ProfileSchema.trailMultiplier(profile) else 1,
 	}
 	local multiplier = RewardMath.multiplier("mining", entitlements)
 	local reward = RewardMath.miningReward(base, entitlements)
@@ -167,6 +169,24 @@ function MiningSystem.shot(player: Player, model: Model, info: Types.ShipInfo, a
 	if share >= 1 then
 		payOut(player, asteroid)
 		show(model, 0, 0, false)
+	end
+end
+
+-- A rocket blast (RocketSystem): every asteroid it catches gains `power`
+-- extraction progress, as if hit on rock; any that break pay out as usual.
+-- Asteroids someone else is mining are left alone.
+function MiningSystem.blast(player: Player, center: Vector3, radius: number, power: number)
+	local now = os.clock()
+	for _, asteroid in AsteroidSystem.within(center, radius) do
+		if not AsteroidSystem.reserve(asteroid, player, now) then
+			continue
+		end
+		asteroid.progress += power
+		local share = math.min(asteroid.progress / asteroid.size.durability, 1)
+		asteroid.model:SetAttribute("Progress", math.floor(share * 100 + 0.5) / 100)
+		if share >= 1 then
+			payOut(player, asteroid)
+		end
 	end
 end
 

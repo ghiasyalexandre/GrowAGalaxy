@@ -136,6 +136,40 @@ function CombatSystem.shot(player: Player, model: Model, info: Types.ShipInfo, a
 	end
 end
 
+-- A rocket blast (RocketSystem): damages every other PvP ship it reaches,
+-- under the same rules as a laser hit.
+function CombatSystem.blast(player: Player, center: Vector3, radius: number, amount: number)
+	if not pvpOf(player) then
+		return
+	end
+	for _, victim in Players:GetPlayers() do
+		local target = if victim ~= player then ShipSystem.getPiloted(victim) else nil
+		local hull = target and target.PrimaryPart
+		if
+			target == nil
+			or hull == nil
+			or (hull.Position - center).Magnitude > radius + hull.Size.Magnitude / 2
+		then
+			continue
+		end
+		local safe = inSafeZone(center) or inSafeZone(hull.Position)
+		if not CombatMath.canDamage(true, pvpOf(victim), false, true, safe) then
+			continue
+		end
+		local now = os.clock()
+		lastCombat[player] = now
+		lastCombat[victim] = now
+		if hit(victim, target, amount) then
+			DataSystem.addStat(player, "shipsDestroyed", 1)
+			Notify.send(player, `Your rocket destroyed {victim.DisplayName}'s ship!`)
+			Notify.send(
+				victim,
+				`{player.DisplayName}'s rocket destroyed your ship. Press Launch Ship again in {C.RELAUNCH_DELAY}s.`
+			)
+		end
+	end
+end
+
 -- PvP switch requests (SettingChanged "pvp").
 function CombatSystem.requestPvp(player: Player, wanted: unknown)
 	if type(wanted) ~= "boolean" or DataSystem.getProfile(player) == nil then

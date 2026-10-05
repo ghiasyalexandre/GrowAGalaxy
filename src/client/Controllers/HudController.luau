@@ -11,6 +11,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local StarController = require(script.Parent.StarController)
@@ -616,6 +617,14 @@ local function build()
 		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Mining")
 	hullPanel, hullFill, hullLabel =
 		makeGauge(gui, "Hull", -210, "HULL", HULL_GOOD, "orange", "Shield")
+	-- The flight gauges only show while flying, at the top of the screen in
+	-- a 2 x 2 block under the speed readout.
+	for index, panel in { heatPanel, boostPanel, hullPanel, extractPanel } do
+		local column = (index - 1) % 2
+		local row = (index - 1) // 2
+		panel.AnchorPoint = Vector2.new(0.5, 0)
+		panel.Position = UDim2.new(0.5, if column == 0 then -118 else 118, 0, 30 + row * 36)
+	end
 
 	reticle = makeLabel(gui, {
 		Name = "Reticle",
@@ -795,6 +804,16 @@ end
 
 local function refreshReadout()
 	local flying = ClientState.mode == "ship"
+	-- Flying, the readout sits above the gauges at the top of the screen.
+	readoutLabel.AnchorPoint = if flying then Vector2.new(0.5, 0) else Vector2.new(0, 1)
+	readoutLabel.Position = if flying then UDim2.new(0.5, 0, 0, 6) else UDim2.new(0, 16, 1, -76)
+	readoutLabel.TextXAlignment = if flying
+		then Enum.TextXAlignment.Center
+		else Enum.TextXAlignment.Left
+	readoutLabel.Size = UDim2.new(0, if flying then 460 else 220, 0, 24)
+	tutorialLabel.Position = UDim2.new(0.5, 0, 0, if flying then 104 else 16)
+	local settings = ClientState.profile and ClientState.profile.settings
+	hintLabel.Visible = settings == nil or settings.showControls ~= false
 	reticle.Visible = flying
 	launchButton.Visible = not flying
 	heatPanel.Visible = flying
@@ -806,10 +825,14 @@ local function refreshReadout()
 		refreshBoost()
 		refreshHull()
 		local flight = ClientState.flight
+		local readyAt = Players.LocalPlayer:GetAttribute("RocketReadyAt")
+		local reload = if type(readyAt) == "number"
+			then math.ceil(readyAt - Workspace:GetServerTimeNow())
+			else 0
 		readoutLabel.Text =
 			`Speed {math.floor(flight.speed)} / {math.floor(flight.maxSpeed)}{if flight.boosting
 				then "  ·  BOOST"
-				else ""}`
+				else ""}  ·  {if reload > 0 then `Rocket {reload}s` else "Rocket ready"}`
 		if flight.dock == "ready" then
 			hintLabel.Text = DOCK_HINTS[Input.device()]
 		elseif flight.dock == "tooFast" then
@@ -914,6 +937,11 @@ function HudController.start()
 	refreshStardust()
 	refreshSector()
 	refreshReadout()
+	ClientState.profileChanged:Connect(function(field)
+		if field == "settings" or field == "*" then
+			refreshReadout()
+		end
+	end)
 	-- Stars come and go (placed, evolved) without a profile field changing.
 	task.spawn(function()
 		while true do

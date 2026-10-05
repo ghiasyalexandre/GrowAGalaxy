@@ -27,12 +27,12 @@ export type GalaxyRecord = {
 export type Loadout = {
 	equipment: { [string]: string }, -- slot -> Config.Equipment id
 	cosmetic: string?,
-	paint: string?, -- Config.Paint.SWATCHES colour; nil = factory colours
-	finish: string?, -- Config.Paint.FINISHES id; nil = factory finish
+	laserColor: string?, -- Config.Paint.SWATCHES colour; nil = the standard laser
+	boostColor: string?, -- Config.Paint.SWATCHES colour; nil = the standard engines
 }
 
--- A ship's paint job, as the client sees it.
-export type ShipLook = { paint: string?, finish: string? }
+-- A ship's colours, as the client sees them.
+export type ShipLook = { laserColor: string?, boostColor: string? }
 
 export type AchievementRecord = { progress: number, claimed: boolean }
 
@@ -44,6 +44,7 @@ export type Settings = {
 	reducedEffects: boolean,
 	pvp: boolean,
 	showBounds: boolean, -- draw your galaxy region's boundary box
+	showControls: boolean, -- the controls hint along the bottom of the screen
 }
 
 export type Profile = {
@@ -70,6 +71,8 @@ export type Profile = {
 	-- Owned ships on show in the hangar's Showcase Dock (up to
 	-- Config.Paint.SHOWCASE_SLOTS), in slot order.
 	showcase: { string },
+	ownedTrails: { [string]: boolean }, -- Config.Trails ids bought
+	trail: string?, -- the equipped trail, if any
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.
 	boosts: { mining: number, star: number },
@@ -99,8 +102,10 @@ export type ProfileView = {
 	boosts: { mining: number, star: number },
 	passes: { [string]: boolean }, -- passes the server has verified
 	daily: { day: number, lastClaim: number },
-	looks: { [string]: ShipLook }, -- paint jobs of owned ships
+	looks: { [string]: ShipLook }, -- colours of owned ships
 	showcase: { string },
+	ownedTrails: { [string]: boolean },
+	trail: string?,
 }
 
 export type RegionInfo = {

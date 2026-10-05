@@ -10,9 +10,9 @@
 -- are tagged "HangarPad" (clients make them pulse). A building with a `site`
 -- stands there instead of on its pad.
 --
--- The Showcase Dock holds the player's chosen ships (profile.showcase), in
--- their paint jobs, turning on its cradles; refreshShowcase rebuilds them
--- when the choice or a paint job changes.
+-- The Showcase Dock holds the player's chosen ships (profile.showcase)
+-- turning on its cradles; refreshShowcase rebuilds them when the choice
+-- or a ship's colours change.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -28,6 +28,7 @@ local ShipBuilder = require(script.Parent.Parent.World.ShipBuilder)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local StationSystem = require(script.Parent.StationSystem)
+local Types = require(ReplicatedStorage.Shared.Types)
 
 local H = Config.Hangar
 local STRUCTURE_TAG = "HangarStructure"
@@ -43,14 +44,9 @@ local refresh: (player: Player, justBuilt: string?) -> ()
 local SHOWCASE_ID = "ShowcaseDock"
 local DISPLAY_SPIN = 0.25 -- radians per second
 
--- A ship for show: the real ship model in its paint job, with everything
+-- A ship for show: the real ship model in its colours, with everything
 -- that makes it flyable or boardable removed, anchored, turning slowly.
-local function display(
-	shipId: string,
-	look: { paint: string?, finish: string? },
-	at: CFrame,
-	accent: string
-): Model
+local function display(shipId: string, look: Types.ShipLook, at: CFrame, accent: string): Model
 	local model = ShipBuilder.build(shipId, at, accent, look)
 	for _, item in model:GetDescendants() do
 		if
@@ -123,7 +119,10 @@ function HangarSystem.refreshShowcase(player: Player)
 				* (cradle.CFrame - cradle.Position)
 				* CFrame.Angles(0, 0, -math.pi / 2)
 				* CFrame.Angles(0, math.pi / 2, 0)
-			local look = { paint = loadout and loadout.paint, finish = loadout and loadout.finish }
+			local look = {
+				laserColor = loadout and loadout.laserColor,
+				boostColor = loadout and loadout.boostColor,
+			}
 			display(shipId, look, at, accent).Parent = dock
 		end
 	end

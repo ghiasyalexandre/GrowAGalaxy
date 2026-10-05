@@ -22,6 +22,7 @@ export type Source = "mining" | "star"
 export type Entitlements = {
 	passes: { [string]: boolean },
 	boosts: { mining: number, star: number },
+	trail: number?, -- the equipped trail's multiplier (Config.Trails); 1 when nil
 }
 
 local RewardMath = {}
@@ -53,9 +54,11 @@ function RewardMath.temporary(source: Source, boosts: { mining: number, star: nu
 	return if (boosts[source] or 0) > 0 then P.BOOST_MULTIPLIER else 1
 end
 
--- The multiplier for a reward earned right now.
+-- The multiplier for a reward earned right now: passes x boost x trail.
 function RewardMath.multiplier(source: Source, e: Entitlements): number
-	return RewardMath.permanent(source, e.passes) * RewardMath.temporary(source, e.boosts)
+	return RewardMath.permanent(source, e.passes)
+		* RewardMath.temporary(source, e.boosts)
+		* (e.trail or 1)
 end
 
 -- Stardust for breaking an asteroid worth `base`.
@@ -70,13 +73,14 @@ function RewardMath.starIncome(
 	rate: number,
 	dt: number,
 	boostLeft: number,
-	passes: { [string]: boolean }
+	passes: { [string]: boolean },
+	trail: number?
 ): number
 	if rate <= 0 or dt <= 0 then
 		return 0
 	end
 	local boosted = math.clamp(boostLeft, 0, dt)
-	local base = rate * RewardMath.permanent("star", passes)
+	local base = rate * RewardMath.permanent("star", passes) * (trail or 1)
 	return base * (boosted * P.BOOST_MULTIPLIER + (dt - boosted))
 end
 

@@ -96,14 +96,16 @@ local Asteroids = {
 	BREAK_LINGER = 0.4, -- seconds a broken asteroid stays (hidden) so clients see it break
 
 	-- Golden swarm: every SWARM_INTERVAL seconds a dense clump of golden
-	-- asteroids worth SWARM_REWARD x the usual appears somewhere in the field,
+	-- asteroids worth SWARM_REWARD x the usual (and SWARM_DURABILITY x as
+	-- tough to break) appears somewhere in the field,
 	-- announced to everyone with a marker; whatever is left crumbles after
 	-- SWARM_DURATION.
 	SWARM_INTERVAL = 7 * 60,
 	SWARM_DURATION = 150,
 	SWARM_COUNT = 14,
 	SWARM_SPREAD = 220, -- studs from the swarm's centre
-	SWARM_REWARD = 3,
+	SWARM_REWARD = 5,
+	SWARM_DURABILITY = 2,
 	SWARM_COLOR = "#FFC83D",
 
 	-- Scanner: while flying, markers show the nearest asteroids.

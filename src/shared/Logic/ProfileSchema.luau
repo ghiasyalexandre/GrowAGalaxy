@@ -37,7 +37,10 @@ local ProfileSchema = {}
 --    and the region boundary setting; equipment levels (owned items start at
 --    level 1). Older profiles keep factory paint, an
 --    empty showcase and the boundary shown (normalize fills them in).
-ProfileSchema.VERSION = 10
+-- 11: ship colours replaced paint jobs: loadouts save laserColor and
+--    boostColor (paint and finish are dropped); trails bought and the one
+--    equipped; the controls hint setting. Older profiles start with none.
+ProfileSchema.VERSION = 11
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -48,6 +51,7 @@ local function defaultSettings(): Types.Settings
 		reducedEffects = false,
 		pvp = Config.Combat.PVP_DEFAULT,
 		showBounds = true,
+		showControls = true,
 	}
 end
 
@@ -75,6 +79,8 @@ function ProfileSchema.default(): Profile
 		settings = defaultSettings(),
 		hangar = {},
 		showcase = {},
+		ownedTrails = {},
+		trail = nil,
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
 		daily = { day = 1, lastClaim = 0 },
@@ -274,18 +280,24 @@ local function migrateShipsV5(data: { [string]: any })
 	end
 end
 
--- Whether `paint` is one of the offered colours (Config.Paint.SWATCHES).
-function ProfileSchema.validPaint(paint: any): boolean
-	return type(paint) == "string" and table.find(Config.Paint.SWATCHES, paint) ~= nil
+-- Whether `color` is one of the offered colours (Config.Paint.SWATCHES).
+function ProfileSchema.validColor(color: any): boolean
+	return type(color) == "string" and table.find(Config.Paint.SWATCHES, color) ~= nil
 end
 
--- Paint jobs of every owned ship, for the client.
+-- Laser and boost colours of every owned ship, for the client.
 function ProfileSchema.looks(profile: Profile): { [string]: Types.ShipLook }
 	local looks: { [string]: Types.ShipLook } = {}
 	for shipId, loadout in profile.loadouts do
-		looks[shipId] = { paint = loadout.paint, finish = loadout.finish }
+		looks[shipId] = { laserColor = loadout.laserColor, boostColor = loadout.boostColor }
 	end
 	return looks
+end
+
+-- The equipped trail's Stardust multiplier (1 with none).
+function ProfileSchema.trailMultiplier(profile: Profile): number
+	local def = if profile.trail then Config.Trails.BY_ID[profile.trail] else nil
+	return if def then def.multiplier else 1
 end
 
 -- Repairs a loaded profile in place. Returns false (and changes nothing) when
@@ -375,15 +387,13 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 				cosmetic = raw.cosmetic
 			end
 		end
-		local paint = if type(raw) == "table" then raw.paint else nil
-		local finish = if type(raw) == "table" then raw.finish else nil
+		local laser = if type(raw) == "table" then raw.laserColor else nil
+		local boost = if type(raw) == "table" then raw.boostColor else nil
 		loadouts[shipId] = {
 			equipment = equipment,
 			cosmetic = cosmetic,
-			paint = if ProfileSchema.validPaint(paint) then paint else nil,
-			finish = if type(finish) == "string" and Config.Paint.FINISHES[finish]
-				then finish
-				else nil,
+			laserColor = if ProfileSchema.validColor(laser) then laser else nil,
+			boostColor = if ProfileSchema.validColor(boost) then boost else nil,
 		}
 	end
 	data.loadouts = loadouts
@@ -403,6 +413,16 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 		end
 	end
 	data.showcase = showcase
+
+	-- Trails: known ids only for the one equipped, which must be owned.
+	data.ownedTrails = flags(data.ownedTrails)
+	if
+		type(data.trail) ~= "string"
+		or not data.ownedTrails[data.trail]
+		or Config.Trails.BY_ID[data.trail] == nil
+	then
+		data.trail = nil
+	end
 
 	data.galaxy = galaxy(data.galaxy)
 
@@ -448,6 +468,9 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 		showBounds = if type(settings.showBounds) == "boolean"
 			then settings.showBounds
 			else fallback.showBounds,
+		showControls = if type(settings.showControls) == "boolean"
+			then settings.showControls
+			else fallback.showControls,
 	}
 
 	local receipts: { string } = {}
@@ -493,6 +516,8 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		daily = table.clone(profile.daily),
 		looks = ProfileSchema.looks(profile),
 		showcase = table.clone(profile.showcase),
+		ownedTrails = table.clone(profile.ownedTrails),
+		trail = profile.trail,
 	}
 end
 

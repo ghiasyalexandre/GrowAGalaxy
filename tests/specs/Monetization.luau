@@ -203,5 +203,24 @@ return function(T, Loader)
 			T.equal(ReceiptFlow.process(receipt, deps, inFlight), "granted")
 			T.equal(state.data.stardust, 100 + P.BY_KEY.StardustSmall.grants.stardust)
 		end)
+
+		T.test("an equipped trail multiplies mining and star income", function()
+			local e = RewardMath.none()
+			e.trail = 2.5
+			T.near(RewardMath.multiplier("mining", e), 2.5)
+			T.equal(RewardMath.miningReward(10, e), 25)
+			T.near(RewardMath.starIncome(10, 1, 0, {}, 2.5), 25)
+			T.near(RewardMath.starIncome(10, 1, 0, {}), 10)
+		end)
+
+		T.test("trail multipliers rise in steps of 0.5", function()
+			local last, lastCost = 1, 0
+			for _, id in Config.Trails.ORDER do
+				local def = Config.Trails.BY_ID[id]
+				T.near(def.multiplier - last, 0.5, 1e-9, id)
+				T.truthy(def.cost > lastCost, id)
+				last, lastCost = def.multiplier, def.cost
+			end
+		end)
 	end)
 end
