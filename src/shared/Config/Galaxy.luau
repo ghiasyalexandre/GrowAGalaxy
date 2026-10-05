@@ -24,7 +24,9 @@ local Galaxy = {
 	MOON_ORBIT_RADII = { 11, 16 } :: { number },
 
 	SYSTEM_RADIUS = 222, -- nothing in a system reaches further than this from its star
-	MIN_STAR_SPACING = 444, -- 2 x SYSTEM_RADIUS, so systems never overlap
+	-- Two thirds of 2 x SYSTEM_RADIUS: neighbours' outer orbits may cross,
+	-- but no planet ever reaches another star (SYSTEM_RADIUS + STAR_MAX_RADIUS).
+	MIN_STAR_SPACING = 296,
 	WALL_MARGIN = 222, -- star centres stay this far inside the region walls
 
 	GRID_SNAP = 10, -- optional placement snapping, studs
@@ -38,12 +40,12 @@ local Galaxy = {
 		{
 			size = { x = 1536, y = 896, z = 1536 },
 			maxSystems = 6,
-			cost = { stardust = 6000, materials = {} },
+			cost = { stardust = 8000, materials = {} },
 		},
 		{
 			size = { x = 2048, y = 1152, z = 2048 },
 			maxSystems = 10,
-			cost = { stardust = 40000, materials = {} },
+			cost = { stardust = 60000, materials = {} },
 		},
 	} :: { ExpansionDef },
 }

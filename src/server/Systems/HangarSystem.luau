@@ -7,7 +7,12 @@
 --
 -- Buildings are tagged "HangarStructure" (one bought just now also has
 -- BuiltAt, server time, so clients animate it rising and celebrate); pads
--- are tagged "HangarPad" (clients make them pulse).
+-- are tagged "HangarPad" (clients make them pulse). A building with a `site`
+-- stands there instead of on its pad.
+--
+-- The Showcase Dock holds the player's chosen ships (profile.showcase), in
+-- their paint jobs, turning on its cradles; refreshShowcase rebuilds them
+-- when the choice or a paint job changes.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -18,6 +23,8 @@ local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local HangarBuilder = require(script.Parent.Parent.World.HangarBuilder)
 local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
+local RegionSystem = require(script.Parent.RegionSystem)
+local ShipBuilder = require(script.Parent.Parent.World.ShipBuilder)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local StationSystem = require(script.Parent.StationSystem)
@@ -32,6 +39,95 @@ local limit = RateLimiter.new(4, 1)
 local lastTouch: { [Player]: number } = {}
 
 local refresh: (player: Player, justBuilt: string?) -> ()
+
+local SHOWCASE_ID = "ShowcaseDock"
+local DISPLAY_SPIN = 0.25 -- radians per second
+
+-- A ship for show: the real ship model in its paint job, with everything
+-- that makes it flyable or boardable removed, anchored, turning slowly.
+local function display(
+	shipId: string,
+	look: { paint: string?, finish: string? },
+	at: CFrame,
+	accent: string
+): Model
+	local model = ShipBuilder.build(shipId, at, accent, look)
+	for _, item in model:GetDescendants() do
+		if
+			item:IsA("ProximityPrompt")
+			or item:IsA("Constraint")
+			or item:IsA("Seat")
+			or item:IsA("ParticleEmitter")
+			or item:IsA("Trail")
+		then
+			item:Destroy()
+		end
+	end
+	for _, part in model:GetDescendants() do
+		if part:IsA("BasePart") then
+			part.Anchored = true
+			part.CanCollide = false
+		elseif part:IsA("JointInstance") or part:IsA("WeldConstraint") then
+			part:Destroy()
+		end
+	end
+	model.Name = `Display_{shipId}`
+	model:SetAttribute("SpinSpeed", DISPLAY_SPIN)
+	CollectionService:AddTag(model, "GaG_Spin")
+	local def = Config.Ships.BY_ID[shipId]
+	local hull = model.PrimaryPart
+	if def and hull then
+		local tag = Instance.new("BillboardGui")
+		tag.Name = "ShipName"
+		tag.Size = UDim2.fromOffset(200, 30)
+		tag.StudsOffsetWorldSpace = Vector3.new(0, 9, 0)
+		tag.MaxDistance = 250
+		tag.LightInfluence = 0
+		tag.Adornee = hull
+		tag.Parent = hull
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.fromScale(1, 1)
+		label.BackgroundTransparency = 1
+		label.Font = Enum.Font.GothamBlack
+		label.TextScaled = true
+		label.TextColor3 = Color3.fromHex("#FFD36B")
+		label.TextStrokeTransparency = 0.3
+		label.Text = def.displayName
+		label.Parent = tag
+	end
+	return model
+end
+
+-- Rebuilds the ships on the player's Showcase Dock, if it's built.
+function HangarSystem.refreshShowcase(player: Player)
+	local station = StationSystem.getStation(player)
+	local profile = DataSystem.getProfile(player)
+	local folder = station and station.model:FindFirstChild("Hangar")
+	local dock = folder and folder:FindFirstChild(SHOWCASE_ID)
+	if profile == nil or dock == nil or dock:GetAttribute("State") ~= "built" then
+		return
+	end
+	for _, child in dock:GetChildren() do
+		if child:IsA("Model") and string.sub(child.Name, 1, 8) == "Display_" then
+			child:Destroy()
+		end
+	end
+	local region = RegionSystem.getRegion(player)
+	local accent = if region then region.color else Config.World.COLORS.accent
+	for index, shipId in profile.showcase do
+		local cradle = dock:FindFirstChild(`Cradle{index}`)
+		local loadout = profile.loadouts[shipId]
+		if cradle and cradle:IsA("BasePart") and Config.Ships.BY_ID[shipId] then
+			-- Nose towards the deck, hovering over the cradle.
+			local at = CFrame.new(cradle.Position + Vector3.new(0, 6, 0))
+				* (cradle.CFrame - cradle.Position)
+				* CFrame.Angles(0, 0, -math.pi / 2)
+				* CFrame.Angles(0, math.pi / 2, 0)
+			local look = { paint = loadout and loadout.paint, finish = loadout and loadout.finish }
+			display(shipId, look, at, accent).Parent = dock
+		end
+	end
+end
 
 local function buy(player: Player, upgradeId: string, fromTouch: boolean)
 	local profile = DataSystem.getProfile(player)
@@ -128,8 +224,12 @@ refresh = function(player: Player, justBuilt: string?)
 			continue
 		end
 		local floor = station.floor * CFrame.new(def.pad.x, 0, def.pad.z)
+		local site = def.site
 		local model = if wanted == "built"
-			then HangarBuilder.structure(def, floor)
+			then HangarBuilder.structure(
+				def,
+				if site then station.floor * CFrame.new(site.x, site.y or 0, site.z) else floor
+			)
 			else HangarBuilder.pad(def, floor)
 		model:SetAttribute("OwnerUserId", player.UserId)
 		if wanted == "built" then
@@ -142,6 +242,8 @@ refresh = function(player: Player, justBuilt: string?)
 		if wanted == "pad" then
 			CollectionService:AddTag(model, PAD_TAG)
 			hookPad(player, model, upgradeId)
+		elseif upgradeId == SHOWCASE_ID then
+			HangarSystem.refreshShowcase(player)
 		end
 	end
 end

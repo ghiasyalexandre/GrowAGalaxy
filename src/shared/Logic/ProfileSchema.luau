@@ -33,7 +33,11 @@ local ProfileSchema = {}
 --    Older profiles start with no boosts (normalize fills them in).
 -- 9: daily prizes: the next calendar day (1..14) and the day last claimed.
 --    Older profiles start at day 1, never claimed.
-ProfileSchema.VERSION = 9
+-- 10: ship paint jobs (loadout paint and finish), the hangar's showcase list
+--    and the region boundary setting; equipment levels (owned items start at
+--    level 1). Older profiles keep factory paint, an
+--    empty showcase and the boundary shown (normalize fills them in).
+ProfileSchema.VERSION = 10
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -43,6 +47,7 @@ local function defaultSettings(): Types.Settings
 		stabilization = true,
 		reducedEffects = false,
 		pvp = Config.Combat.PVP_DEFAULT,
+		showBounds = true,
 	}
 end
 
@@ -58,6 +63,7 @@ function ProfileSchema.default(): Profile
 		activeShip = starter,
 		loadouts = { [starter] = { equipment = {} } },
 		ownedEquipment = {},
+		equipmentLevels = {},
 		ownedCosmetics = {},
 		inventory = {},
 		galaxy = { expansion = 1, nextId = 1, stars = {} },
@@ -68,6 +74,7 @@ function ProfileSchema.default(): Profile
 		stats = {},
 		settings = defaultSettings(),
 		hangar = {},
+		showcase = {},
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
 		daily = { day = 1, lastClaim = 0 },
@@ -267,6 +274,20 @@ local function migrateShipsV5(data: { [string]: any })
 	end
 end
 
+-- Whether `paint` is one of the offered colours (Config.Paint.SWATCHES).
+function ProfileSchema.validPaint(paint: any): boolean
+	return type(paint) == "string" and table.find(Config.Paint.SWATCHES, paint) ~= nil
+end
+
+-- Paint jobs of every owned ship, for the client.
+function ProfileSchema.looks(profile: Profile): { [string]: Types.ShipLook }
+	local looks: { [string]: Types.ShipLook } = {}
+	for shipId, loadout in profile.loadouts do
+		looks[shipId] = { paint = loadout.paint, finish = loadout.finish }
+	end
+	return looks
+end
+
 -- Repairs a loaded profile in place. Returns false (and changes nothing) when
 -- the data must not be used, e.g. it was saved by a newer game version.
 function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
@@ -313,6 +334,14 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 
 	data.ownedEquipment = flags(data.ownedEquipment)
+	-- Every owned item has a level, 1 to MAX_LEVEL (1 for items bought before
+	-- levels existed).
+	local rawLevels = if type(data.equipmentLevels) == "table" then data.equipmentLevels else {}
+	local levels: { [string]: number } = {}
+	for itemId in data.ownedEquipment do
+		levels[itemId] = math.clamp(count(rawLevels[itemId]) or 1, 1, Config.Equipment.MAX_LEVEL)
+	end
+	data.equipmentLevels = levels
 	data.hangar = flags(data.hangar)
 	data.verifiedPasses = flags(data.verifiedPasses)
 	local daily = if type(data.daily) == "table" then data.daily else {}
@@ -346,9 +375,34 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 				cosmetic = raw.cosmetic
 			end
 		end
-		loadouts[shipId] = { equipment = equipment, cosmetic = cosmetic }
+		local paint = if type(raw) == "table" then raw.paint else nil
+		local finish = if type(raw) == "table" then raw.finish else nil
+		loadouts[shipId] = {
+			equipment = equipment,
+			cosmetic = cosmetic,
+			paint = if ProfileSchema.validPaint(paint) then paint else nil,
+			finish = if type(finish) == "string" and Config.Paint.FINISHES[finish]
+				then finish
+				else nil,
+		}
 	end
 	data.loadouts = loadouts
+
+	-- Showcase: owned ships only, each once, at most SHOWCASE_SLOTS.
+	local showcase: { string } = {}
+	if type(data.showcase) == "table" then
+		for _, shipId in ipairs(data.showcase) do
+			if
+				type(shipId) == "string"
+				and ownedShips[shipId]
+				and not table.find(showcase, shipId)
+				and #showcase < Config.Paint.SHOWCASE_SLOTS
+			then
+				table.insert(showcase, shipId)
+			end
+		end
+	end
+	data.showcase = showcase
 
 	data.galaxy = galaxy(data.galaxy)
 
@@ -391,6 +445,9 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 			then settings.reducedEffects
 			else fallback.reducedEffects,
 		pvp = if type(settings.pvp) == "boolean" then settings.pvp else fallback.pvp,
+		showBounds = if type(settings.showBounds) == "boolean"
+			then settings.showBounds
+			else fallback.showBounds,
 	}
 
 	local receipts: { string } = {}
@@ -409,10 +466,11 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	return true, nil
 end
 
--- Stardust per second from the player's stars, with hangar upgrades.
+-- Stardust per second from the player's stars, with hangar upgrades, as a
+-- whole number.
 function ProfileSchema.incomeRate(profile: Profile): number
 	local rate = StarMath.totalIncome(profile.galaxy.stars)
-	return math.floor(rate * HangarMath.incomeMultiplier(profile.hangar) * 100 + 0.5) / 100
+	return math.floor(rate * HangarMath.incomeMultiplier(profile.hangar) + 0.5)
 end
 
 -- The slice of a profile its owner's client is allowed to see.
@@ -427,11 +485,14 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		incomeRate = ProfileSchema.incomeRate(profile),
 		ownedShips = table.clone(profile.ownedShips),
 		ownedEquipment = table.clone(profile.ownedEquipment),
+		equipmentLevels = table.clone(profile.equipmentLevels),
 		tutorialStep = if profile.tutorial.done then 0 else Progression.tutorialStep(profile.stats),
 		settings = table.clone(profile.settings),
 		boosts = table.clone(profile.boosts),
 		passes = table.clone(profile.verifiedPasses),
 		daily = table.clone(profile.daily),
+		looks = ProfileSchema.looks(profile),
+		showcase = table.clone(profile.showcase),
 	}
 end
 

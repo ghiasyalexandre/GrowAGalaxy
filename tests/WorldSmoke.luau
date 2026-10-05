@@ -20,6 +20,7 @@ local roblox = require("@lune/roblox")
 local ISS_PART_BUDGET = 400
 local REGION_PART_BUDGET = 110 -- the station before any hangar upgrades
 local HANGAR_PART_BUDGET = 30 -- per hangar building
+local VANITY_PART_BUDGET = 40 -- per vanity building (runway, hologram, spire, dock)
 local SHIP_PART_BUDGET = 20
 -- How far a ship's launch path (straight out of its berth) must be clear.
 local LAUNCH_PATH = 150
@@ -261,10 +262,16 @@ for _, id in HangarConfig.ORDER do
 	)
 	local building = HangarBuilder.structure(def, floor)
 	local n = countParts(building)
-	check(
-		n > 3 and n <= HANGAR_PART_BUDGET,
-		`{id}: building has {n} parts (budget {HANGAR_PART_BUDGET})`
-	)
+	local budget = if def.vanity then VANITY_PART_BUDGET else HANGAR_PART_BUDGET
+	check(n > 3 and n <= budget, `{id}: building has {n} parts (budget {budget})`)
+	if id == "ShowcaseDock" then
+		check(
+			building:FindFirstChild("Cradle1") ~= nil
+				and building:FindFirstChild("Cradle2") ~= nil
+				and building:FindFirstChild("Cradle3") ~= nil,
+			"ShowcaseDock: three cradles for the showcased ships"
+		)
+	end
 	pad:Destroy()
 	building:Destroy()
 end

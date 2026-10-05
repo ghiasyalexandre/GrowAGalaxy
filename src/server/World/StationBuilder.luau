@@ -192,10 +192,10 @@ function StationBuilder.build(
 	for _, crate in
 		{
 			{ x = -27, z = 30, s = 4, y = 0 },
-			{ x = -22.5, z = 31, s = 3.2, y = 0 },
+			{ x = -28, z = 24, s = 3.2, y = 0 },
 			{ x = -26.5, z = 30.2, s = 2.6, y = 4 },
 			{ x = 26, z = 30, s = 4, y = 0 },
-			{ x = 21.8, z = 30.6, s = 3, y = 0 },
+			{ x = 28, z = 24.5, s = 3, y = 0 },
 		}
 	do
 		Build.part({

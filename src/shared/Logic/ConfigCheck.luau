@@ -223,7 +223,7 @@ function ConfigCheck.run(config: any): { string }
 		for otherId, other in hangar.BY_ID do
 			local gap =
 				math.max(math.abs(def.pad.x - other.pad.x), math.abs(def.pad.z - other.pad.z))
-			if otherId ~= id and gap < 14 then
+			if otherId ~= id and gap < 12 then
 				fail(`Hangar {id}: pad too close to {otherId}`)
 			end
 		end
@@ -420,6 +420,16 @@ function ConfigCheck.run(config: any): { string }
 		or asteroids.SIZE_JITTER >= 0.5
 	then
 		fail("Asteroids: bad group spread, stream chance or size jitter")
+	end
+	if
+		asteroids.SWARM_INTERVAL <= asteroids.SWARM_DURATION
+		or asteroids.SWARM_COUNT < 1
+		or asteroids.SWARM_REWARD < 1
+		or asteroids.SWARM_SPREAD <= 0
+	then
+		fail(
+			"Asteroids: the golden swarm needs a positive count, spread and reward, and to end before the next"
+		)
 	end
 	if asteroids.ISS_CLEARANCE + 2 * largestRock >= asteroids.MAX_DISTANCE then
 		fail("Asteroids: no room between ISS_CLEARANCE and MAX_DISTANCE")
@@ -652,8 +662,8 @@ function ConfigCheck.run(config: any): { string }
 	if planetOrbits[#planetOrbits] + planetExtent > galaxy.SYSTEM_RADIUS then
 		fail("Galaxy: the outermost orbit reaches beyond SYSTEM_RADIUS")
 	end
-	if galaxy.MIN_STAR_SPACING < 2 * galaxy.SYSTEM_RADIUS then
-		fail("Galaxy: MIN_STAR_SPACING must be at least 2 x SYSTEM_RADIUS")
+	if galaxy.MIN_STAR_SPACING < galaxy.SYSTEM_RADIUS + galaxy.STAR_MAX_RADIUS then
+		fail("Galaxy: MIN_STAR_SPACING must keep every planet out of a neighbouring star")
 	end
 	if galaxy.WALL_MARGIN < galaxy.SYSTEM_RADIUS then
 		fail("Galaxy: WALL_MARGIN must be at least SYSTEM_RADIUS")

@@ -42,6 +42,7 @@ local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local RegionSystem = require(script.Parent.RegionSystem)
 local ShipBuilder = require(script.Parent.Parent.World.ShipBuilder)
 local ShipStats = require(ReplicatedStorage.Shared.Logic.ShipStats)
+local ShipLook = require(ReplicatedStorage.Shared.Util.ShipLook)
 local StationSystem = require(script.Parent.StationSystem)
 local Teleport = require(script.Parent.Parent.Util.Teleport)
 local Types = require(ReplicatedStorage.Shared.Types)
@@ -292,7 +293,10 @@ end
 local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): Ship
 	local region = RegionSystem.getRegion(player)
 	local accent = if region then region.color else Config.World.COLORS.accent
-	local model = ShipBuilder.build(info.shipId, berth, accent)
+	local profile = DataSystem.getProfile(player)
+	local loadout = profile and profile.loadouts[info.shipId]
+	local look = { paint = loadout and loadout.paint, finish = loadout and loadout.finish }
+	local model = ShipBuilder.build(info.shipId, berth, accent, look)
 	model.Name = `Ship_{player.UserId}`
 	model:SetAttribute("OwnerUserId", player.UserId)
 	-- Read by every client's ship effects (engine glow, beam reach).
@@ -300,9 +304,12 @@ local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): S
 	model:SetAttribute("BeamRange", info.beamRange)
 	model:SetAttribute("Health", 1)
 	local shipDef = Config.Ships.BY_ID[info.shipId]
-	model:SetAttribute("Paint", if shipDef then shipDef.paint else Config.World.COLORS.hull)
+	-- The hull colour (explosion debris): the paint job's, else the factory one.
+	model:SetAttribute(
+		"Paint",
+		look.paint or (if shipDef then shipDef.paint else Config.World.COLORS.hull)
+	)
 	-- An owned beam-colour cosmetic recolours the laser for everyone.
-	local profile = DataSystem.getProfile(player)
 	for cosmeticId, def in Config.Cosmetics.BY_ID do
 		if
 			def.kind == "BeamColor"
@@ -463,6 +470,26 @@ local function dock(player: Player)
 		floatOut(ship, character)
 	end
 	Notify.send(player, "Docked.")
+end
+
+-- Repaints the player's spawned ship after its paint job changed.
+function ShipSystem.refreshLook(player: Player)
+	local ship = ships[player]
+	local profile = DataSystem.getProfile(player)
+	if ship == nil or profile == nil then
+		return
+	end
+	local shipId = ship.model:GetAttribute("ShipId")
+	local loadout = if type(shipId) == "string" then profile.loadouts[shipId] else nil
+	if loadout == nil then
+		return
+	end
+	ShipLook.apply(ship.model, { paint = loadout.paint, finish = loadout.finish })
+	local def = Config.Ships.BY_ID[shipId :: string]
+	ship.model:SetAttribute(
+		"Paint",
+		loadout.paint or (if def then def.paint else Config.World.COLORS.hull)
+	)
 end
 
 -- Blows up the player's ship (PvP): the pilot floats out, every client

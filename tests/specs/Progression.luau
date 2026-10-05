@@ -69,5 +69,28 @@ return function(T, Loader)
 			T.equal(Progression.previousShip(order[3]), order[2])
 			T.equal(Progression.previousShip(order[1]), nil)
 		end)
+
+		T.test("equipment has 5 levels: each costs more and gives more", function()
+			local E = Config.Equipment
+			T.equal(E.MAX_LEVEL, 5)
+			for _, itemId in E.ORDER do
+				if Progression.equipmentCost(itemId) == nil then
+					continue
+				end
+				local lastCost, lastBonus = 0, 0
+				for level = 1, E.MAX_LEVEL do
+					local cost = Progression.equipmentCost(itemId, level) :: number
+					T.truthy(cost > lastCost and cost == math.floor(cost), `{itemId} L{level} cost`)
+					for _, multiplier in E.BY_ID[itemId].modifiers do
+						local bonus = Progression.equipmentMultiplier(multiplier, level)
+						T.truthy(bonus > lastBonus or level == 1, `{itemId} L{level} bonus`)
+						lastBonus = bonus
+						break
+					end
+					lastCost = cost
+				end
+				T.equal(Progression.equipmentCost(itemId, E.MAX_LEVEL + 1), nil)
+			end
+		end)
 	end)
 end

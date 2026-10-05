@@ -12,6 +12,10 @@
         "Ships": {
           "$path": "assets/roblox/Ships",
           "$ignoreUnknownInstances": true
+        },
+        "Music": {
+          "$path": "assets/roblox/Music",
+          "$ignoreUnknownInstances": true
         }
       },
       "Remotes": {
@@ -62,6 +66,12 @@
           "$className": "RemoteEvent"
         },
         "RaidEvent": {
+          "$className": "RemoteEvent"
+        },
+        "CustomizeRequest": {
+          "$className": "RemoteFunction"
+        },
+        "WorldEvent": {
           "$className": "RemoteEvent"
         }
       }

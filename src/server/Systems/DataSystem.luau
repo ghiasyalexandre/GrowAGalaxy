@@ -300,6 +300,7 @@ function DataSystem.grantEquipment(player: Player, itemId: string, slot: string)
 		return
 	end
 	profile.ownedEquipment[itemId] = true
+	profile.equipmentLevels[itemId] = profile.equipmentLevels[itemId] or 1
 	for shipId in profile.ownedShips do
 		local loadout = profile.loadouts[shipId]
 		if loadout == nil then
@@ -309,6 +310,18 @@ function DataSystem.grantEquipment(player: Player, itemId: string, slot: string)
 		loadout.equipment[slot] = itemId
 	end
 	push(player, "ownedEquipment", table.clone(profile.ownedEquipment))
+	push(player, "equipmentLevels", table.clone(profile.equipmentLevels))
+end
+
+-- Raises an owned equipment item one level (the caller has paid).
+function DataSystem.levelEquipment(player: Player, itemId: string)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or not profile.ownedEquipment[itemId] then
+		return
+	end
+	local level = profile.equipmentLevels[itemId] or 1
+	profile.equipmentLevels[itemId] = math.min(level + 1, Config.Equipment.MAX_LEVEL)
+	push(player, "equipmentLevels", table.clone(profile.equipmentLevels))
 end
 
 function DataSystem.setExpansion(player: Player, level: number)
@@ -437,22 +450,72 @@ function DataSystem.grantRaidReward(player: Player, reward: any)
 end
 
 -- Player settings a client may change (all booleans).
-local BOOLEAN_SETTINGS = { stabilization = true, reducedEffects = true, pvp = true }
+local BOOLEAN_SETTINGS =
+	{ stabilization = true, reducedEffects = true, pvp = true, showBounds = true }
+-- Player settings that are volumes, 0 to 1.
+local VOLUME_SETTINGS = { sfxVolume = true, musicVolume = true }
 
--- Saves a setting from the client. Unknown names and non-boolean values are
--- ignored.
+-- Saves a setting from the client. Unknown names and values of the wrong
+-- type are ignored; volumes are clamped to 0..1.
 function DataSystem.setSetting(player: Player, name: unknown, value: unknown)
 	local profile = DataSystem.getProfile(player)
-	if
-		profile == nil
-		or type(name) ~= "string"
-		or not BOOLEAN_SETTINGS[name]
-		or type(value) ~= "boolean"
-	then
+	if profile == nil or type(name) ~= "string" then
 		return
 	end
-	(profile.settings :: any)[name] = value
+	if BOOLEAN_SETTINGS[name] and type(value) == "boolean" then
+		(profile.settings :: any)[name] = value
+	elseif VOLUME_SETTINGS[name] and type(value) == "number" and value == value then
+		(profile.settings :: any)[name] = math.clamp(value, 0, 1)
+	else
+		return
+	end
 	push(player, "settings", table.clone(profile.settings))
+end
+
+-- Sets an owned ship's paint job (Config.Paint): `paint` a swatch colour or
+-- nil for factory colours, `finish` a finish id or nil. False if the ship
+-- isn't owned or a value isn't offered.
+function DataSystem.setShipLook(
+	player: Player,
+	shipId: string,
+	paint: string?,
+	finish: string?
+): boolean
+	local profile = DataSystem.getProfile(player)
+	local loadout = profile and profile.loadouts[shipId]
+	if profile == nil or loadout == nil or not profile.ownedShips[shipId] then
+		return false
+	end
+	if paint ~= nil and not ProfileSchema.validPaint(paint) then
+		return false
+	end
+	if finish ~= nil and Config.Paint.FINISHES[finish] == nil then
+		return false
+	end
+	loadout.paint = paint
+	loadout.finish = finish
+	push(player, "looks", ProfileSchema.looks(profile))
+	return true
+end
+
+-- Puts an owned ship on show in the Showcase Dock, or takes it off. Returns
+-- false (and changes nothing) when it isn't owned or every slot is taken.
+function DataSystem.setShowcase(player: Player, shipId: string, on: boolean): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or not profile.ownedShips[shipId] then
+		return false
+	end
+	local index = table.find(profile.showcase, shipId)
+	if on and index == nil then
+		if #profile.showcase >= Config.Paint.SHOWCASE_SLOTS then
+			return false
+		end
+		table.insert(profile.showcase, shipId)
+	elseif not on and index then
+		table.remove(profile.showcase, index)
+	end
+	push(player, "showcase", table.clone(profile.showcase))
+	return true
 end
 
 -- Records the tutorial step to show (0 = finished) and tells the client.

@@ -84,7 +84,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"RedDwarf",
 		2,
 		"Red Dwarf",
-		600,
+		700,
 		4,
 		12,
 		"#E2563B",
@@ -95,7 +95,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"YellowDwarf",
 		3,
 		"Yellow Dwarf",
-		2500,
+		3500,
 		12,
 		15,
 		"#FFD36B",
@@ -106,7 +106,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"WhiteDwarf",
 		4,
 		"White Dwarf",
-		8000,
+		14000,
 		30,
 		11,
 		"#F2F6FF",
@@ -117,7 +117,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"RedGiant",
 		5,
 		"Red Giant",
-		25000,
+		50000,
 		75,
 		20,
 		"#FF6B3D",
@@ -128,7 +128,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"BlueGiant",
 		6,
 		"Blue Giant",
-		75000,
+		170000,
 		180,
 		21,
 		"#6FA8FF",
@@ -139,7 +139,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"RedSupergiant",
 		7,
 		"Red Supergiant",
-		200000,
+		550000,
 		420,
 		24,
 		"#FF4A2E",
@@ -150,7 +150,7 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"BlackHole",
 		8,
 		"Black Hole",
-		600000,
+		1800000,
 		1000,
 		14,
 		"#05020A",
@@ -193,7 +193,7 @@ return {
 	LEVEL_INCOME_CURVE = 0.05,
 	-- Level L -> L + 1 costs the type's price x UPGRADE_SHARE x UPGRADE_GROWTH^(L - 1).
 	UPGRADE_SHARE = 0.4,
-	UPGRADE_GROWTH = 1.25,
+	UPGRADE_GROWTH = 1.35,
 	-- A star at max level is this much bigger than at level 1.
 	MAX_RADIUS_SCALE = 1.2,
 	-- Orbit clock (drawn by each client): simulated seconds per real second.
@@ -204,7 +204,7 @@ return {
 	INSPECT_RATE_MAX = 30 * 365.25 * 86400, -- 3 decades per second
 	DEFAULT_TYPE = "BrownDwarf", -- the first star; must be affordable at the start
 	-- Each star you already own multiplies the price of the next one.
-	PRICE_GROWTH = 1.25,
+	PRICE_GROWTH = 1.35,
 	-- Placement ghost: how far ahead of the camera it starts, and its range.
 	GHOST_DISTANCE = 300,
 	GHOST_MIN_DISTANCE = 60,

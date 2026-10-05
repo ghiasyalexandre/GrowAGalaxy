@@ -224,5 +224,45 @@ return function(T, Loader)
 			T.equal(view.expansion, 1)
 			T.equal((view :: any).receipts, nil)
 		end)
+
+		T.test(
+			"v10: paint jobs, showcase and the boundary setting are filled in and checked",
+			function()
+				local data = ProfileSchema.default()
+				data.schemaVersion = 9
+				data.showcase = nil :: any
+				data.settings.showBounds = nil :: any
+				data.ownedShips.RedFighter = true
+				data.loadouts.RedFighter = {
+					equipment = {},
+					paint = Config.Paint.SWATCHES[2],
+					finish = "Metallic",
+				} :: any
+				data.loadouts[Config.Ships.STARTER_SHIP] =
+					{ equipment = {}, paint = "#123456", finish = "Chrome" } :: any
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(data.schemaVersion, 10)
+				T.equal(#data.showcase, 0)
+				T.equal(data.settings.showBounds, true)
+				T.equal(data.loadouts.RedFighter.paint, Config.Paint.SWATCHES[2])
+				T.equal(data.loadouts.RedFighter.finish, "Metallic")
+				T.equal(
+					data.loadouts[Config.Ships.STARTER_SHIP].paint,
+					nil,
+					"colours outside the swatches are dropped"
+				)
+				T.equal(
+					data.loadouts[Config.Ships.STARTER_SHIP].finish,
+					nil,
+					"unknown finishes are dropped"
+				)
+
+				data.showcase =
+					{ "RedFighter", "RedFighter", "Warship", Config.Ships.STARTER_SHIP, 5 } :: any
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(#data.showcase, 2, "unowned, repeated and bad ids are dropped")
+				T.equal(data.showcase[1], "RedFighter")
+			end
+		)
 	end)
 end

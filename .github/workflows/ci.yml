@@ -38,3 +38,6 @@ jobs:
 
       - name: World builder smoke test
         run: lune run tests/WorldSmoke build.rbxl
+
+      - name: Orbiting planets smoke test
+        run: lune run tests/OrbitSmoke build.rbxl

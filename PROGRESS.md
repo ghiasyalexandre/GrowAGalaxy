@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 20 merged into `main`).
+Last updated: 2026-10-05 (stage 21 merged into `main`).
 
 ## Status by stage
 
@@ -26,7 +26,8 @@ Last updated: 2026-10-05 (stage 20 merged into `main`).
 | 18. Daily prizes (14-day calendar), flashier Galaxy Store, premium shortcut (ship / black hole) | Merged | Passing (151 tests) | **Not yet** |
 | 19. Roomier ISS (lounge, playground, showroom), Saturn V raid beacon, Death Star raids (Easy / Medium / Hard queues) | Merged | Passing (157 tests) | **Not yet** |
 | 20. Floating lean, floor clearance and suit thruster sound (default walking sounds muted), showroom spin fix, Death Star overhaul (moving weak point, drones, shockwaves, Hard bombardment, enrage), random asteroid groups, curved progression | Merged | Passing (166 tests) | **Not yet** |
-| 21+. Save hardening, tuning | Not started | | |
+| 21. Vanity hangar + Showcase Dock, ship paint and finish, 5-level equipment, Settings panel and music, vertical shop buttons, solar flares, golden swarms, steeper whole-number progression, closer stars, star panel and orbit hardening | Merged | Passing (168 tests + orbit smoke) | **Not yet** |
+| 22+. Save hardening, tuning | Not started | | |
 
 ## What works in code (unverified in Studio)
 
