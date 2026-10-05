@@ -30,7 +30,7 @@ and orbit smoke tests). Not yet playtested in Studio.**
 
 - **Redeeming:** Settings has a **Codes** row. Type a code and press **Redeem** (or Enter).
   Letter case and spaces around the code don't matter.
-- **The code:** `ILUVGHIASY` gives **500,000 Stardust**, once per player. A second try says it's
+- **The code:** `ILUVGHIASY` gives **5,000,000 Stardust**, once per player. A second try says it's
   already been redeemed.
 - **Server side:** codes are checked on the server (`CodeSystem`), with a rate limit (5 tries,
   then one every 5 s) so they can't be guessed by brute force. The reward is a fixed amount;
@@ -45,5 +45,5 @@ and orbit smoke tests). Not yet playtested in Studio.**
 3. A new star should show no orbit rings until its first planet is bought.
 4. Put ships on show, build the Showcase Dock, and look for the ships turning over the white
    pads.
-5. Settings > Codes: redeem ILUVGHIASY (+500,000 Stardust), then try again; it should be
+5. Settings > Codes: redeem ILUVGHIASY (+5,000,000 Stardust), then try again; it should be
    refused.

@@ -11,8 +11,8 @@ export type CodeDef = {
 
 local BY_CODE: { [string]: CodeDef } = {
 	ILUVGHIASY = {
-		stardust = 500000,
-		message = "+500,000 Stardust!",
+		stardust = 5000000,
+		message = "+5,000,000 Stardust!",
 	},
 }
 

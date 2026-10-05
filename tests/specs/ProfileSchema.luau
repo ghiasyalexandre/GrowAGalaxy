@@ -306,7 +306,7 @@ return function(T, Loader)
 			T.equal(data.redeemedCodes.ILUVGHIASY, true)
 			T.equal(data.redeemedCodes.BAD, nil)
 			local code = Config.Codes.BY_CODE.ILUVGHIASY
-			T.equal(code and code.stardust, 500000, "the code gives 500,000 Stardust")
+			T.equal(code and code.stardust, 5000000, "the code gives 5,000,000 Stardust")
 		end)
 	end)
 end
