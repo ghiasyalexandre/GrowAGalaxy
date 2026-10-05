@@ -24,6 +24,8 @@ Stable instructions for working on this repo. Implementation status lives in
 | `vendor` | ServerScriptService/Vendor (ProfileStore) |
 | `tests` | not synced; Lune unit tests and the world smoke test |
 | `assets/roblox/Ships` | ReplicatedStorage/Assets/Ships (imported ship models as `.rbxm`, saved from Studio) |
+| `assets/roblox/Music` | ReplicatedStorage/Assets/Music (SpaceMusic, SpaceDisco Sounds) |
+| `assets/roblox/Stuff`, `assets/roblox/Bosses` | ServerStorage/Assets (Saturn V beacon, Death Star) |
 | `assets` (the rest) | not synced; source art (`assets/models`: ship OBJs with palettes). The UI kit is packed into `assets/ui/GaG_UI_Atlas.png` by `tools/pack_ui_atlas.py` (writes `Config/SpriteAtlas.luau`); the atlas is uploaded to Roblox by hand |
 
 Remotes are declared in `default.project.json` (ReplicatedStorage/Remotes) and accessed only via
@@ -52,7 +54,7 @@ selene src
 lune run tests/run
 rojo sourcemap default.project.json -o sourcemap.json
 luau-lsp analyze --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/ProfileStore.luau" src
-rojo build -o build.rbxl && lune run tests/WorldSmoke build.rbxl
+rojo build -o build.rbxl && lune run tests/WorldSmoke build.rbxl && lune run tests/OrbitSmoke build.rbxl
 ```
 
 `globalTypes.d.luau` comes from the URL in `.github/workflows/ci.yml`. Files must stay LF

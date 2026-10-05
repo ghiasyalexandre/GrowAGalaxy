@@ -27,7 +27,12 @@ export type GalaxyRecord = {
 export type Loadout = {
 	equipment: { [string]: string }, -- slot -> Config.Equipment id
 	cosmetic: string?,
+	paint: string?, -- Config.Paint.SWATCHES colour; nil = factory colours
+	finish: string?, -- Config.Paint.FINISHES id; nil = factory finish
 }
+
+-- A ship's paint job, as the client sees it.
+export type ShipLook = { paint: string?, finish: string? }
 
 export type AchievementRecord = { progress: number, claimed: boolean }
 
@@ -38,6 +43,7 @@ export type Settings = {
 	stabilization: boolean,
 	reducedEffects: boolean,
 	pvp: boolean,
+	showBounds: boolean, -- draw your galaxy region's boundary box
 }
 
 export type Profile = {
@@ -50,6 +56,7 @@ export type Profile = {
 	activeShip: string,
 	loadouts: { [string]: Loadout }, -- per owned ship
 	ownedEquipment: { [string]: boolean },
+	equipmentLevels: { [string]: number }, -- owned item -> level 1..Config.Equipment.MAX_LEVEL
 	ownedCosmetics: { [string]: boolean },
 	inventory: { [string]: number }, -- crafted items not yet placed
 	galaxy: GalaxyRecord,
@@ -60,6 +67,9 @@ export type Profile = {
 	stats: { [string]: number },
 	settings: Settings,
 	hangar: { [string]: boolean }, -- hangar upgrades built (Config.Hangar)
+	-- Owned ships on show in the hangar's Showcase Dock (up to
+	-- Config.Paint.SHOWCASE_SLOTS), in slot order.
+	showcase: { string },
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.
 	boosts: { mining: number, star: number },
@@ -83,11 +93,14 @@ export type ProfileView = {
 	incomeRate: number, -- Stardust per second from all stars
 	ownedShips: { [string]: boolean },
 	ownedEquipment: { [string]: boolean },
+	equipmentLevels: { [string]: number },
 	tutorialStep: number, -- Config.Tutorial step to show, 0 when done
 	settings: Settings,
 	boosts: { mining: number, star: number },
 	passes: { [string]: boolean }, -- passes the server has verified
 	daily: { day: number, lastClaim: number },
+	looks: { [string]: ShipLook }, -- paint jobs of owned ships
+	showcase: { string },
 }
 
 export type RegionInfo = {

@@ -249,11 +249,18 @@ end
 
 -- Panel ------------------------------------------------------------------
 
+local refreshPanel: () -> ()
+
 local function request(...: any)
 	local ok, message = Net.StarRequest:InvokeServer(...)
 	ClientState.notify:Fire(
 		if type(message) == "string" then message else if ok then "Done" else "Failed"
 	)
+	-- The star's attributes have replicated by the time the answer arrives:
+	-- show the new level, price and buttons straight away.
+	if panelStar then
+		refreshPanel()
+	end
 end
 
 local function stardust(): number
@@ -307,8 +314,6 @@ local function tagIcon(button: TextButton, icon: string): TextButton
 	button:SetAttribute("Icon", icon)
 	return button
 end
-
-local refreshPanel: () -> ()
 
 local function showPicker(model: Model, typeId: string)
 	Theme.clear(list)
@@ -627,7 +632,7 @@ local function onLevelChanged(v: Visual)
 				v,
 				"LEVEL UP",
 				`{if def then def.displayName else "Star"}  ·  level {level}/{top}`,
-				`Production x{math.floor(StarMath.levelMultiplier(level) * 100 + 0.5) / 100}`,
+				`Production x{math.floor(StarMath.levelMultiplier(level) + 0.5)}`,
 				false
 			)
 		end
@@ -658,12 +663,23 @@ local function onPlanetsChanged(v: Visual)
 	end
 end
 
+local waitingForCore: { [Instance]: boolean } = {}
+local orbitWarned = false
+
 local function add(model: Instance)
 	if not model:IsA("Model") or model:GetAttribute("StarId") == nil or visuals[model] then
 		return
 	end
 	local core = model.PrimaryPart or model:FindFirstChild("Core")
 	if core == nil or not core:IsA("BasePart") then
+		-- Its core may replicate a moment after the model: try again then.
+		if not waitingForCore[model] then
+			waitingForCore[model] = true
+			model.ChildAdded:Once(function()
+				waitingForCore[model] = nil
+				add(model)
+			end)
+		end
 		return
 	end
 	local mine = isMine(model)
@@ -729,8 +745,16 @@ local function add(model: Instance)
 		table.insert(
 			v.connections,
 			model:GetAttributeChangedSignal(attribute):Connect(function()
-				handler(v)
+				-- The panel and label first: a failing effect or banner must
+				-- never leave them showing the old level.
 				refreshLabel(v)
+				if panelStar == model then
+					refreshPanel()
+				end
+				local ok, problem = pcall(handler :: any, v)
+				if not ok then
+					warn(`[StarController] {attribute} change effect failed: {problem}`)
+				end
 				if panelStar == model then
 					refreshPanel()
 				end
@@ -760,14 +784,22 @@ animate = function(dt: number?)
 		clock.time += dt * (clock.rate :: number)
 	end
 	for _, v in visuals do
-		local center = v.core.CFrame.Position
-		for _, planet in v.planets do
-			local slot = S.SLOTS[planet.slot]
-			local angle = OrbitTime.angle(planet.slot, clock.time, planet.phase)
-			local offset = CFrame.Angles(math.rad(slot.tilt), 0, 0)
-				* Vector3.new(math.cos(angle) * slot.orbit, 0, math.sin(angle) * slot.orbit)
-			-- Facing the star, so the sunward light sits on the day side.
-			planet.part.CFrame = CFrame.lookAt(center + offset, center)
+		-- One broken system must not stop every other one from turning; the
+		-- first failure is reported once in Output.
+		local ok, problem = pcall(function()
+			local center = v.core.CFrame.Position
+			for _, planet in v.planets do
+				local slot = S.SLOTS[planet.slot]
+				local angle = OrbitTime.angle(planet.slot, clock.time, planet.phase)
+				local offset = CFrame.Angles(math.rad(slot.tilt), 0, 0)
+					* Vector3.new(math.cos(angle) * slot.orbit, 0, math.sin(angle) * slot.orbit)
+				-- Facing the star, so the sunward light sits on the day side.
+				planet.part.CFrame = CFrame.lookAt(center + offset, center)
+			end
+		end)
+		if not ok and not orbitWarned then
+			orbitWarned = true
+			warn(`[StarController] orbit update failed: {problem}`)
 		end
 	end
 end

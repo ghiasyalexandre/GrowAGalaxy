@@ -6,7 +6,8 @@
 -- ShopRequest (RemoteFunction, client -> server), returns (ok, message):
 --   "buyShip", shipId          buy an earnable ship (fitted with your equipment)
 --   "selectShip", shipId       make an owned ship the one your hangars launch
---   "buyEquipment", itemId     buy an item; it is fitted to every ship you own
+--   "buyEquipment", itemId     buy an item (fitted to every ship you own), or
+--                              raise one you own a level, up to MAX_LEVEL
 --   "expand"                   buy the next galaxy expansion
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -56,17 +57,24 @@ local function selectShip(player: Player, shipId: string): (boolean, string)
 end
 
 local function buyEquipment(player: Player, profile: any, itemId: string): (boolean, string)
-	local cost = Progression.equipmentCost(itemId)
-	if cost == nil then
+	local owned = profile.ownedEquipment[itemId] == true
+	local nextLevel = if owned then (profile.equipmentLevels[itemId] or 1) + 1 else 1
+	if Progression.equipmentCost(itemId) == nil then
 		return false, "That item isn't for sale."
 	end
-	if profile.ownedEquipment[itemId] then
-		return false, "You already own that item."
+	local cost = Progression.equipmentCost(itemId, nextLevel)
+	if cost == nil then
+		return false, "That item is already at its top level."
 	end
 	if not DataSystem.spendStardust(player, cost) then
 		return false, `You need {cost} {CURRENCY} for that.`
 	end
 	local def = Config.Equipment.BY_ID[itemId]
+	if owned then
+		DataSystem.levelEquipment(player, itemId)
+		return true,
+			`{def.displayName} upgraded to level {nextLevel}/{Config.Equipment.MAX_LEVEL}. {APPLY_NOTE}`
+	end
 	DataSystem.grantEquipment(player, itemId, def.slot)
 	return true, `{def.displayName} fitted to your ships. {APPLY_NOTE}`
 end

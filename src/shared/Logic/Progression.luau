@@ -73,13 +73,22 @@ function Progression.previousShip(shipId: string): string?
 	return if index and index > 1 then Config.Ships.ORDER[index - 1] else nil
 end
 
--- Stardust price of an equipment item on sale, or nil.
-function Progression.equipmentCost(itemId: string): number?
+-- Stardust price of level `level` (1 = buying it) of an equipment item on
+-- sale, or nil (not for sale, or past MAX_LEVEL). A whole number.
+function Progression.equipmentCost(itemId: string, level: number?): number?
 	local def = Config.Equipment.BY_ID[itemId]
-	if def == nil or not def.enabled then
+	local wanted = level or 1
+	if def == nil or not def.enabled or wanted < 1 or wanted > Config.Equipment.MAX_LEVEL then
 		return nil
 	end
-	return def.cost.stardust
+	return math.floor(def.cost.stardust * Config.Equipment.COST_GROWTH ^ (wanted - 1) + 0.5)
+end
+
+-- An equipment modifier at a level: its bonus (multiplier - 1) grows by
+-- Config.Equipment.LEVEL_BONUS.
+function Progression.equipmentMultiplier(multiplier: number, level: number): number
+	local index = math.clamp(math.floor(level), 1, Config.Equipment.MAX_LEVEL)
+	return 1 + (multiplier - 1) * Config.Equipment.LEVEL_BONUS[index]
 end
 
 return Progression

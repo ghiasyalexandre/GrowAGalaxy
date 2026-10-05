@@ -1,6 +1,11 @@
 --!strict
 -- Ship equipment. Each item fits one slot and multiplies ship stats. Equipment
 -- is owned by the player and can be fitted to any owned ship.
+--
+-- Levels: buying an item gets level 1 (`modifiers` as listed); it can then be
+-- upgraded up to MAX_LEVEL. At level L each modifier's bonus is multiplied
+-- by LEVEL_BONUS[L] (a +25% item gives +85% at level 5), and level L costs
+-- cost x COST_GROWTH^(L - 1), so the last levels are a real grind.
 
 export type Cost = { stardust: number, materials: { [string]: number } }
 
@@ -70,4 +75,7 @@ return {
 	SLOTS = SLOTS,
 	ORDER = ORDER,
 	BY_ID = BY_ID,
+	MAX_LEVEL = 5,
+	LEVEL_BONUS = { 1, 1.6, 2.2, 2.8, 3.4 } :: { number },
+	COST_GROWTH = 3.5,
 }

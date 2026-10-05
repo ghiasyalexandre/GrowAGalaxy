@@ -27,6 +27,9 @@
 --                                                       ownerUserId: number) draw the explosion
 --   DailyRequest     RemoteFunction  client -> server  ("claim") -> (ok: boolean, message: string)
 --   RaidRequest      RemoteEvent     client -> server  ("join", difficulty | "leave")
+--   CustomizeRequest RemoteFunction  client -> server  ("paint" | "finish" | "showcase", shipId, value)
+--                                                     -> (ok: boolean, message: string)
+--   WorldEvent       RemoteEvent     server -> all     (kind: "swarm" | "swarmEnd", ...) world events
 --   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
 --                                                       "bossDown" | "result", ...) raid effects
 
@@ -51,6 +54,8 @@ local Net = {
 	DailyRequest = folder:WaitForChild("DailyRequest") :: RemoteFunction,
 	RaidRequest = folder:WaitForChild("RaidRequest") :: RemoteEvent,
 	RaidEvent = folder:WaitForChild("RaidEvent") :: RemoteEvent,
+	CustomizeRequest = folder:WaitForChild("CustomizeRequest") :: RemoteFunction,
+	WorldEvent = folder:WaitForChild("WorldEvent") :: RemoteEvent,
 }
 
 return Net

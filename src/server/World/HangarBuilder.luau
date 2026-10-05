@@ -5,9 +5,11 @@
 --   pad(def, floor)        a glowing red ground circle with a sign above it
 --                          (name, what it does, cost) and a "Build" prompt.
 --                          The circle part is named "Circle".
---   structure(def, floor)  the finished building, with a small name plate.
+--   structure(def, floor)  the finished building, with a small name plate
+--                          (none for one built at its `site`, off its pad).
 -- Both return a Model; the caller parents it.
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -440,9 +442,233 @@ builders.ArmorWorkshop = function(model, floor)
 	light(torch, "#FFC870", 10)
 end
 
+-- Vanity -------------------------------------------------------------------
+
+local SPIN_TAG = "GaG_Spin"
+local PULSE_TAG = "GaG_Pulse"
+
+local function spin(instance: Instance, speed: number)
+	instance:SetAttribute("SpinSpeed", speed)
+	CollectionService:AddTag(instance, SPIN_TAG)
+end
+
+local function pulse(part: BasePart, from: number, to: number)
+	part:SetAttribute("PulseFrom", from)
+	part:SetAttribute("PulseTo", to)
+	CollectionService:AddTag(part, PULSE_TAG)
+end
+
+-- Floating chevrons leading in to the berth (which is towards +Z from here),
+-- flanked by two rows of edge lights.
+builders.NeonRunway = function(model, floor)
+	for i = 0, 7 do
+		local z = -i * 12
+		local fade = i / 8
+		for _, side in { -1, 1 } do
+			local arm = glow(
+				"Chevron",
+				Vector3.new(6, 0.4, 1.2),
+				floor * CFrame.new(side * 2.6, 0, z) * CFrame.Angles(0, side * math.rad(-35), 0),
+				"#5FE3FF",
+				model
+			)
+			arm.Transparency = 0.1 + fade * 0.5
+			pulse(arm, 0.05 + fade * 0.4, 0.6 + fade * 0.3)
+			local edge = glow(
+				"EdgeLight",
+				Vector3.one * 1.2,
+				floor * CFrame.new(side * 14, 0, z),
+				"#FFD36B",
+				model
+			)
+			edge.Shape = Enum.PartType.Ball
+		end
+	end
+	light(model:FindFirstChild("Chevron") :: BasePart, "#5FE3FF", 30)
+end
+
+-- A spinning galaxy hologram: a glowing core, two tilted spiral arms of stars
+-- and a faint disc, over a projector ring on the deck below.
+builders.HoloGalaxy = function(model, floor)
+	local holo = Instance.new("Model")
+	holo.Name = "Hologram"
+	holo.Parent = model
+	local core = Build.part({
+		name = "Core",
+		shape = Enum.PartType.Ball,
+		size = Vector3.one * 3,
+		cframe = floor,
+		color = "#FFE6A3",
+		material = Enum.Material.Neon,
+		collide = false,
+		parent = holo,
+	})
+	light(core, "#B06BFF", 24)
+	local disc = Build.part({
+		name = "Disc",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(0.2, 22, 22),
+		cframe = floor * CFrame.Angles(0, 0, math.pi / 2),
+		color = "#8C6BFF",
+		material = Enum.Material.ForceField,
+		transparency = 0.2,
+		collide = false,
+		parent = holo,
+	})
+	disc.CastShadow = false
+	local colors = { "#5FE3FF", "#B06BFF", "#FF6EC8", "#FFE6A3" }
+	for arm = 0, 1 do
+		for step = 1, 14 do
+			local angle = arm * math.pi + step * 0.42
+			local radius = 1.6 + step * 0.65
+			local star = Build.part({
+				name = "Star",
+				shape = Enum.PartType.Ball,
+				size = Vector3.one * (0.9 - step * 0.035),
+				cframe = floor * CFrame.new(math.cos(angle) * radius, 0, math.sin(angle) * radius),
+				color = colors[(step + arm) % #colors + 1],
+				material = Enum.Material.Neon,
+				collide = false,
+				parent = holo,
+			})
+			star.CastShadow = false
+		end
+	end
+	holo.PrimaryPart = core
+	spin(holo, 0.35)
+	-- The projector on the deck below, beaming up.
+	local site = model:GetAttribute("SiteHeight")
+	local down = if type(site) == "number" then site else 16
+	local projector = glow(
+		"Projector",
+		Vector3.new(0.4, 6, 6),
+		floor * CFrame.new(0, -down + 0.2, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		"#B06BFF",
+		model
+	)
+	projector.Shape = Enum.PartType.Cylinder
+	local beam = glow(
+		"Beam",
+		Vector3.new(down - 2, 3, 3),
+		floor * CFrame.new(0, -down / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		"#B06BFF",
+		model
+	)
+	beam.Shape = Enum.PartType.Cylinder
+	beam.Transparency = 0.85
+	pulse(beam, 0.75, 0.92)
+end
+
+-- A tall spire with rings turning around it and a beacon on top.
+builders.VictorySpire = function(model, floor)
+	box("Base", Vector3.new(12, 2, 12), floor * CFrame.new(0, 1, 0), COLORS.hullAlt, nil, model)
+	for i, d in { 6, 5, 4, 3, 2.2 } do
+		column("Spire", d, 9, floor * CFrame.new(0, 2 + (i - 1) * 9, 0), COLORS.hull, nil, model)
+	end
+	for i, y in { 12, 24, 36 } do
+		local ring = Instance.new("Model")
+		ring.Name = `Ring{i}`
+		ring.Parent = model
+		for s = 0, 7 do
+			local angle = s / 8 * 2 * math.pi
+			glow(
+				"Segment",
+				Vector3.new(2.6, 0.4, 0.6),
+				floor
+					* CFrame.new(0, y, 0)
+					* CFrame.Angles(0, angle, 0)
+					* CFrame.new(0, 0, -(4 + i)),
+				if i % 2 == 0 then "#FFD36B" else "#5FE3FF",
+				ring
+			)
+		end
+		ring.WorldPivot = floor * CFrame.new(0, y, 0)
+		spin(ring, if i % 2 == 0 then -0.5 else 0.4)
+	end
+	local beacon = glow("Beacon", Vector3.one * 4, floor * CFrame.new(0, 49, 0), "#FFD36B", model)
+	beacon.Shape = Enum.PartType.Ball
+	pulse(beacon, 0, 0.5)
+	light(beacon, "#FFD36B", 60)
+	local sky = Instance.new("Attachment")
+	sky.Position = Vector3.new(0, 400, 0)
+	sky.Parent = beacon
+	local base = Instance.new("Attachment")
+	base.Parent = beacon
+	local ray = Instance.new("Beam")
+	ray.Attachment0 = base
+	ray.Attachment1 = sky
+	ray.Width0 = 3
+	ray.Width1 = 0.5
+	ray.FaceCamera = true
+	ray.LightEmission = 1
+	ray.Color = ColorSequence.new(Color3.fromHex("#FFD36B"))
+	ray.Transparency = NumberSequence.new(0.3, 1)
+	ray.Parent = beacon
+end
+
+-- An open platform off the deck's side with three lit cradles; HangarSystem
+-- puts the player's chosen ships on them (parts named "Cradle1".."Cradle3",
+-- their tops are where a ship's bottom sits).
+builders.ShowcaseDock = function(model, floor)
+	box(
+		"Platform",
+		Vector3.new(30, 1.4, 66),
+		floor * CFrame.new(0, -0.7, 0),
+		COLORS.deck,
+		Enum.Material.DiamondPlate,
+		model
+	)
+	box(
+		"Bridge",
+		Vector3.new(12, 1, 8),
+		floor * CFrame.new(-21, -0.5, 0),
+		COLORS.deck,
+		Enum.Material.DiamondPlate,
+		model
+	)
+	for _, side in { -1, 1 } do
+		glow(
+			"EdgeStrip",
+			Vector3.new(0.5, 0.2, 64),
+			floor * CFrame.new(side * 14.5, 0.1, 0),
+			"#FFD36B",
+			model
+		)
+	end
+	for index, z in { -21, 0, 21 } do
+		local cradle = column(
+			`Cradle{index}`,
+			12,
+			1,
+			floor * CFrame.new(0, 0, z),
+			COLORS.hullAlt,
+			Enum.Material.Metal,
+			model
+		)
+		cradle.Name = `Cradle{index}`
+		local rim = flat("CradleGlow", 6.4, 0.2, floor * CFrame.new(0, 1, z), "#5FE3FF", model)
+		pulse(rim, 0.1, 0.6)
+		light(rim, "#5FE3FF", 22)
+	end
+	local sign = Build.sign({
+		name = "DockSign",
+		text = "SHOWCASE",
+		size = Vector3.new(16, 3, 0.4),
+		cframe = floor * CFrame.new(-14.6, 6, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		faces = { Enum.NormalId.Front, Enum.NormalId.Back },
+		parent = model,
+		textColor = "#FFD36B",
+	})
+	sign.CanCollide = false
+end
+
 function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 	local model = Instance.new("Model")
 	model.Name = def.id
+	local site = def.site
+	if site and site.y then
+		model:SetAttribute("SiteHeight", site.y)
+	end
 	local build = builders[def.id]
 	if build then
 		build(model, floor)
@@ -455,6 +681,12 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 			nil,
 			model
 		)
+	end
+	model:SetAttribute("State", "built")
+	model:SetAttribute("UpgradeId", def.id)
+	if site then
+		-- Built away from its pad: no name plate on the deck.
+		return model
 	end
 	-- Name plate at the front edge, facing the deck's centre line.
 	local plate = Build.sign({

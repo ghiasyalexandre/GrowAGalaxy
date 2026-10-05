@@ -116,7 +116,7 @@ return function(T, Loader)
 
 		T.test("income adds the star (by level) and its planets", function()
 			local s = star("RedDwarf", 2, { ["1"] = "Barren", ["2"] = "Molten" })
-			local expected = S.BY_ID.RedDwarf.income * StarMath.levelMultiplier(2)
+			local expected = math.floor(S.BY_ID.RedDwarf.income * StarMath.levelMultiplier(2) + 0.5)
 				+ P.BY_ID.Barren.income
 				+ P.BY_ID.Molten.income
 			T.near(StarMath.income(s), expected)

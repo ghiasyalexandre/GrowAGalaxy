@@ -21,6 +21,7 @@ local AsteroidField = require(ReplicatedStorage.Shared.Logic.AsteroidField)
 local AsteroidConfig = require(ReplicatedStorage.Shared.Config.Asteroids)
 local Config = require(ReplicatedStorage.Shared.Config)
 local MiningMath = require(ReplicatedStorage.Shared.Logic.MiningMath)
+local Net = require(ReplicatedStorage.Shared.Net)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 type Vec3 = Types.Vec3
@@ -170,6 +171,96 @@ local function spawnClusters(clusters: number)
 	end
 end
 
+-- Golden swarm -------------------------------------------------------------
+
+local swarmElapsed = 0
+local swarm: { centre: Vector3, endsAt: number, ids: { number } }? = nil
+
+-- A golden copy of a size: worth SWARM_REWARD x, named for the banner.
+local function golden(size: AsteroidConfig.SizeDef): AsteroidConfig.SizeDef
+	local copy = table.clone(size)
+	copy.reward = math.floor(size.reward * A.SWARM_REWARD + 0.5)
+	copy.displayName = `Golden {string.lower(size.displayName)}`
+	return copy
+end
+
+local function gild(asteroid: Asteroid)
+	local gold = Color3.fromHex(A.SWARM_COLOR)
+	for _, part in asteroid.model:GetDescendants() do
+		if part:IsA("BasePart") and part ~= asteroid.weakPoint then
+			part.Color = gold
+			part.Material = Enum.Material.Foil
+		end
+	end
+	local sparkles = Instance.new("Sparkles")
+	sparkles.SparkleColor = gold
+	sparkles.Parent = asteroid.weakPoint
+	asteroid.model:SetAttribute("Golden", true)
+end
+
+local function endSwarm()
+	local current = swarm
+	if current == nil then
+		return
+	end
+	swarm = nil
+	-- What nobody is mining crumbles away.
+	for _, id in current.ids do
+		local asteroid = asteroids[id]
+		if asteroid and asteroid.reservedBy == nil then
+			AsteroidSystem.breakAsteroid(asteroid)
+		end
+	end
+	Net.WorldEvent:FireAllClients("swarmEnd")
+end
+
+local function startSwarm()
+	local blocked = blockers()
+	local existing = spheres()
+	-- A centre with room for the whole swarm.
+	local centre: Vec3? = nil
+	for _ = 1, 40 do
+		local point = AsteroidField.randomPoint(rng)
+		if
+			AsteroidField.inVolume(point, A.SWARM_SPREAD)
+			and AsteroidField.clearOfRegions(point, A.SWARM_SPREAD)
+		then
+			centre = point
+			break
+		end
+	end
+	if centre == nil then
+		return
+	end
+	local ids: { number } = {}
+	local plan = { members = A.SWARM_COUNT, spread = A.SWARM_SPREAD, stream = nil }
+	for _ = 1, A.SWARM_COUNT * A.PLACEMENT_ATTEMPTS do
+		if #ids >= A.SWARM_COUNT then
+			break
+		end
+		local size = golden(AsteroidField.varied(A.SIZES[AsteroidField.pickSize(rng)], rng))
+		local extent = size.radius * EXTENT
+		local position = AsteroidField.inGroup(centre, plan, rng)
+		if AsteroidField.isValid(position, extent, existing, blocked) then
+			local id = nextId
+			spawnAt(position, size)
+			table.insert(existing, { position = position, radius = extent })
+			local asteroid = asteroids[id]
+			if asteroid then
+				gild(asteroid)
+				table.insert(ids, id)
+			end
+		end
+	end
+	if #ids == 0 then
+		return
+	end
+	local where = Vector3.new(centre.x, centre.y, centre.z)
+	local endsAt = Workspace:GetServerTimeNow() + A.SWARM_DURATION
+	swarm = { centre = where, endsAt = endsAt, ids = ids }
+	Net.WorldEvent:FireAllClients("swarm", where, endsAt, #ids)
+end
+
 local function resetProgress(asteroid: Asteroid)
 	asteroid.reservedBy = nil
 	asteroid.progress = 0
@@ -280,9 +371,26 @@ function AsteroidSystem.start()
 		if elapsed < A.SPAWN_INTERVAL then
 			return
 		end
+		swarmElapsed += elapsed
 		elapsed = 0
 		releaseStale(os.clock())
 		spawnClusters(A.CLUSTERS_PER_PASS)
+		local current = swarm
+		if current and Workspace:GetServerTimeNow() >= current.endsAt then
+			endSwarm()
+		end
+		if swarmElapsed >= A.SWARM_INTERVAL then
+			swarmElapsed = 0
+			startSwarm()
+		end
+	end)
+
+	-- Players who join mid-swarm hear about it too.
+	Players.PlayerAdded:Connect(function(player)
+		local current = swarm
+		if current then
+			Net.WorldEvent:FireClient(player, "swarm", current.centre, current.endsAt, #current.ids)
+		end
 	end)
 
 	Players.PlayerRemoving:Connect(function(player)

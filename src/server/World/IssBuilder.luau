@@ -34,6 +34,8 @@ local FLOOR_WIDTH = 28
 local TRUSS_Y = 30
 local TRUSS_LENGTH = 340
 local SPIN_TAG = "GaG_Spin"
+-- The main hull's white panels glare in the sun: they're 20% darker.
+local HULL_DIM = 0.2
 local SAFE_ZONE_TAG = "SafeZone"
 local PLATFORM_SIZE = 260 -- the raid platform, square
 local BALL_COLORS = { "#FF5AA0", "#5FE3FF", "#FFD36B", "#8CFF6B", "#B06BFF", "#FF8A3D" }
@@ -111,6 +113,10 @@ end
 
 -- A hollow polygonal tube along X, open at both ends. Its two side panels
 -- are windows; the cupola is glass underneath too.
+local function dim(color: string): string
+	return Color3.fromHex(color):Lerp(Color3.new(), HULL_DIM):ToHex()
+end
+
 local function tube(parent: Instance, span: Span, color: string, glassBottom: boolean)
 	local width = 2 * (TUBE_RADIUS + 1) * math.tan(math.pi / TUBE_SIDES) + 0.2
 	for i = 0, TUBE_SIDES - 1 do
@@ -123,7 +129,7 @@ local function tube(parent: Instance, span: Span, color: string, glassBottom: bo
 			cframe = CFrame.new(span.center, 0, 0)
 				* CFrame.Angles(angle, 0, 0)
 				* CFrame.new(0, TUBE_RADIUS + 0.5, 0),
-			color = if glass then COLORS.glass else color,
+			color = if glass then COLORS.glass else dim(color),
 			material = if glass then Enum.Material.Glass else Enum.Material.SmoothPlastic,
 			transparency = if glass then 0.5 else 0,
 			parent = parent,
@@ -137,7 +143,7 @@ local function endCap(parent: Instance, x: number, glass: boolean)
 		shape = Enum.PartType.Cylinder,
 		size = Vector3.new(1, 2 * TUBE_RADIUS + 3, 2 * TUBE_RADIUS + 3),
 		cframe = CFrame.new(x, 0, 0),
-		color = if glass then COLORS.glass else COLORS.hullAlt,
+		color = if glass then COLORS.glass else dim(COLORS.hullAlt),
 		material = if glass then Enum.Material.Glass else Enum.Material.SmoothPlastic,
 		transparency = if glass then 0.45 else 0,
 		parent = parent,

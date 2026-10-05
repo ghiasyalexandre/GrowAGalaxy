@@ -25,6 +25,7 @@ local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
+local ShipLook = require(ReplicatedStorage.Shared.Util.ShipLook)
 local ShipModel = require(ReplicatedStorage.Shared.Util.ShipModel)
 
 local COLORS = Config.World.COLORS
@@ -292,9 +293,15 @@ ShipBuilder.BOARD_TAG = BOARD_TAG
 -- must be clear of other ships and players before a ship appears there.
 ShipBuilder.BERTH_BOX = Vector3.new(20, 14, 24)
 
--- Builds a parked ship with its hull centred on `cframe`. The hull is
+-- Builds a parked ship with its hull centred on `cframe`, wearing `look`
+-- (its paint job, Util/ShipLook; factory colours when nil). The hull is
 -- anchored; ShipSystem unanchors it when the owner boards.
-function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Model
+function ShipBuilder.build(
+	shipId: string,
+	cframe: CFrame,
+	accent: string,
+	look: ShipLook.Look?
+): Model
 	local def = Config.Ships.BY_ID[shipId] or Config.Ships.BY_ID[Config.Ships.STARTER_SHIP]
 	local paint = Color3.fromHex(def.paint)
 	local plain = Color3.fromHex(COLORS.hull)
@@ -408,9 +415,11 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 
 	model:SetAttribute("ShipId", def.id)
 	-- Each ship type has its own paint: recolour the plain hull parts.
+	local paintParts: { BasePart } = {}
 	for _, part in model:GetDescendants() do
 		if part:IsA("BasePart") and part.Color == plain then
 			part.Color = paint
+			table.insert(paintParts, part)
 		end
 	end
 
@@ -426,12 +435,16 @@ function ShipBuilder.build(shipId: string, cframe: CFrame, accent: string): Mode
 				part.Massless = true
 				if not ShipModel.textured(part) then
 					part.Color = paint
+					table.insert(paintParts, part)
 				end
 				weld(hull, part)
 			end
 		end
 		skin.Parent = model
 	end
+	ShipLook.mark(model, paintParts)
+	ShipLook.apply(model, look or {})
+	CollectionService:AddTag(model, ShipLook.TAG)
 	return model
 end
 

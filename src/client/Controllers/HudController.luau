@@ -1,7 +1,8 @@
 --!strict
 -- Heads-up display: Stardust and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Station button (bottom left), the Star Shop button (under the wallet), and
+-- Station button (bottom left), the Settings and PvP buttons and the Star
+-- Shop, Shipyard and Store buttons stacked under the wallet, and
 -- while flying a reticle, the laser's heat gauge, the boost tank and, while
 -- the beam extracts an asteroid, the extraction bar.
 -- Display only; the server owns every value shown here.
@@ -392,9 +393,9 @@ local function build()
 	dressButton(recoverButton, "ButtonBlue", "Station")
 	Theme.hover(recoverButton)
 
-	-- Settings toggle under the wallet.
+	-- Settings (effects, sound, music, boundary box) under the wallet.
 	effectsButton = Instance.new("TextButton")
-	effectsButton.Name = "Effects"
+	effectsButton.Name = "Settings"
 	effectsButton.Position = UDim2.new(0, 16, 0, 116)
 	effectsButton.Size = UDim2.new(0, 150, 0, 30)
 	effectsButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
@@ -427,7 +428,7 @@ local function build()
 	shopButton = Instance.new("TextButton")
 	shopButton.Name = "StarShop"
 	shopButton.Position = UDim2.new(0, 16, 0, 152)
-	shopButton.Size = UDim2.new(0, 170, 0, 40)
+	shopButton.Size = UDim2.new(0, 180, 0, 40)
 	shopButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	shopButton.AutoButtonColor = false
 	shopButton.Font = Enum.Font.GothamBlack
@@ -448,8 +449,8 @@ local function build()
 	-- Opens the Shipyard (ships and upgrades) from anywhere.
 	shipyardButton = Instance.new("TextButton")
 	shipyardButton.Name = "Shipyard"
-	shipyardButton.Position = UDim2.new(0, 192, 0, 152)
-	shipyardButton.Size = UDim2.new(0, 150, 0, 40)
+	shipyardButton.Position = UDim2.new(0, 16, 0, 198)
+	shipyardButton.Size = UDim2.new(0, 180, 0, 40)
 	shipyardButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	shipyardButton.AutoButtonColor = false
 	shipyardButton.Font = Enum.Font.GothamBlack
@@ -470,8 +471,8 @@ local function build()
 	-- Opens the optional Galaxy Store. Only ever opened by the player.
 	storeButton = Instance.new("TextButton")
 	storeButton.Name = "Store"
-	storeButton.Position = UDim2.new(0, 348, 0, 152)
-	storeButton.Size = UDim2.new(0, 120, 0, 40)
+	storeButton.Position = UDim2.new(0, 16, 0, 244)
+	storeButton.Size = UDim2.new(0, 180, 0, 40)
 	storeButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	storeButton.AutoButtonColor = false
 	storeButton.Font = Enum.Font.GothamBlack
@@ -492,7 +493,7 @@ local function build()
 	-- Active boosts with their time left, under the goal panel.
 	boostBar = Instance.new("Frame")
 	boostBar.Name = "Boosts"
-	boostBar.Position = UDim2.new(0, 16, 0, 258)
+	boostBar.Position = UDim2.new(0, 16, 0, 350)
 	boostBar.Size = UDim2.new(0, 300, 0, 26)
 	boostBar.BackgroundTransparency = 1
 	boostBar.Parent = gui
@@ -553,7 +554,7 @@ local function build()
 	goalButton.Name = "NextGoal"
 	goalButton.Text = ""
 	goalButton.AutoButtonColor = false
-	goalButton.Position = UDim2.new(0, 16, 0, 200)
+	goalButton.Position = UDim2.new(0, 16, 0, 292)
 	goalButton.Size = UDim2.new(0, 220, 0, 52)
 	goalButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	goalButton.BackgroundTransparency = 0.2
@@ -857,13 +858,9 @@ function HudController.init()
 	ClientState.modeChanged:Connect(refreshReadout)
 	ClientState.stabilizationChanged:Connect(refreshReadout)
 	Input.deviceChanged:Connect(refreshReadout)
-	local function refreshEffects()
-		setEffectsText(if ClientState.reducedEffects then "Effects: reduced" else "Effects: full")
-	end
-	ClientState.effectsChanged:Connect(refreshEffects)
-	refreshEffects()
+	setEffectsText("Settings")
 	effectsButton.Activated:Connect(function()
-		ClientState.setReducedEffects(not ClientState.reducedEffects)
+		ClientState.openSettings:Fire()
 	end)
 	local player = Players.LocalPlayer
 	local function refreshPvp()

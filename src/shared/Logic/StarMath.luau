@@ -43,13 +43,14 @@ function StarMath.radius(typeId: string, level: number): number
 	return (if def then def.radius else 12) * (1 + (S.MAX_RADIUS_SCALE - 1) * progress)
 end
 
--- Stardust per second from the star itself (planets not included).
+-- Stardust per second from the star itself (planets not included), rounded
+-- to a whole number.
 function StarMath.starIncome(typeId: string, level: number): number
 	local def = S.BY_ID[typeId]
 	if def == nil then
 		return 0
 	end
-	return def.income * StarMath.levelMultiplier(level)
+	return math.floor(def.income * StarMath.levelMultiplier(level) + 0.5)
 end
 
 function StarMath.planetIncome(planetId: string): number

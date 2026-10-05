@@ -22,6 +22,7 @@ return {
 	SolarSystems = require(script.SolarSystems),
 	Galaxy = require(script.Galaxy),
 	Hangar = require(script.Hangar),
+	Paint = require(script.Paint),
 	Economy = require(script.Economy),
 	Cosmetics = require(script.Cosmetics),
 	Achievements = require(script.Achievements),

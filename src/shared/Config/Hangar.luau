@@ -8,9 +8,13 @@
 --   stats    ship stats (Config.Ships ShipStats names), from your next launch
 --   income   Stardust per second from your stars
 --   storage  how much uncollected Stardust your stars can hold
+--   vanity   none: it's there to show off (a runway, a hologram, a spire,
+--            the Showcase Dock that displays your three favourite ships)
 --
--- `pad` is where the circle and the building sit on the deck, in station
--- space (x right, z towards the back; the berth is off the -z edge).
+-- `pad` is where the circle sits on the deck, in station space (x right, z
+-- towards the back; the berth is off the -z edge). The building stands on
+-- the pad, or at `site` when given: off the deck's edge, or `site.y` studs
+-- above it.
 
 export type HangarDef = {
 	id: string,
@@ -22,6 +26,8 @@ export type HangarDef = {
 	stats: { [string]: number }?,
 	income: number?,
 	storage: number?,
+	vanity: boolean?, -- no gameplay effect
+	site: { x: number, y: number?, z: number }?,
 }
 
 local ORDER: { string } = {
@@ -31,6 +37,10 @@ local ORDER: { string } = {
 	"CoolingTower",
 	"MiningLab",
 	"ArmorWorkshop",
+	"NeonRunway",
+	"HoloGalaxy",
+	"ShowcaseDock",
+	"VictorySpire",
 }
 
 local BY_ID: { [string]: HangarDef } = {
@@ -56,7 +66,7 @@ local BY_ID: { [string]: HangarDef } = {
 		id = "Refinery",
 		displayName = "Stardust Refinery",
 		effect = "+15% Stardust from your stars",
-		cost = 6000,
+		cost = 7000,
 		requires = { "StardustSilo" },
 		pad = { x = -20, z = -4 },
 		income = 1.15,
@@ -65,7 +75,7 @@ local BY_ID: { [string]: HangarDef } = {
 		id = "CoolingTower",
 		displayName = "Cooling Tower",
 		effect = "+25% laser cooling on every ship",
-		cost = 10000,
+		cost = 14000,
 		requires = { "FuelDepot" },
 		pad = { x = 20, z = -4 },
 		stats = { coolingRate = 1.25 },
@@ -74,7 +84,7 @@ local BY_ID: { [string]: HangarDef } = {
 		id = "MiningLab",
 		displayName = "Mining Lab",
 		effect = "+15% laser power on every ship",
-		cost = 25000,
+		cost = 40000,
 		requires = { "Refinery" },
 		pad = { x = -20, z = 12 },
 		stats = { beamPower = 1.15 },
@@ -83,10 +93,50 @@ local BY_ID: { [string]: HangarDef } = {
 		id = "ArmorWorkshop",
 		displayName = "Armor Workshop",
 		effect = "+30% hull on every ship",
-		cost = 20000,
+		cost = 30000,
 		requires = { "CoolingTower" },
 		pad = { x = 20, z = 12 },
 		stats = { hull = 1.3 },
+	},
+	NeonRunway = {
+		id = "NeonRunway",
+		displayName = "Neon Runway",
+		effect = "Vanity: chevron lights guide you in to your berth",
+		cost = 5000,
+		requires = {},
+		pad = { x = 8, z = -30 },
+		site = { x = 0, z = -60 },
+		vanity = true,
+	},
+	HoloGalaxy = {
+		id = "HoloGalaxy",
+		displayName = "Galaxy Hologram",
+		effect = "Vanity: a turning galaxy hologram over your deck",
+		cost = 12000,
+		requires = {},
+		pad = { x = -8, z = -30 },
+		site = { x = 0, y = 16, z = -16 },
+		vanity = true,
+	},
+	ShowcaseDock = {
+		id = "ShowcaseDock",
+		displayName = "Showcase Dock",
+		effect = "Vanity: shows off 3 favourite ships (pick them in the Shipyard's Paint tab)",
+		cost = 15000,
+		requires = {},
+		pad = { x = 20, z = 28 },
+		site = { x = 52, z = 0 },
+		vanity = true,
+	},
+	VictorySpire = {
+		id = "VictorySpire",
+		displayName = "Victory Spire",
+		effect = "Vanity: a towering beacon spire seen across the galaxy",
+		cost = 30000,
+		requires = { "HoloGalaxy" },
+		pad = { x = -20, z = 28 },
+		site = { x = -46, z = 24 },
+		vanity = true,
 	},
 }
 

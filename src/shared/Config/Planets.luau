@@ -56,17 +56,17 @@ local function planet(
 end
 
 local BY_ID: { [string]: PlanetTypeDef } = {
-	Barren = planet("Barren", 1, "Barren Rock", 150, 1.5, 4, "#8C8478", "Slate"),
-	Molten = planet("Molten", 2, "Molten World", 800, 5, 4.5, "#D9542B", "CrackedLava"),
-	Desert = planet("Desert", 3, "Desert World", 3000, 14, 5, "#D9B26A", "Sand"),
-	Ocean = planet("Ocean", 4, "Ocean World", 9000, 35, 5.5, "#2F7FD6", "Glass"),
-	Terran = planet("Terran", 5, "Terran World", 28000, 85, 6, "#4F9D5B", "Grass"),
-	IceGiant = planet("IceGiant", 6, "Ice Giant", 80000, 200, 6.5, "#9FE3F0", "Glacier"),
+	Barren = planet("Barren", 1, "Barren Rock", 150, 2, 4, "#8C8478", "Slate"),
+	Molten = planet("Molten", 2, "Molten World", 900, 5, 4.5, "#D9542B", "CrackedLava"),
+	Desert = planet("Desert", 3, "Desert World", 4000, 14, 5, "#D9B26A", "Sand"),
+	Ocean = planet("Ocean", 4, "Ocean World", 14000, 35, 5.5, "#2F7FD6", "Glass"),
+	Terran = planet("Terran", 5, "Terran World", 45000, 85, 6, "#4F9D5B", "Grass"),
+	IceGiant = planet("IceGiant", 6, "Ice Giant", 140000, 200, 6.5, "#9FE3F0", "Glacier"),
 	GasGiant = planet(
 		"GasGiant",
 		7,
 		"Gas Giant",
-		220000,
+		420000,
 		480,
 		7,
 		"#E0A960",
@@ -77,7 +77,7 @@ local BY_ID: { [string]: PlanetTypeDef } = {
 		"Crystal",
 		8,
 		"Crystal World",
-		650000,
+		1300000,
 		1100,
 		6.6,
 		"#C08CFF",
