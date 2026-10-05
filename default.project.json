@@ -6,6 +6,14 @@
       "Shared": {
         "$path": "src/shared"
       },
+      "Assets": {
+        "$className": "Folder",
+        "$ignoreUnknownInstances": true,
+        "Ships": {
+          "$path": "assets/roblox/Ships",
+          "$ignoreUnknownInstances": true
+        }
+      },
       "Remotes": {
         "$className": "Folder",
         "GetInitialState": {

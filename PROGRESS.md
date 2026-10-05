@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 13 merged into `main`).
+Last updated: 2026-10-05 (stage 14 merged into `main`).
 
 ## Status by stage
 
@@ -19,7 +19,8 @@ Last updated: 2026-10-05 (stage 13 merged into `main`).
 | 11. Sprite sheet UI (needs the sheet uploaded and its id in Config/Sprites) | Merged | Passing (107 tests) | **Not yet** |
 | 12. UI kit atlas (replaces the stage 11 sheet), hover animations, vivid sparkles | Merged | Passing (107 tests) | **Not yet** |
 | 13. Evolution ladder (max level per tier, reset on evolve), orbits per tier, lit planets, inspector | Merged | Passing (118 tests) | **Not yet** |
-| 14+. Save hardening, tuning, monetization | Not started | | |
+| 14. 11-ship ladder in unlock order, imported ship models, Shipyard Ships tab with previews | Merged | Passing (120 tests) | **Not yet** |
+| 15+. Save hardening, tuning, monetization | Not started | | |
 
 ## What works in code (unverified in Studio)
 
@@ -44,6 +45,11 @@ Last updated: 2026-10-05 (stage 13 merged into `main`).
 
 0. Upload `assets/ui/GaG_UI_Atlas.png` to Roblox and put its id in
    `src/shared/Config/Sprites.luau` (`IMAGE`) in VS Code; see [stage 12](docs/stage-12-ui-kit.md).
+
+   Import the ship models (`assets/models/*.obj`, with their `.mtl` and `.png`) with Studio's
+   3D Importer and save each as `assets/roblox/Ships/<Name>.rbxm`; see
+   [assets/roblox/Ships/README.md](assets/roblox/Ships/README.md). Galactix Racer, Warship and
+   Meteor Slicer have no model yet (greybox until then).
 
 1. Studio playtest of stages 2 and 3 (test tables in the stage docs): how flying and mining
    feel. Report anything that feels wrong.

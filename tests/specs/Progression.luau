@@ -50,10 +50,24 @@ return function(T, Loader)
 
 		T.test("shop prices: earnable ships, enabled equipment, next expansion", function()
 			T.equal(Progression.shipCost(Config.Ships.STARTER_SHIP), nil, "starter is free")
-			T.truthy(Progression.shipCost("Prospector"))
+			T.truthy(Progression.shipCost("RedFighter"))
 			T.equal(Progression.equipmentCost("CargoMk2"), nil, "disabled")
 			T.equal(Progression.expansionCost(1), Config.Galaxy.EXPANSIONS[2].cost.stardust)
 			T.equal(Progression.expansionCost(#Config.Galaxy.EXPANSIONS), nil)
+		end)
+
+		T.test("ships unlock in ladder order", function()
+			local order = Config.Ships.ORDER
+			T.equal(order[1], "MicroRecon")
+			T.equal(order[11], "MeteorSlicer")
+			local owned = { [order[1]] = true }
+			T.truthy(Progression.shipUnlocked(order[2], owned))
+			T.equal(Progression.shipUnlocked(order[3], owned), false, "skips a step")
+			owned[order[2]] = true
+			T.truthy(Progression.shipUnlocked(order[3], owned))
+			T.equal(Progression.shipUnlocked("NoSuchShip", owned), false)
+			T.equal(Progression.previousShip(order[3]), order[2])
+			T.equal(Progression.previousShip(order[1]), nil)
 		end)
 	end)
 end

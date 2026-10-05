@@ -142,6 +142,41 @@ function ConfigCheck.run(config: any): { string }
 		if ship.productKey and config.Products.BY_KEY[ship.productKey] == nil then
 			fail(`Ship {shipId}: unknown product "{ship.productKey}"`)
 		end
+		if type(ship.model) ~= "string" or ship.model == "" then
+			fail(`Ship {shipId}: model must name an asset`)
+		end
+		if type(ship.modelSize) ~= "number" or ship.modelSize <= 0 then
+			fail(`Ship {shipId}: modelSize must be positive`)
+		end
+		if type(ship.modelYaw) ~= "number" then
+			fail(`Ship {shipId}: modelYaw must be a number`)
+		end
+	end
+
+	-- The ladder (checkOrder covers ORDER itself): the starter first, and each
+	-- ship costs more than the one before it.
+	local lastCost = 0
+	for index, shipId in config.Ships.ORDER do
+		local ship = config.Ships.BY_ID[shipId]
+		if ship == nil then
+			continue
+		end
+		if index == 1 and shipId ~= starterId then
+			fail("Ships.ORDER must start with the starter ship")
+		end
+		local cost = if ship.earn then ship.earn.stardust else 0
+		if index > 1 and cost <= lastCost then
+			fail(`Ship {shipId} must cost more than the ship before it`)
+		end
+		lastCost = cost
+	end
+	for old, new in config.Ships.RENAMED do
+		if config.Ships.BY_ID[new] == nil then
+			fail(`Ships.RENAMED: {old} maps to unknown ship {new}`)
+		end
+	end
+	if config.Ships.PREVIEW_SPIN < 0 then
+		fail("Ships.PREVIEW_SPIN must not be negative")
 	end
 
 	-- Movement: the suit must be slower than every ship, and docking must be
