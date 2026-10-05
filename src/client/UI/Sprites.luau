@@ -10,7 +10,8 @@
 --                                   gradient and stroke are switched off.
 --                                   Without `scale`, the frame art is sized
 --                                   to target's height.
---   panelSkin(target)               a panel frame, wide or large by shape
+--   panelSkin(target)               a panel frame, small, wide or tall by shape
+--   leftCap(name, height)           width of a sprite's left edge art
 --   set(image, name)                switch an icon to another sprite
 --   tint(target, color)             recolour a skin (multiplies its colours)
 
@@ -21,7 +22,8 @@ local SpritesConfig =
 	require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("Sprites"))
 
 local CFG = Config.Sprites
-local WIDE_ASPECT = 3.2 -- panels at least this wide for their height use PanelWide
+local WIDE_ASPECT = 2.5 -- panels at least this wide for their height use PanelSpace
+local SMALL_HEIGHT = 56 -- panels this short or shorter use PanelSmall
 
 local Sprites = {}
 
@@ -101,16 +103,26 @@ function Sprites.skin(target: GuiObject, name: string, scale: number?): ImageLab
 	return image
 end
 
+-- Which panel art suits a box: short strips get the small frame, wide boxes
+-- the space scene, everything else (windows) the tall frame.
+local function panelFor(size: Vector2): string
+	if size.Y <= SMALL_HEIGHT then
+		return "PanelSmall"
+	elseif size.X >= size.Y * WIDE_ASPECT then
+		return "PanelSpace"
+	end
+	return "PanelTall"
+end
+
 function Sprites.panelSkin(target: GuiObject): ImageLabel?
-	local image = Sprites.skin(target, "PanelLarge", CFG.PANEL_SLICE_SCALE)
+	local image = Sprites.skin(target, "PanelTall", CFG.PANEL_SLICE_SCALE)
 	if image == nil then
 		return nil
 	end
 	local skin = image
 	local function fit()
 		local size = target.AbsoluteSize
-		local name = if size.X >= size.Y * WIDE_ASPECT then "PanelWide" else "PanelLarge"
-		local def = CFG.SPRITES[name]
+		local def = CFG.SPRITES[panelFor(size)]
 		apply(skin, def)
 		-- Never let the corners take more than the panel's height.
 		skin.SliceScale = math.min(CFG.PANEL_SLICE_SCALE, size.Y / math.max(def.h, 1))
@@ -118,6 +130,18 @@ function Sprites.panelSkin(target: GuiObject): ImageLabel?
 	fit()
 	target:GetPropertyChangedSignal("AbsoluteSize"):Connect(fit)
 	return skin
+end
+
+-- Width in pixels of a 9-slice sprite's left edge art when drawn `height`
+-- pixels tall (skins without a fixed scale fit their height), e.g. to keep
+-- text clear of the Stardust art on PanelHud. 0 without the sheet.
+function Sprites.leftCap(name: string, height: number): number
+	local def = CFG.SPRITES[name]
+	local cut = if def then def.slice else nil
+	if CFG.IMAGE == nil or def == nil or cut == nil then
+		return 0
+	end
+	return cut.x0 * math.clamp(height / def.h, 0.05, 1)
 end
 
 -- Points an existing sprite image at another sprite.

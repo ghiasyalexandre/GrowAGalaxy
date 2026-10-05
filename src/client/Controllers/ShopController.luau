@@ -161,7 +161,7 @@ local function refresh()
 		end
 	end
 
-	heading("Equipment (fitted to every ship you own)", nextOrder(), "Laser")
+	heading("Equipment (fitted to every ship you own)", nextOrder(), "Mining")
 	for _, itemId in Config.Equipment.ORDER do
 		local def = Config.Equipment.BY_ID[itemId]
 		local cost = Progression.equipmentCost(itemId)
@@ -245,10 +245,7 @@ local function build()
 		Font = Enum.Font.GothamBlack,
 		TextColor3 = Theme.COLORS.gold,
 	})
-	local closeButton = Theme.button(panel, "Close", "primary", close)
-	closeButton.AnchorPoint = Vector2.new(1, 0)
-	closeButton.Position = UDim2.new(1, -12, 0, 10)
-	closeButton.Size = UDim2.fromOffset(80, 30)
+	Theme.closeButton(panel, close)
 
 	list = Theme.list(panel, 6)
 	list.Position = UDim2.fromOffset(14, 50)
