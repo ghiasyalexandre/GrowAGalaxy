@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 39 merged into `main`).
+Last updated: 2026-10-05 (stage 40 merged into `main`).
 
 ## Status by stage
 
@@ -45,6 +45,7 @@ Last updated: 2026-10-05 (stage 39 merged into `main`).
 | 37. Full kid-friendly tutorial (13 steps, device-specific words, HUD arrows, world markers, How to play guide, finish reward), star prompts from 90 studs, station/hangar/arena glow dimmed 20% ([doc](docs/stage-37-tutorial.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 38. Softer indoor bloom, M frees the cursor in ships, inspect hides star prompts, prompt distance 135, codes PlanetzPlz and StarzShipz, Visit other hangars, flat 1,000 eggs, no direct planet purchases, chat announcements for Legendary+, hatch times rounded to 30 s, Berth renamed Dock, shorter tutorial with progress dots ([doc](docs/stage-38-feedback.md)) | Merged | Passing (226 tests) | **Not yet** |
 | 39. Hangar highlight colour (10 colours in Settings, saved, v17), Dodgeball giant ball powerup every 12 s (next throw 3x bigger) ([doc](docs/stage-39-hangar-color-powerup.md)) | Merged | Passing (227 tests) | **Not yet** |
+| 40. Loading screen with the key art, progress bar and tips (art needs uploading; title card until then) ([doc](docs/stage-40-loading-screen.md)) | Merged | Passing (227 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 
@@ -66,6 +67,9 @@ Last updated: 2026-10-05 (stage 39 merged into `main`).
   `[Config]` warnings. ProfileStore runs in mock mode (API services off), so nothing saves.
 
 ## Needs the user
+
+- Upload `assets/ui/GaG_LoadingScreen.png` and put its id in `IMAGE` at the top of
+  `src/first/LoadingScreen.client.luau` ([stage 40](docs/stage-40-loading-screen.md)).
 
 - **Overhaul (stages 30-34) Studio playtest**, in this order, following each doc's test table:
   star placement (row 30: place, stack and move stars, check the build box and messages), then

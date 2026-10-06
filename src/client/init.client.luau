@@ -47,3 +47,5 @@ for name, controller in loaded do
 end
 
 print("[Grow a Galaxy] client started")
+-- Tells the loading screen (ReplicatedFirst) it can fade out.
+game:GetService("Players").LocalPlayer:SetAttribute("GaG_ClientReady", true)

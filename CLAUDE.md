@@ -21,6 +21,7 @@ Stable instructions for working on this repo. Implementation status lives in
 | `src/shared` | ReplicatedStorage/Shared (Config, Logic, Types, Net, Util) |
 | `src/server` | ServerScriptService/Server (Systems, World builders, Util) |
 | `src/client` | StarterPlayer/StarterPlayerScripts/Client (Controllers, Input, ClientState) |
+| `src/first` | ReplicatedFirst (the loading screen; runs before Shared exists, so its settings live in the script) |
 | `vendor` | ServerScriptService/Vendor (ProfileStore) |
 | `tests` | not synced; Lune unit tests and the world smoke test |
 | `assets/roblox/Ships` | ReplicatedStorage/Assets/Ships (imported ship models as `.rbxm`, saved from Studio) |
