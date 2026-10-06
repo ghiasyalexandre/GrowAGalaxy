@@ -20,6 +20,10 @@ local World = {
 	-- Share by which every glow (Neon colours, lights, beams) of player
 	-- stations, hangar upgrades and the Zero G Dodgeball arena is dimmed.
 	EMISSIVE_DIM = 0.2,
+	-- Bloom (Lighting SpaceBloom): in open space, and inside player stations
+	-- and the Zero G Dodgeball arena (BloomController eases between them).
+	BLOOM_INTENSITY = 0.6,
+	BLOOM_INDOOR = 0.2,
 	STATION_DISTANCE = 140,
 
 	EARTH_CENTER = { x = 0, y = -3000, z = 0 } :: Vec3,

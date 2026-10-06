@@ -219,5 +219,5 @@ return {
 	GHOST_STEP = 40, -- studs per scroll step or elevation tap
 	-- How often star income is added to "uncollected".
 	INCOME_TICK = 1,
-	MANAGE_DISTANCE = 90, -- studs: the star's Manage and Inspect prompts show this close (from inside the system)
+	MANAGE_DISTANCE = 135, -- studs: the star's Manage and Inspect prompts show this close (from inside the system)
 }

@@ -761,7 +761,7 @@ local function add(model: Instance)
 	local mine = isMine(model)
 	local prompt = core:FindFirstChild("Manage")
 	if prompt and prompt:IsA("ProximityPrompt") then
-		prompt.Enabled = mine
+		prompt.Enabled = mine and not ClientState.inspecting
 	end
 	-- Anyone may inspect any system (R / R3): a local prompt on this client.
 	local inspect = Instance.new("ProximityPrompt")
@@ -775,6 +775,7 @@ local function add(model: Instance)
 	inspect.RequiresLineOfSight = false
 	inspect.UIOffset = Vector2.new(0, 70)
 	inspect:SetAttribute("GaG_Inspect", true)
+	inspect.Enabled = not ClientState.inspecting
 	inspect.Parent = core
 	local level = model:GetAttribute("Level")
 	local planetsText = model:GetAttribute("Planets")
@@ -900,6 +901,21 @@ end
 StarController.clock = clock
 
 -- The planets drawn around a star: part, orbit slot and planet type id.
+-- Shows or hides every star's Manage and Inspect prompts (hidden while a
+-- system is being inspected, so they don't cover the view).
+function StarController.setPromptsShown(shown: boolean)
+	for model, v in visuals do
+		local manage = v.core:FindFirstChild("Manage")
+		if manage and manage:IsA("ProximityPrompt") then
+			manage.Enabled = shown and isMine(model)
+		end
+		local inspect = v.core:FindFirstChild("GaG_Inspect")
+		if inspect and inspect:IsA("ProximityPrompt") then
+			inspect.Enabled = shown
+		end
+	end
+end
+
 function StarController.planetsOf(model: Model): { { part: Part, slot: number, id: string } }
 	local v = visuals[model]
 	local result: { { part: Part, slot: number, id: string } } = {}

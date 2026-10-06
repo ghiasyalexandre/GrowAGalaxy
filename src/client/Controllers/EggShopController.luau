@@ -6,7 +6,6 @@
 --                   type's exact chance grouped by rarity with each rarity's
 --                   hatch time; that hatching starts at your hangar; and,
 --                   when random eggs are off for you, why.
---   Choose a planet a non-random egg for any type, at its listed price.
 --   Details         how the roll, prices, hatching and restrictions work.
 --
 -- The server (EggSystem) decides everything: the policy check, the price
@@ -36,7 +35,7 @@ local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local EGG_COLOR = Color3.fromRGB(255, 110, 200)
 
-type Tab = "mystery" | "chosen" | "details"
+type Tab = "mystery" | "details"
 
 local EggShopController = {}
 
@@ -108,13 +107,6 @@ local function buy(action: string, ...: any)
 		if type(message) == "string" then message else if ok then "Done" else "Failed"
 	)
 	refresh()
-end
-
-local function sized(button: TextButton, width: number): TextButton
-	button.AnchorPoint = Vector2.new(1, 0.5)
-	button.Position = UDim2.new(1, -10, 0.5, 0)
-	button.Size = UDim2.fromOffset(width, 38)
-	return button
 end
 
 -- Whether this planet type is in the player's Planet Index.
@@ -209,7 +201,7 @@ local function showMystery()
 	Theme.label(card, {
 		Position = UDim2.fromOffset(78, 34),
 		Size = UDim2.new(1, -90 - #E.MULTI_BUY * 112, 0, 40),
-		Text = `{whole(price)} {CURRENCY}  ·  one random planet each, rising per egg, duplicates possible  ·  you have {whole(
+		Text = `{whole(price)} {CURRENCY}  ·  each, one random planet, duplicates possible  ·  you have {whole(
 			stardust
 		)}`,
 		TextWrapped = true,
@@ -268,9 +260,7 @@ local function showMystery()
 	end
 	textRow(
 		order,
-		`Hatching starts when you put the egg in one of your hangar's {E.HATCH_SLOTS} incubator chambers, not when you buy it. Eggs waiting: {held}/{E.MAX_UNHATCHED}. Each egg bought raises the next price by {math.floor(
-			(E.PRICE_GROWTH - 1) * 100 + 0.5
-		)}%.`,
+		`Hatching starts when you put the egg in one of your hangar's {E.HATCH_SLOTS} incubator chambers, not when you buy it. Eggs waiting: {held}/{E.MAX_UNHATCHED}.`,
 		56
 	)
 	order += 1
@@ -296,51 +286,12 @@ local function showMystery()
 	end
 end
 
-local function showChosen()
-	local stardust, bought, held = profileNumbers()
-	textRow(
-		1,
-		`Choose exactly which planet you get: no randomness, the price is shown. Prices follow the mystery egg price ({whole(
-			EggMath.price(bought)
-		)} now) times a rarity factor, and buying one also counts as an egg bought. Eggs waiting: {held}/{E.MAX_UNHATCHED}.`,
-		56
-	)
-	local order = 2
-	local full = held >= E.MAX_UNHATCHED
-	for _, rarityId in P.RARITY_ORDER do
-		rarityHeader(order, rarityId)
-		order += 1
-		for _, id in P.BY_RARITY[rarityId] do
-			local def = P.BY_ID[id]
-			local price = EggMath.guaranteedPrice(bought, id) :: number
-			local row = planetRow(order, def, "", nil)
-			local affordable = stardust >= price and not full
-			sized(
-				Theme.button(
-					row,
-					`Buy · {fmt(price)}`,
-					if affordable then "buy" else "disabled",
-					if affordable
-						then function()
-							buy("buyChosen", id, price)
-						end
-						else nil
-				),
-				130
-			)
-			order += 1
-		end
-	end
-end
-
 local function showDetails()
 	local _, bought = profileNumbers()
-	local multipliers: { string } = {}
 	local hatchTimes: { string } = {}
 	local shares: { string } = {}
 	for _, rarityId in P.RARITY_ORDER do
 		local rarity = P.RARITIES[rarityId]
-		table.insert(multipliers, `{rarity.displayName} x{E.GUARANTEED_MULTIPLIER[rarityId]}`)
 		table.insert(hatchTimes, `{rarity.displayName} {EggMath.durationText(rarity.hatchSeconds)}`)
 		table.insert(
 			shares,
@@ -362,13 +313,8 @@ local function showDetails()
 			)}. Duplicates are possible.`,
 		},
 		{
-			"Prices",
-			`A mystery egg costs {whole(E.PRICE_BASE)} x {E.PRICE_GROWTH}^(eggs you've bought) {CURRENCY}, rounded: {whole(
-				EggMath.price(bought)
-			)} now, {whole(EggMath.price(bought + 1))} next. A chosen planet costs the current mystery egg price times: {table.concat(
-				multipliers,
-				", "
-			)}. Only {CURRENCY} is used.`,
+			"Price",
+			`Every mystery egg costs {whole(EggMath.price(bought))} {CURRENCY}. Only {CURRENCY} is used.`,
 		},
 		{
 			"Hatching",
@@ -379,7 +325,7 @@ local function showDetails()
 		},
 		{
 			"Restrictions",
-			"Where Roblox restricts paid random items, or while we can't confirm that they're allowed for you, mystery eggs are switched off. Chosen planets are always available. There is no paid luck, no rerolls, no paid hatch speed-ups and no trading.",
+			"Where Roblox restricts paid random items, or while we can't confirm that they're allowed for you, eggs are switched off. Planets can only come from eggs: they can't be bought directly. There is no paid luck, no rerolls, no paid hatch speed-ups and no trading.",
 		},
 	}
 	for index, paragraph in paragraphs do
@@ -408,8 +354,6 @@ refresh = function()
 	Theme.clear(list)
 	if tab == "mystery" then
 		showMystery()
-	elseif tab == "chosen" then
-		showChosen()
 	else
 		showDetails()
 	end
@@ -484,7 +428,6 @@ function EggShopController.init()
 	tabs.Parent = panel
 	local tabDefs: { { id: Tab, text: string, style: Theme.ButtonStyle } } = {
 		{ id = "mystery", text = "Mystery egg", style = "buy" },
-		{ id = "chosen", text = "Choose a planet", style = "primary" },
 		{ id = "details", text = "Details", style = "special" },
 	}
 	for index, def in tabDefs do

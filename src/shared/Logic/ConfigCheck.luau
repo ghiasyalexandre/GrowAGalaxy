@@ -304,7 +304,12 @@ function ConfigCheck.run(config: any): { string }
 		if code ~= string.upper(code) or #code > config.Codes.MAX_LENGTH then
 			fail(`Code {code}: must be upper case and at most MAX_LENGTH letters`)
 		end
-		if (def.stardust or 0) <= 0 and def.boost == nil then
+		if
+			(def.stardust or 0) <= 0
+			and def.boost == nil
+			and not def.allPlanets
+			and not def.allShips
+		then
 			fail(`Code {code}: needs a reward`)
 		end
 	end
@@ -658,8 +663,11 @@ function ConfigCheck.run(config: any): { string }
 		if rarity.index ~= index - 1 then
 			fail(`Planets: rarity {rarityId} index must be {index - 1}`)
 		end
-		if rarity.hatchSeconds ~= math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5) then
-			fail(`Planets: rarity {rarityId} hatch time must be round(10 x 180^({index - 1}/5))`)
+		local raw = math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5)
+		if rarity.hatchSeconds ~= math.ceil(raw / 30) * 30 then
+			fail(
+				`Planets: rarity {rarityId} hatch time must be round(10 x 180^({index - 1}/5)) rounded up to 30 s`
+			)
 		end
 		if (byRarity[rarityId] or 0) ~= rarity.weight then
 			fail(`Planets: rarity {rarityId}'s types don't add up to its weight`)
@@ -735,17 +743,13 @@ function ConfigCheck.run(config: any): { string }
 		fail("Planets: MAX_PLANETS must be a positive whole number")
 	end
 
-	-- Eggs: prices that only grow, a multiplier for every rarity, sensible
-	-- incubator limits.
+	-- Eggs: prices that never fall, sensible incubator limits.
 	local eggs = config.Eggs
 	if not isWhole(eggs.PRICE_BASE) or eggs.PRICE_BASE <= 0 or eggs.PRICE_GROWTH < 1 then
 		fail("Eggs: PRICE_BASE must be a positive whole number and PRICE_GROWTH at least 1")
 	end
-	for _, rarityId in planets.RARITY_ORDER do
-		local multiplier = eggs.GUARANTEED_MULTIPLIER[rarityId]
-		if type(multiplier) ~= "number" or multiplier < 1 then
-			fail(`Eggs: GUARANTEED_MULTIPLIER.{rarityId} must be at least 1`)
-		end
+	if planets.RARITIES[eggs.CHAT_RARITY] == nil then
+		fail("Eggs: CHAT_RARITY must be a rarity")
 	end
 	if not isWhole(eggs.HATCH_SLOTS) or eggs.HATCH_SLOTS < 1 then
 		fail("Eggs: HATCH_SLOTS must be a whole number of at least 1")
@@ -803,12 +807,23 @@ function ConfigCheck.run(config: any): { string }
 		if (step.auto or step.final) and not step.ack then
 			fail(`{where}: auto and final steps must be ack steps`)
 		end
+		for _, text in { step.text, step.gamepad or "", step.touch or "" } do
+			if #text > tutorial.MAX_TEXT then
+				fail(`{where}: text longer than MAX_TEXT`)
+			end
+		end
 		if step.final and index ~= #tutorial.STEPS then
 			fail(`{where}: the final step must be the last`)
 		end
 	end
 	if config.World.EMISSIVE_DIM < 0 or config.World.EMISSIVE_DIM > 1 then
 		fail("World: EMISSIVE_DIM must be from 0 to 1")
+	end
+	if
+		config.World.BLOOM_INDOOR < 0
+		or config.World.BLOOM_INDOOR > config.World.BLOOM_INTENSITY
+	then
+		fail("World: BLOOM_INDOOR must be from 0 to BLOOM_INTENSITY")
 	end
 	if not isWhole(tutorial.FINISH_REWARD) or tutorial.FINISH_REWARD < 0 then
 		fail("Tutorial: FINISH_REWARD must be a whole number, 0 or more")

@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 37 merged into `main`).
+Last updated: 2026-10-05 (stage 38 merged into `main`).
 
 ## Status by stage
 
@@ -43,6 +43,7 @@ Last updated: 2026-10-05 (stage 37 merged into `main`).
 | 35. ISS directory, Top Stardust board, Daily Wheel kiosk, rare-hatch board and planet gallery; planet selling, locking, bulk and auto-sell, filters, Equip best, Planet Index; multi-buy eggs, auto-incubate with offline chaining, Fill all; Floating off (walk on floors); save v16 ([doc](docs/stage-35-iss-gacha-inventory.md)) | Merged | Passing (225 tests) | **Not yet** |
 | 36. Daily Wheel spins cost 1,000 Stardust (still once a day, paid-random-item policy applies); planet storage 200 | Merged | Passing | **Not yet** |
 | 37. Full kid-friendly tutorial (13 steps, device-specific words, HUD arrows, world markers, How to play guide, finish reward), star prompts from 90 studs, station/hangar/arena glow dimmed 20% ([doc](docs/stage-37-tutorial.md)) | Merged | Passing (227 tests) | **Not yet** |
+| 38. Softer indoor bloom, M frees the cursor in ships, inspect hides star prompts, prompt distance 135, codes PlanetzPlz and StarzShipz, Visit other hangars, flat 1,000 eggs, no direct planet purchases, chat announcements for Legendary+, hatch times rounded to 30 s, Berth renamed Dock, shorter tutorial with progress dots ([doc](docs/stage-38-feedback.md)) | Merged | Passing (226 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

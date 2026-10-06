@@ -13,7 +13,8 @@
 -- waiting egg by itself (also while offline). Hatched planets of a rarity
 -- the player auto-sells are sold on the spot (DataSystem.advanceHatches).
 -- Hatches of Config.Eggs.ANNOUNCE_RARITY or rarer are announced to the
--- whole server and listed in the hatch feed (the ISS Egg Lab board).
+-- whole server and listed in the hatch feed (the ISS Egg Lab board);
+-- CHAT_RARITY or rarer (Legendary, Interstellar) also go to the chat.
 --
 -- Hatches are saved as unix start and end times, so they keep going while
 -- the player is offline. Every second (and when a profile loads) any hatch
@@ -103,6 +104,12 @@ local function announce(player: Player, typeId: string)
 	end
 	HatchSystem.feedChanged:Fire()
 	local rarity = P.RARITIES[def.rarity].displayName
+	if P.RARITIES[def.rarity].index >= P.RARITIES[E.CHAT_RARITY].index then
+		Net.ChatAnnounce:FireAllClients(
+			`[Planet Egg] {player.DisplayName} hatched a {rarity} {def.displayName}!`,
+			P.RARITIES[def.rarity].color
+		)
+	end
 	for _, other in Players:GetPlayers() do
 		if other ~= player then
 			Notify.send(other, `{player.DisplayName} hatched a {rarity} {def.displayName}!`)

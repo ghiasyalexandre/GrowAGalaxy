@@ -100,6 +100,9 @@
         },
         "TutorialRequest": {
           "$className": "RemoteFunction"
+        },
+        "ChatAnnounce": {
+          "$className": "RemoteEvent"
         }
       }
     },

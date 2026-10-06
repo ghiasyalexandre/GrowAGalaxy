@@ -1,8 +1,10 @@
 --!strict
 -- The new-player tutorial on screen (Config.Tutorial), made for young
--- players: one big card at the top with a picture, a title, a few simple
--- sentences written for the device in use (keyboard, controller, touch), a
--- progress bar and big buttons.
+-- players: one big card at the top with a picture, a title, one short line
+-- written for the device in use (keyboard, controller, touch) and big
+-- buttons. Visual cues show progress: a row of dots (done steps tick green,
+-- the current one glows), a "Next:" preview of the coming step, and a big
+-- green "Great job!" flash when a step is done.
 --
 --   Pointers   an arrow bounces next to the HUD button the step needs (and
 --              the button glows); a "Here!" marker with the distance floats
@@ -23,6 +25,7 @@ local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
@@ -59,7 +62,9 @@ local iconHolder: Frame
 local title: TextLabel
 local counter: TextLabel
 local body: TextLabel
-local fill: Frame
+local dots: Frame
+local nextUp: TextLabel
+local doneFlash: TextLabel
 local buttonRow: Frame
 local tab: TextButton
 local arrow: TextLabel
@@ -355,8 +360,20 @@ refresh = function()
 		clearHud()
 		clearBeacon()
 		if advanced then
+			-- The step just done: a big green tick, then the next card.
+			doneFlash.Visible = true
+			doneFlash.TextTransparency = 0
+			doneFlash.BackgroundTransparency = 0.05
 			Theme.popIn(card)
-			ClientState.notify:Fire("Great job! Here's what to do next.")
+			task.delay(1.1, function()
+				local fade = TweenInfo.new(0.35)
+				TweenService
+					:Create(doneFlash, fade, { TextTransparency = 1, BackgroundTransparency = 1 })
+					:Play()
+				task.delay(0.4, function()
+					doneFlash.Visible = false
+				end)
+			end)
 		end
 	end
 	card.Visible = not hidden
@@ -366,7 +383,29 @@ refresh = function()
 	title.Text = step.title
 	counter.Text = `Step {index} of {#T.STEPS}`
 	body.Text = textFor(step)
-	fill.Size = UDim2.fromScale((index - 1) / #T.STEPS, 1)
+	-- Progress dots: done ticks, the current step glowing, the rest dim.
+	Theme.clear(dots)
+	for number = 1, #T.STEPS do
+		local dot = Instance.new("TextLabel")
+		dot.LayoutOrder = number
+		local current = number == index
+		dot.Size = UDim2.fromOffset(if current then 26 else 20, if current then 26 else 20)
+		dot.BackgroundColor3 = if number < index
+			then Color3.fromRGB(90, 220, 130)
+			elseif current then GOLD
+			else Color3.fromRGB(60, 62, 100)
+		dot.Text = if number < index then "✓" elseif current then tostring(number) else ""
+		dot.Font = Enum.Font.GothamBlack
+		dot.TextSize = if current then 15 else 13
+		dot.TextColor3 = Color3.fromRGB(20, 20, 40)
+		dot.Parent = dots
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = dot
+	end
+	local upcoming = T.STEPS[index + 1]
+	nextUp.Text = if upcoming then `Next: {upcoming.title}` else "Last step!"
+	nextUp.Visible = true
 	buildButtons(step, index)
 	-- When flying, the flight gauges sit at the top: move below them.
 	local flying = ClientState.mode == "ship"
@@ -639,33 +678,53 @@ local function build()
 		AutomaticSize = Enum.AutomaticSize.Y,
 		TextWrapped = true,
 		Font = Enum.Font.GothamMedium,
-		TextSize = 18,
+		TextSize = 22,
 		TextColor3 = Color3.fromRGB(240, 242, 255),
 	})
 	body.TextTruncate = Enum.TextTruncate.None
-	local track = Instance.new("Frame")
-	track.LayoutOrder = 3
-	track.Size = UDim2.new(1, 0, 0, 8)
-	track.BackgroundColor3 = Color3.fromRGB(44, 46, 80)
-	track.BorderSizePixel = 0
-	track.Parent = content
-	local trackRound = Instance.new("UICorner")
-	trackRound.CornerRadius = UDim.new(1, 0)
-	trackRound.Parent = track
-	fill = Instance.new("Frame")
-	fill.BackgroundColor3 = GOLD
-	fill.BorderSizePixel = 0
-	fill.Size = UDim2.fromScale(0, 1)
-	fill.Parent = track
-	local fillRound = Instance.new("UICorner")
-	fillRound.CornerRadius = UDim.new(1, 0)
-	fillRound.Parent = fill
+	-- Progress dots, one per step.
+	dots = Instance.new("Frame")
+	dots.Name = "Dots"
+	dots.LayoutOrder = 3
+	dots.BackgroundTransparency = 1
+	dots.Size = UDim2.new(1, 0, 0, 26)
+	dots.Parent = content
+	local dotLayout = Instance.new("UIListLayout")
+	dotLayout.FillDirection = Enum.FillDirection.Horizontal
+	dotLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	dotLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	dotLayout.Padding = UDim.new(0, 5)
+	dotLayout.Parent = dots
+	nextUp = Theme.label(content, {
+		LayoutOrder = 5,
+		Size = UDim2.new(1, 0, 0, 18),
+		Font = Enum.Font.GothamBold,
+		TextSize = 14,
+		TextColor3 = C.subtle,
+	})
 	buttonRow = Instance.new("Frame")
 	buttonRow.Name = "Buttons"
 	buttonRow.LayoutOrder = 4
 	buttonRow.BackgroundTransparency = 1
 	buttonRow.Size = UDim2.new(1, 0, 0, 40)
 	buttonRow.Parent = content
+
+	-- The "step done" flash over the whole card.
+	doneFlash = Instance.new("TextLabel")
+	doneFlash.Name = "Done"
+	doneFlash.Size = UDim2.fromScale(1, 1)
+	doneFlash.ZIndex = 10
+	doneFlash.BackgroundColor3 = Color3.fromRGB(50, 170, 90)
+	doneFlash.Font = Enum.Font.GothamBlack
+	doneFlash.TextSize = 34
+	doneFlash.TextColor3 = Color3.new(1, 1, 1)
+	doneFlash.TextStrokeTransparency = 0.4
+	doneFlash.Text = "✓  Great job!"
+	doneFlash.Visible = false
+	doneFlash.Parent = card
+	local doneRound = Instance.new("UICorner")
+	doneRound.CornerRadius = UDim.new(0, 14)
+	doneRound.Parent = doneFlash
 
 	-- The hidden card's tab.
 	tab = Instance.new("TextButton")

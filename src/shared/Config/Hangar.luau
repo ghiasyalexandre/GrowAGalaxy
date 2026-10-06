@@ -101,7 +101,7 @@ local BY_ID: { [string]: HangarDef } = {
 	NeonRunway = {
 		id = "NeonRunway",
 		displayName = "Neon Runway",
-		effect = "Vanity: chevron lights guide you in to your berth",
+		effect = "Vanity: chevron lights guide you in to your dock",
 		cost = 5000,
 		requires = {},
 		pad = { x = 8, z = -30 },

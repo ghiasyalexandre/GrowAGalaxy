@@ -6,34 +6,23 @@
 --                 Config.Planets (shown in full before buying). The planet is
 --                 chosen on the server the moment the egg is bought and saved
 --                 with it; it never changes. Price: PRICE_BASE x
---                 PRICE_GROWTH^(eggs bought so far), rounded.
---   Chosen planet a guaranteed, non-random egg for one specific planet type,
---                 for GUARANTEED_MULTIPLIER[rarity] x the current mystery
---                 egg price. Always available, and the only way for players
---                 whose region restricts paid random items (PolicyService).
+--                 PRICE_GROWTH^(eggs bought so far), rounded; with
+--                 PRICE_GROWTH 1 every egg costs PRICE_BASE.
+--
+-- Planets can't be bought directly: eggs are the only way to get them.
 --
 -- Eggs wait in the player's inventory until they put one in one of
 -- HATCH_SLOTS incubation chambers; it hatches after its rarity's hatch time
 -- (Config.Planets.RARITIES), even while they're offline.
 --
--- Price review (Oct 2026 economy): a new player has 100 Stardust, their first
--- star makes 1/s and a small asteroid pays ~12, so a 500 Stardust first egg
--- takes a few minutes of mining. Each egg bought raises the next by 15%: the
--- 10th costs ~1.8k, the 25th ~13k, the 50th ~470k, keeping later eggs a real
--- goal next to star upgrades.
+-- Price review (Oct 2026): a flat 1,000 Stardust per egg. A new player's
+-- first egg takes a few minutes of mining; later eggs stay cheap next to
+-- star upgrades, so eggs are the steady way to fill orbits.
 
 return {
-	PRICE_BASE = 500,
-	PRICE_GROWTH = 1.15,
-	GUARANTEED_MULTIPLIER = {
-		Common = 3,
-		Uncommon = 6,
-		Rare = 16,
-		Epic = 50,
-		Legendary = 150,
-		Interstellar = 400,
-	} :: { [string]: number },
-	-- Mystery eggs bought in one go (each at its own rising price).
+	PRICE_BASE = 1000,
+	PRICE_GROWTH = 1, -- 1: the price never rises
+	-- Mystery eggs bought in one go.
 	MULTI_BUY = { 1, 5, 10 } :: { number },
 	HATCH_SLOTS = 5,
 	MAX_UNHATCHED = 50, -- eggs a player may hold unhatched at once
@@ -43,5 +32,7 @@ return {
 	-- Hatches of this rarity or rarer are announced to the whole server and
 	-- shown on the ISS Egg Lab's hatch board (last HATCH_FEED_SIZE).
 	ANNOUNCE_RARITY = "Epic",
+	-- Hatches of this rarity or rarer are also announced in the chat.
+	CHAT_RARITY = "Legendary",
 	HATCH_FEED_SIZE = 6,
 }

@@ -465,6 +465,8 @@ return function(T, Loader)
 			T.equal(data.redeemedCodes.BAD, nil)
 			local code = Config.Codes.BY_CODE.ILUVGHIASY
 			T.equal(code and code.stardust, 5000000, "the code gives 5,000,000 Stardust")
+			T.truthy(Config.Codes.BY_CODE.PLANETZPLZ.allPlanets, "PlanetzPlz: one of every planet")
+			T.truthy(Config.Codes.BY_CODE.STARZSHIPZ.allShips, "StarzShipz: every ship")
 		end)
 	end)
 end

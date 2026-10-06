@@ -5,7 +5,7 @@
 -- A mystery egg's planet is pick(roll) for a whole roll from 1 to
 -- WEIGHT_TOTAL drawn on the server: each type owns a run of rolls as long as
 -- its weight, in catalog order, so its chance is exactly weight /
--- WEIGHT_TOTAL. A chosen-planet egg is never random.
+-- WEIGHT_TOTAL. Planets can't be bought any other way.
 --
 -- Random eggs are sold only when Roblox says paid random items are allowed
 -- for the player (PolicyService). "unknown" (not checked yet, or the check
@@ -41,17 +41,6 @@ end
 -- Whether `count` is one of the offered multi-buy sizes.
 function EggMath.isBatchSize(count: unknown): boolean
 	return type(count) == "number" and table.find(Config.Eggs.MULTI_BUY, count) ~= nil
-end
-
--- The price of a chosen-planet egg of `typeId` after `bought` eggs, or nil
--- for an unknown type.
-function EggMath.guaranteedPrice(bought: number, typeId: string): number?
-	local def = P.BY_ID[typeId]
-	local multiplier = if def then E.GUARANTEED_MULTIPLIER[def.rarity] else nil
-	if multiplier == nil then
-		return nil
-	end
-	return EggMath.price(bought) * multiplier
 end
 
 -- The planet type a whole roll in 1..WEIGHT_TOTAL lands on.

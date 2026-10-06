@@ -10,9 +10,11 @@
 -- airlocks (NavigationSystem), and a part tagged "SafeZone" around it (no PvP).
 
 local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
+local Config = require(ReplicatedStorage.Shared.Config)
 local EarthBuilder = require(script.Parent.Parent.World.EarthBuilder)
 local IssBuilder = require(script.Parent.Parent.World.IssBuilder)
 
@@ -58,7 +60,7 @@ local function setupLighting()
 
 	local bloom = Instance.new("BloomEffect")
 	bloom.Name = "SpaceBloom"
-	bloom.Intensity = 0.6
+	bloom.Intensity = Config.World.BLOOM_INTENSITY
 	bloom.Size = 24
 	bloom.Threshold = 0.9
 	bloom.Parent = Lighting
