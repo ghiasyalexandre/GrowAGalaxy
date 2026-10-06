@@ -10,6 +10,10 @@
 -- docking zone sit off the -Z edge. Hangar upgrades (HangarSystem) are built
 -- on the deck at Config.Hangar pads, inside the "Hangar" model.
 --
+-- Highlight colour: the glowing strips, back rail, beacon and name signs use
+-- the region's colour, or the owner's pick (recolor, Config.Hangar
+-- HIGHLIGHT_COLORS); they carry the attribute GaG_Accent.
+--
 -- Incubator Bay: an annex off the left side (-X), through a doorway in the
 -- left wall, holding Config.Eggs.HATCH_SLOTS incubator chambers in a row
 -- ("Incubator" model, parts "Chamber1".., tagged "GaG_Incubator" with
@@ -40,6 +44,8 @@ local DOOR_FROM, DOOR_TO = -16, -8
 local BAY_WIDTH = 24 -- x, beyond the left wall
 local BAY_FROM, BAY_TO = -30, 6 -- z
 local INCUBATOR_TAG = "GaG_Incubator"
+-- Parts and labels in the station's highlight colour (recolor() changes them).
+local ACCENT = "GaG_Accent"
 
 local StationBuilder = {}
 
@@ -68,7 +74,7 @@ function StationBuilder.build(
 	end
 
 	local function neon(name: string, size: Vector3, where: CFrame, tint: string?)
-		Build.part({
+		local part = Build.part({
 			name = name,
 			size = size,
 			cframe = where,
@@ -77,6 +83,9 @@ function StationBuilder.build(
 			collide = false,
 			parent = station,
 		})
+		if tint == nil then
+			part:SetAttribute(ACCENT, true)
+		end
 	end
 
 	-- Deck: a plated slab with darker inset panels and a docking ring below.
@@ -223,7 +232,7 @@ function StationBuilder.build(
 		cframe = at(0, FLOOR_Y + 1.5, LENGTH / 2),
 		color = color,
 		parent = station,
-	})
+	}):SetAttribute(ACCENT, true)
 
 	-- Truss arches overhead, each with a light panel underneath.
 	for _, z in { -26, -4, 18 } do
@@ -345,6 +354,7 @@ function StationBuilder.build(
 		collide = false,
 		parent = station,
 	})
+	beacon:SetAttribute(ACCENT, true)
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "OwnerTag"
 	billboard.Size = UDim2.fromOffset(260, 40)
@@ -357,11 +367,12 @@ function StationBuilder.build(
 	tag.TextScaled = true
 	tag.Font = Enum.Font.GothamBold
 	tag.TextColor3 = Color3.fromHex(color)
+	tag:SetAttribute(ACCENT, true)
 	tag.TextStrokeTransparency = 0.4
 	tag.Parent = billboard
 	billboard.Parent = beacon
 
-	Build.sign({
+	local nameSign = Build.sign({
 		name = "NameSign",
 		text = `{ownerName}'s Hangar`,
 		size = Vector3.new(16, 3, 0.4),
@@ -370,6 +381,11 @@ function StationBuilder.build(
 		parent = station,
 		textColor = color,
 	})
+	for _, item in nameSign:GetDescendants() do
+		if item:IsA("TextLabel") then
+			item:SetAttribute(ACCENT, true)
+		end
+	end
 
 	-- The Collect console, facing the spawn, with a glowing Stardust orb.
 	local collect = Build.console(
@@ -445,6 +461,25 @@ function StationBuilder.build(
 		dockZone = dockZone,
 		floor = at(0, FLOOR_Y, 0),
 	}
+end
+
+-- Changes the station's highlight colour (Config.Hangar.HIGHLIGHT_COLORS or
+-- the region's): every piece built in it, glowing ones dimmed like the rest
+-- (Config.World.EMISSIVE_DIM).
+function StationBuilder.recolor(station: Model, hex: string)
+	local base = Color3.fromHex(hex)
+	local keep = 1 - Config.World.EMISSIVE_DIM
+	local dimmed = Color3.new(base.R * keep, base.G * keep, base.B * keep)
+	for _, item in station:GetDescendants() do
+		if item:GetAttribute(ACCENT) ~= true then
+			continue
+		end
+		if item:IsA("BasePart") then
+			item.Color = if item.Material == Enum.Material.Neon then dimmed else base
+		elseif item:IsA("TextLabel") then
+			item.TextColor3 = base
+		end
+	end
 end
 
 return StationBuilder

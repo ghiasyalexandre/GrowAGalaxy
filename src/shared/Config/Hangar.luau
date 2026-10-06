@@ -148,4 +148,19 @@ return {
 	-- A player standing on a pad tries to buy it at most this often.
 	TOUCH_COOLDOWN = 2,
 	SIGN_DISTANCE = 120, -- studs: pad signs show within this range
+	-- Hangar highlight colours a player can pick (Settings): the station's
+	-- glowing strips, rail, beacon and name signs. None picked: the region's
+	-- own colour.
+	HIGHLIGHT_COLORS = {
+		{ id = "Cyan", name = "Cyan", hex = "#4FC3F7" },
+		{ id = "Blue", name = "Blue", hex = "#3F7BFF" },
+		{ id = "Purple", name = "Purple", hex = "#B06BFF" },
+		{ id = "Pink", name = "Pink", hex = "#FF6EC8" },
+		{ id = "Red", name = "Red", hex = "#FF4A4A" },
+		{ id = "Orange", name = "Orange", hex = "#FF9A3D" },
+		{ id = "Gold", name = "Gold", hex = "#FFD36B" },
+		{ id = "Green", name = "Green", hex = "#5CFF8A" },
+		{ id = "Mint", name = "Mint", hex = "#3FFFD0" },
+		{ id = "White", name = "White", hex = "#E8F0FF" },
+	} :: { { id: string, name: string, hex: string } },
 }

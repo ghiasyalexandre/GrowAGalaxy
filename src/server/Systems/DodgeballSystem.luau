@@ -17,8 +17,15 @@
 -- client is told, DodgeballEvent "hit") and moved to a random spawn after
 -- OUT_TIME. Every client draws the balls from DodgeballEvent "throw" and
 -- "end". Player attributes for the HUD: DodgeReady (ball ready), DodgeOut,
--- DodgeHits and DodgeOuts (this session).
+-- DodgeHits and DodgeOuts (this session), DodgeBig (giant ball charged).
+--
+-- Giant ball powerup: every POWERUP_INTERVAL seconds, if none is out, an orb
+-- ("BigBallPowerup") appears at a random spawn point. The first player who
+-- floats within POWERUP_REACH of it takes it: their next ball is
+-- POWERUP_SCALE x bigger (the server sweeps a sphere that much bigger, so it
+-- hits that much more easily), and the sun in their hand grows to show it.
 
+local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -38,7 +45,14 @@ local Teleport = require(script.Parent.Parent.Util.Teleport)
 local D = Config.Dodgeball
 local SUN_COLOR = Color3.fromRGB(255, 176, 32)
 
-type Ball = { id: number, thrower: Player, position: Vector3, direction: Vector3, born: number }
+type Ball = {
+	id: number,
+	thrower: Player,
+	position: Vector3,
+	direction: Vector3,
+	born: number,
+	radius: number,
+}
 
 local DodgeballSystem = {}
 
@@ -50,6 +64,9 @@ local balls: { Ball } = {}
 local nextBall = 1
 local elapsed = 0
 local ignore: { Instance } = {} -- arena decorations balls fly through
+local big: { [Player]: boolean } = {} -- giant ball charged
+local powerup: Part? = nil
+local powerupTimer = 0
 
 local function vec(point: DodgeballMath.Point): Vector3
 	return Vector3.new(point.x, point.y, point.z)
@@ -86,7 +103,7 @@ local function setHeld(player: Player, on: boolean)
 	local sun = Instance.new("Part")
 	sun.Name = "DodgeSun"
 	sun.Shape = Enum.PartType.Ball
-	sun.Size = Vector3.one * 1.8
+	sun.Size = Vector3.one * (if big[player] then 3.2 else 1.8)
 	sun.Material = Enum.Material.Neon
 	sun.Color = SUN_COLOR
 	sun.CanCollide = false
@@ -126,9 +143,30 @@ local function join(player: Player)
 	Notify.send(player, "Zero G Dodgeball! Click to throw your sun, Shift to launch off a block.")
 end
 
+local function setBig(player: Player, on: boolean)
+	if on then
+		big[player] = true
+	else
+		big[player] = nil
+	end
+	if player.Parent then
+		player:SetAttribute("DodgeBig", if on then true else nil)
+		-- Re-make the hand sun at its new size.
+		setHeld(player, false)
+		if members[player] then
+			setHeld(player, true)
+			setReady(player, player:GetAttribute("DodgeReady") == true)
+		end
+	end
+end
+
 local function leave(player: Player)
 	members[player] = nil
 	out[player] = nil
+	big[player] = nil
+	if player.Parent then
+		player:SetAttribute("DodgeBig", nil)
+	end
 	if player.Parent then
 		player:SetAttribute("Dodgeball", nil)
 		player:SetAttribute("DodgeOut", nil)
@@ -232,8 +270,11 @@ local function stepBalls(dt: number)
 		if ball.thrower.Character then
 			table.insert(skip, ball.thrower.Character)
 		end
+		if powerup then
+			table.insert(skip, powerup)
+		end
 		params.FilterDescendantsInstances = skip
-		local result = Workspace:Spherecast(ball.position, D.BALL_RADIUS, step, params)
+		local result = Workspace:Spherecast(ball.position, ball.radius, step, params)
 		if result == nil then
 			ball.position += step
 			continue
@@ -269,22 +310,100 @@ local function throw(player: Player, direction: unknown)
 	end
 	lastThrow[player] = now
 	local unit = dir.Unit
+	local scale = if big[player] then D.POWERUP_SCALE else 1
 	local ball: Ball = {
 		id = nextBall,
 		thrower = player,
-		position = root.Position + unit * 3,
+		position = root.Position + unit * (3 + D.BALL_RADIUS * (scale - 1)),
 		direction = unit,
 		born = now,
+		radius = D.BALL_RADIUS * scale,
 	}
 	nextBall += 1
 	table.insert(balls, ball)
-	Net.DodgeballEvent:FireAllClients("throw", ball.id, ball.position, unit, player.UserId)
+	Net.DodgeballEvent:FireAllClients("throw", ball.id, ball.position, unit, player.UserId, scale)
+	if scale > 1 then
+		setBig(player, false)
+	end
 	setReady(player, false)
 	task.delay(D.THROW_COOLDOWN, function()
 		if members[player] then
 			setReady(player, true)
 		end
 	end)
+end
+
+-- A new powerup orb at a random spawn point, a little off it.
+local function spawnPowerup()
+	local spawns = DodgeballMath.spawnPoints()
+	local at = vec(spawns[math.random(#spawns)])
+		+ Vector3.new(math.random(-12, 12), 10, math.random(-12, 12))
+	local orb = Instance.new("Part")
+	orb.Name = "BigBallPowerup"
+	orb.Shape = Enum.PartType.Ball
+	orb.Size = Vector3.one * 4
+	orb.CFrame = CFrame.new(at)
+	orb.Color = Color3.fromHex(D.POWERUP_COLOR)
+	orb.Material = Enum.Material.Neon
+	orb.Transparency = 0.15
+	orb.Anchored = true
+	orb.CanCollide = false
+	orb.CanQuery = false
+	orb.CanTouch = false
+	orb:SetAttribute("SpinSpeed", 1.5)
+	CollectionService:AddTag(orb, "GaG_Spin")
+	local light = Instance.new("PointLight")
+	light.Color = orb.Color
+	light.Range = 18
+	light.Brightness = 2 * (1 - Config.World.EMISSIVE_DIM)
+	light.Parent = orb
+	local label = Instance.new("BillboardGui")
+	label.Size = UDim2.fromOffset(160, 40)
+	label.StudsOffsetWorldSpace = Vector3.new(0, 4, 0)
+	label.MaxDistance = 150
+	label.LightInfluence = 0
+	label.AlwaysOnTop = true
+	label.Parent = orb
+	local text = Instance.new("TextLabel")
+	text.Size = UDim2.fromScale(1, 1)
+	text.BackgroundTransparency = 1
+	text.Font = Enum.Font.GothamBlack
+	text.TextScaled = true
+	text.TextColor3 = orb.Color
+	text.TextStrokeTransparency = 0.2
+	text.Text = "GIANT BALL!"
+	text.Parent = label
+	orb.Parent = arena
+	powerup = orb
+end
+
+-- Every tick: a member touching the orb takes it; with none out, a new one
+-- appears every POWERUP_INTERVAL seconds.
+local function tickPowerup(dt: number)
+	local orb = powerup
+	if orb == nil then
+		powerupTimer += dt
+		if powerupTimer >= D.POWERUP_INTERVAL then
+			powerupTimer = 0
+			spawnPowerup()
+		end
+		return
+	end
+	for player in members do
+		local root = Teleport.rootOf(player)
+		if
+			not out[player]
+			and root
+			and (root.Position - orb.Position).Magnitude <= D.POWERUP_REACH
+		then
+			orb:Destroy()
+			powerup = nil
+			powerupTimer = 0
+			setBig(player, true)
+			Notify.send(player, "GIANT BALL! Your next throw is 3 times bigger.")
+			return
+		end
+	end
 end
 
 function DodgeballSystem.init()
@@ -303,6 +422,7 @@ function DodgeballSystem.start()
 	Net.DodgeballThrow.OnServerEvent:Connect(throw)
 	RunService.Heartbeat:Connect(function(dt)
 		stepBalls(dt)
+		tickPowerup(dt)
 		elapsed += dt
 		if elapsed >= D.MEMBERSHIP_TICK then
 			elapsed = 0
@@ -312,6 +432,7 @@ function DodgeballSystem.start()
 	Players.PlayerRemoving:Connect(function(player)
 		leave(player)
 		lastThrow[player] = nil
+		big[player] = nil
 	end)
 end
 

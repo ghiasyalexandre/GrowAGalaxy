@@ -56,7 +56,9 @@ local ProfileSchema = {}
 --    (defaults: float, auto-incubate on, keep new types, auto-sell off);
 --    planets may be locked; `discovered` (the Planet Index) starts as every
 --    type the player owns. No existing data changes.
-ProfileSchema.VERSION = 16
+-- 17: hangarColor (the hangar highlight colour pick), nil = the region's
+--    colour as before. No existing data changes.
+ProfileSchema.VERSION = 17
 
 -- Auto-sell choices: only rarities players may auto-sell, set to true.
 local function autoSellSettings(raw: any): { [string]: boolean }
@@ -576,6 +578,15 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 	data.discovered = discovered
 
+	-- Hangar highlight colour: only a colour on offer.
+	local pick = data.hangarColor
+	data.hangarColor = nil
+	for _, choice in Config.Hangar.HIGHLIGHT_COLORS do
+		if choice.id == pick then
+			data.hangarColor = pick
+		end
+	end
+
 	-- Eggs and hatches: their planets were chosen when bought; never rerolled.
 	local eggs: { [string]: Types.EggRecord } = {}
 	if type(data.eggs) == "table" then
@@ -735,6 +746,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		hatches = ProfileSchema.hatchesView(profile),
 		wheel = table.clone(profile.wheel),
 		discovered = table.clone(profile.discovered),
+		hangarColor = profile.hangarColor,
 	}
 end
 

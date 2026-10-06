@@ -11,7 +11,8 @@
 --            sun is ready; a red flash and the thrower's name when you're out.
 --
 -- Every client draws every ball: a blazing little sun with a fiery corona
--- and a trail, flying straight from DodgeballEvent "throw" until "end",
+-- and a trail (bigger for a giant-ball powerup throw), flying straight
+-- from DodgeballEvent "throw" until "end",
 -- where it bursts.
 
 local CollectionService = game:GetService("CollectionService")
@@ -71,10 +72,11 @@ local function fx(): Folder
 end
 
 -- A small sun: a white-hot core in a blazing shell, with flames and a trail.
-local function makeSun(at: Vector3): Part
+local function makeSun(at: Vector3, scale: number): Part
+	local radius = D.BALL_RADIUS * scale
 	local sun = Instance.new("Part")
 	sun.Shape = Enum.PartType.Ball
-	sun.Size = Vector3.one * D.BALL_RADIUS * 2
+	sun.Size = Vector3.one * radius * 2
 	sun.Material = Enum.Material.Neon
 	sun.Color = SUN
 	sun.Anchored = true
@@ -85,7 +87,7 @@ local function makeSun(at: Vector3): Part
 	sun.CFrame = CFrame.new(at)
 	local core = Instance.new("Part")
 	core.Shape = Enum.PartType.Ball
-	core.Size = Vector3.one * D.BALL_RADIUS * 1.2
+	core.Size = Vector3.one * radius * 1.2
 	core.Material = Enum.Material.Neon
 	core.Color = SUN_HOT
 	core.Anchored = true
@@ -104,15 +106,15 @@ local function makeSun(at: Vector3): Part
 		local flames = Instance.new("Fire")
 		flames.Color = Color3.fromRGB(255, 120, 30)
 		flames.SecondaryColor = Color3.fromRGB(255, 220, 90)
-		flames.Size = D.BALL_RADIUS * 2.2
+		flames.Size = radius * 2.2
 		flames.Heat = 0
 		flames.Parent = sun
 	end
 	local top = Instance.new("Attachment")
-	top.Position = Vector3.new(0, D.BALL_RADIUS * 0.7, 0)
+	top.Position = Vector3.new(0, radius * 0.7, 0)
 	top.Parent = sun
 	local bottom = Instance.new("Attachment")
-	bottom.Position = Vector3.new(0, -D.BALL_RADIUS * 0.7, 0)
+	bottom.Position = Vector3.new(0, -radius * 0.7, 0)
 	bottom.Parent = sun
 	local trail = Instance.new("Trail")
 	trail.Attachment0 = top
@@ -155,7 +157,7 @@ end
 local function onEvent(kind: unknown, ...: unknown)
 	local args = { ... }
 	if kind == "throw" then
-		local id, origin, direction = args[1], args[2], args[3]
+		local id, origin, direction, scale = args[1], args[2], args[3], args[5]
 		if
 			type(id) ~= "number"
 			or typeof(origin) ~= "Vector3"
@@ -164,7 +166,11 @@ local function onEvent(kind: unknown, ...: unknown)
 			return
 		end
 		balls[id] = {
-			part = makeSun(origin),
+			-- A giant ball (powerup) is drawn POWERUP_SCALE x bigger.
+			part = makeSun(
+				origin,
+				if type(scale) == "number" then math.clamp(scale, 1, D.POWERUP_SCALE) else 1
+			),
 			origin = origin,
 			direction = direction.Unit,
 			started = os.clock(),
