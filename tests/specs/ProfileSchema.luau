@@ -429,6 +429,30 @@ return function(T, Loader)
 			T.equal((view.hatches["1"] :: any).outcome, nil)
 		end)
 
+		T.test("v16: new settings default safely; locks and the Planet Index", function()
+			local data = ProfileSchema.default() :: any
+			data.schemaVersion = 15
+			data.settings.floating = nil
+			data.settings.autoSell = { Common = true, Legendary = true, Rare = "yes" }
+			data.planets = {
+				p1 = { typeId = "Aurora", level = 1, locked = true },
+				p2 = { typeId = "Basalt", level = 1, locked = "x" },
+			}
+			data.discovered = { Geode = true, Junk = 5 }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.schemaVersion, 16)
+			T.equal(data.settings.floating, true, "floating stays the default")
+			T.equal(data.settings.autoIncubate, true)
+			T.equal(data.settings.keepNewTypes, true)
+			T.equal(data.settings.autoSell.Common, true)
+			T.equal(data.settings.autoSell.Legendary, nil, "Legendary can't be auto-sold")
+			T.equal(data.settings.autoSell.Rare, nil)
+			T.equal(data.planets.p1.locked, true)
+			T.equal(data.planets.p2.locked, nil)
+			T.truthy(data.discovered.Geode and data.discovered.Aurora and data.discovered.Basalt)
+			T.equal(data.discovered.Junk, nil)
+		end)
+
 		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()
 			local data = ProfileSchema.default()
 			data.schemaVersion = 12

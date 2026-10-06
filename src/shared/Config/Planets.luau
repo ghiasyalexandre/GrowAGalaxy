@@ -523,4 +523,23 @@ return {
 		Crystal = "DiamondCrystal",
 	} :: { [string]: string },
 	LEGACY_FALLBACK = "Basalt", -- for an old planet id that's no longer known
+
+	-- Selling a planet (from the inventory, never one in orbit or locked)
+	-- pays SELL_VALUE[rarity] plus SELL_LEVEL_REFUND of the Stardust spent
+	-- levelling it. Values are kept low enough that a mystery egg's expected
+	-- sale value stays under its price (ConfigCheck), so buying eggs to sell
+	-- them never pays.
+	SELL_VALUE = {
+		Common = 40,
+		Uncommon = 100,
+		Rare = 300,
+		Epic = 1000,
+		Legendary = 3000,
+		Interstellar = 10000,
+	} :: { [string]: number },
+	SELL_LEVEL_REFUND = 0.5,
+	-- Rarities a player may set to sell automatically when they hatch.
+	AUTO_SELL_RARITIES = { "Common", "Uncommon", "Rare", "Epic" } :: { string },
+	-- Planets a player may own at once; a planet hatching past it is sold.
+	MAX_PLANETS = 500,
 }

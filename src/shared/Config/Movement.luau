@@ -37,6 +37,12 @@ local Movement = {
 	-- many studs of gap under the feet, pushed back at FLOOR_PUSH studs per
 	-- second for every stud they sink.
 	SUIT_FLOOR_GAP = 0.6,
+	-- Floating off (Settings): with a floor this close below their feet,
+	-- players walk on it under WALK_GRAVITY (their own character only; the
+	-- world stays zero-g). Further out they float as usual.
+	WALK_GRAVITY = 196.2,
+	WALK_FLOOR_RANGE = 24, -- studs below the feet
+	WALK_MAX_FALL_SPEED = 40, -- studs per second (the flight guard allows ~60)
 	SUIT_FLOOR_PUSH = 10,
 	-- Suit sound (SuitSoundController): the default footsteps, jump, landing
 	-- and falling sounds are silenced (nobody walks in zero-g); instead a soft

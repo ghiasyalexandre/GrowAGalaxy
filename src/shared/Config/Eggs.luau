@@ -33,9 +33,15 @@ return {
 		Legendary = 150,
 		Interstellar = 400,
 	} :: { [string]: number },
+	-- Mystery eggs bought in one go (each at its own rising price).
+	MULTI_BUY = { 1, 5, 10 } :: { number },
 	HATCH_SLOTS = 5,
 	MAX_UNHATCHED = 50, -- eggs a player may hold unhatched at once
 	-- Seconds between rechecks of a player's paid-random-item policy when
 	-- Roblox couldn't answer.
 	POLICY_RETRY = 30,
+	-- Hatches of this rarity or rarer are announced to the whole server and
+	-- shown on the ISS Egg Lab's hatch board (last HATCH_FEED_SIZE).
+	ANNOUNCE_RARITY = "Epic",
+	HATCH_FEED_SIZE = 6,
 }

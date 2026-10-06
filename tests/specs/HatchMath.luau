@@ -66,6 +66,54 @@ return function(T, Loader)
 			T.equal(due[2], "5")
 		end)
 
+		T.test("advance finishes in end order; auto-start chains eggs offline", function()
+			local waiting = {
+				e1 = { outcome = "Basalt", guaranteed = false, boughtAt = 0 }, -- 10 s
+				e2 = { outcome = "Desert", guaranteed = false, boughtAt = 0 }, -- 10 s
+				e3 = { outcome = "Aurora", guaranteed = false, boughtAt = 0 }, -- 80 s
+			}
+			local hatches = {}
+			HatchMath.begin(waiting, hatches, "e1", 1, 0)
+			-- Away for 25 s: e1 ends at 10, e2 starts then and ends at 20,
+			-- e3 starts at 20 and is still hatching.
+			local done = HatchMath.advance(waiting, hatches, 25, true)
+			T.equal(#done, 2)
+			T.equal(done[1].typeId, "Basalt")
+			T.equal(done[1].at, 10)
+			T.equal(done[2].typeId, "Desert")
+			T.equal(done[2].at, 20)
+			T.equal(hatches["1"].outcome, "Aurora")
+			T.equal(hatches["1"].startedAt, 20)
+			T.equal(next(waiting), nil)
+			-- Nothing again until it's due, and never twice.
+			T.equal(#HatchMath.advance(waiting, hatches, 99, true), 0)
+			T.equal(#HatchMath.advance(waiting, hatches, 100, true), 1)
+			T.equal(#HatchMath.advance(waiting, hatches, 1000, true), 0)
+		end)
+
+		T.test("without auto-start a freed chamber stays empty", function()
+			local waiting = eggs()
+			local hatches = {}
+			HatchMath.begin(waiting, hatches, "e1", 1, 0)
+			T.equal(#HatchMath.advance(waiting, hatches, 50, false), 1)
+			T.equal(hatches["1"], nil)
+			T.truthy(waiting.e2)
+		end)
+
+		T.test("fill puts the oldest eggs into every free chamber", function()
+			local waiting = {}
+			for index = 1, E.HATCH_SLOTS + 2 do
+				waiting[`e{index}`] = { outcome = "Basalt", guaranteed = false, boughtAt = 0 }
+			end
+			local hatches = {}
+			HatchMath.begin(waiting, hatches, "e7", 2, 0)
+			T.equal(HatchMath.fill(waiting, hatches, 5), E.HATCH_SLOTS - 1)
+			T.equal(hatches["1"].eggId, "e1")
+			T.equal(hatches["2"].eggId, "e7", "a busy chamber is left alone")
+			T.equal(hatches["3"].eggId, "e2")
+			T.truthy(waiting[`e{E.HATCH_SLOTS}`], "the newest waits")
+		end)
+
 		T.test("a planet type this server doesn't know keeps waiting", function()
 			local hatches =
 				{ ["1"] = { eggId = "e1", outcome = "FutureType", startedAt = 0, endsAt = 1 } }

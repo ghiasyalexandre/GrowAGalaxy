@@ -13,4 +13,8 @@ return {
 	-- Seconds between writes for each player (only when the balance changed);
 	-- a player's balance is also written when they leave.
 	WRITE_INTERVAL = 60,
+	-- The ISS Star Lounge board: the top BOARD_SIZE balances, read every
+	-- READ_INTERVAL seconds.
+	BOARD_SIZE = 10,
+	READ_INTERVAL = 120,
 }

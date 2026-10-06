@@ -117,6 +117,24 @@ local function sized(button: TextButton, width: number): TextButton
 	return button
 end
 
+-- Whether this planet type is in the player's Planet Index.
+local function discovered(typeId: string): boolean
+	local profile = ClientState.profile
+	return profile ~= nil and profile.discovered ~= nil and profile.discovered[typeId] == true
+end
+
+local function indexCount(): number
+	local profile = ClientState.profile
+	local seen: { [string]: boolean } = if profile and profile.discovered
+		then profile.discovered
+		else {}
+	local n = 0
+	for _ in seen do
+		n += 1
+	end
+	return n
+end
+
 local function planetRow(
 	order: number,
 	def: PlanetsConfig.PlanetTypeDef,
@@ -129,8 +147,11 @@ local function planetRow(
 	Theme.label(row, {
 		Position = UDim2.fromOffset(52, 4),
 		Size = UDim2.new(1, -170, 0, 20),
-		Text = def.displayName,
+		Text = if discovered(def.id)
+			then `{def.displayName}  ✓`
+			else `{def.displayName}  ·  not in your Planet Index yet`,
 		TextSize = 15,
+		TextColor3 = if discovered(def.id) then C.text else C.subtle,
 	})
 	Theme.label(row, {
 		Position = UDim2.fromOffset(52, 24),
@@ -179,7 +200,7 @@ local function showMystery()
 	icon.Position = UDim2.fromOffset(12, 16)
 	Theme.label(card, {
 		Position = UDim2.fromOffset(78, 8),
-		Size = UDim2.new(1, -270, 0, 24),
+		Size = UDim2.new(1, -90 - #E.MULTI_BUY * 112, 0, 24),
 		Text = "Mystery Planet Egg",
 		TextSize = 20,
 		Font = Enum.Font.GothamBlack,
@@ -187,8 +208,8 @@ local function showMystery()
 	})
 	Theme.label(card, {
 		Position = UDim2.fromOffset(78, 34),
-		Size = UDim2.new(1, -270, 0, 40),
-		Text = `{whole(price)} {CURRENCY}  ·  one random planet (duplicates possible)  ·  you have {whole(
+		Size = UDim2.new(1, -90 - #E.MULTI_BUY * 112, 0, 40),
+		Text = `{whole(price)} {CURRENCY}  ·  one random planet each, rising per egg, duplicates possible  ·  you have {whole(
 			stardust
 		)}`,
 		TextWrapped = true,
@@ -198,23 +219,38 @@ local function showMystery()
 		TextSize = 13,
 		TextColor3 = C.subtle,
 	})
-	local full = held >= E.MAX_UNHATCHED
-	local affordable = stardust >= price
-	local button
-	if not allowed then
-		button = Theme.button(card, "Unavailable", "disabled", nil)
-	elseif full then
-		button = Theme.button(card, "Egg storage full", "disabled", nil)
-	elseif not affordable then
-		button = Theme.button(card, `Need {fmt(price)}`, "disabled", nil)
-	else
-		button = Theme.button(card, `Buy · {fmt(price)}`, "buy", function()
-			buy("buyMystery", price)
-		end)
+	-- Buy 1, 5 or 10 at once (Config.Eggs.MULTI_BUY), each egg at its own price.
+	local first: TextButton? = nil
+	for index = #E.MULTI_BUY, 1, -1 do
+		local count = E.MULTI_BUY[index]
+		local _, total = EggMath.batch(bought, count)
+		local room = held + count <= E.MAX_UNHATCHED
+		local label = if not allowed
+			then "Unavailable"
+			elseif not room then "No room"
+			elseif stardust < total then `x{count} · need {fmt(total)}`
+			else `x{count} · {fmt(total)}`
+		local ok = allowed and room and stardust >= total
+		local button = Theme.button(
+			card,
+			label,
+			if ok then "buy" else "disabled",
+			if ok
+				then function()
+					buy("buyMystery", total, count)
+				end
+				else nil
+		)
+		button.AnchorPoint = Vector2.new(1, 0.5)
+		button.Position = UDim2.new(1, -10 - (#E.MULTI_BUY - index) * 112, 0.5, 0)
+		button.Size = UDim2.fromOffset(106, 38)
+		button.TextSize = 13
+		if count == 1 then
+			first = button
+		end
 	end
-	sized(button, 170)
-	if Input.device() == "gamepad" and allowed then
-		GuiService.SelectedObject = button
+	if Input.device() == "gamepad" and allowed and first then
+		GuiService.SelectedObject = first
 	end
 
 	local order = 2
@@ -243,7 +279,7 @@ local function showMystery()
 	Theme.label(odds, {
 		Position = UDim2.fromOffset(6, 4),
 		Size = UDim2.new(1, -12, 1, -4),
-		Text = "Odds for every planet in a mystery egg",
+		Text = `Odds for every planet in a mystery egg  ·  Planet Index {indexCount()}/{#P.ORDER}`,
 		TextSize = 16,
 		Font = Enum.Font.GothamBlack,
 		TextColor3 = C.gold,
@@ -479,6 +515,7 @@ function EggShopController.start()
 			or field == "eggs"
 			or field == "eggsBought"
 			or field == "hatches"
+			or field == "discovered"
 			or field == "*"
 		then
 			refresh()

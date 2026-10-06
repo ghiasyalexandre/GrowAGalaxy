@@ -103,6 +103,64 @@ return function(T, Loader)
 			T.near(StarMath.totalIncome(stars, planets), StarMath.starIncome("BlackHole", 1))
 		end)
 
+		T.test("sale value: rarity value plus half the levelling spent", function()
+			T.equal(
+				PlanetInventory.sellValue({ typeId = "Basalt", level = 1 }),
+				P.SELL_VALUE.Common
+			)
+			local spent = StarMath.planetLevelCost("Aurora", 1)
+				+ StarMath.planetLevelCost("Aurora", 2)
+			T.equal(
+				PlanetInventory.sellValue({ typeId = "Aurora", level = 3 }),
+				P.SELL_VALUE.Rare + math.floor(spent * P.SELL_LEVEL_REFUND)
+			)
+			T.equal(PlanetInventory.sellValue({ typeId = "Nope", level = 1 }), 0)
+		end)
+
+		T.test("only unlocked inventory planets can be sold", function()
+			local _, planets = setup()
+			planets.p2.locked = true
+			T.equal(select(2, PlanetInventory.canSell(planets, "p1")), "InOrbit")
+			T.equal(select(2, PlanetInventory.canSell(planets, "p2")), "Locked")
+			T.truthy((PlanetInventory.canSell(planets, "p3")))
+			T.equal(select(2, PlanetInventory.canSell(planets, "p9")), "UnknownPlanet")
+		end)
+
+		T.test("equip best fills every orbit with the top earners", function()
+			local stars = {
+				s1 = { typeId = "BrownDwarf", level = 1, pos = { x = 0, y = 0, z = 0 } }, -- 3 orbits
+			}
+			local planets = {
+				a = { typeId = "Basalt", level = 1, star = "s1", slot = 1 }, -- 2/s, the weakest
+				b = { typeId = "Moss", level = 1, star = "s1", slot = 2 }, -- 5/s
+				c = { typeId = "Singularity", level = 1 }, -- 1250/s
+				d = { typeId = "Aurora", level = 1 }, -- 40/s
+				e = { typeId = "Desert", level = 1 }, -- 4/s
+			}
+			local layout = PlanetInventory.best(planets, stars)
+			T.equal(layout.a, nil, "the weakest leaves orbit")
+			T.equal(layout.e, nil)
+			T.equal(layout.b.slot, 2, "a kept planet doesn't move")
+			T.truthy(layout.c and layout.d, "the best two are in")
+			local used = {}
+			for _, place in layout do
+				T.equal(place.star, "s1")
+				T.falsy(used[place.slot], "no two share a slot")
+				used[place.slot] = true
+			end
+		end)
+
+		T.test("equip best leaves an already best layout alone", function()
+			local stars, planets = setup()
+			planets.p2.star, planets.p2.slot = "s2", 1
+			planets.p3.star, planets.p3.slot = "s2", 2
+			local layout = PlanetInventory.best(planets, stars)
+			for id, planet in planets do
+				T.equal(layout[id].star, planet.star, id)
+				T.equal(layout[id].slot, planet.slot, id)
+			end
+		end)
+
 		T.test("new ids count up", function()
 			local id, nextId = PlanetInventory.newId(7)
 			T.equal(id, "p7")
@@ -141,6 +199,15 @@ return function(T, Loader)
 			for index, rarity in P.RARITY_ORDER do
 				T.equal(P.RARITIES[rarity].hatchSeconds, expected[index], rarity)
 			end
+		end)
+
+		T.test("buying mystery eggs to sell them never pays", function()
+			local expected = 0
+			for _, id in P.ORDER do
+				local def = P.BY_ID[id]
+				expected += def.weight / P.WEIGHT_TOTAL * P.SELL_VALUE[def.rarity]
+			end
+			T.truthy(expected < Config.Eggs.PRICE_BASE, `expected sale {expected}`)
 		end)
 
 		T.test("every old planet maps to a type that earns at least as much", function()

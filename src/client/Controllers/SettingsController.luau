@@ -4,6 +4,8 @@
 -- (SettingChanged) and only changes this player's view:
 --
 --   Effects         full or reduced (fewer particles, no ambient motion)
+--   Floating        float everywhere, or walk on floors (SuitController)
+--   Auto-incubate   a freed incubator chamber takes the next waiting egg
 --   Sound effects   SFX volume, 0 to 100% (AudioController)
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
@@ -242,10 +244,21 @@ refresh = function()
 			ClientState.setReducedEffects(not ClientState.reducedEffects)
 		end
 	)
-	slider(2, "Sound effects", "Lasers, explosions, your suit", "sfxVolume", current.sfxVolume)
-	slider(3, "Music", "Space music; disco in boss fights", "musicVolume", current.musicVolume)
 	toggle(
-		5,
+		2,
+		"Floating",
+		"Off: walk on floors; you still float in open space",
+		current.floating ~= false,
+		"Float",
+		"Walk",
+		function()
+			save("floating", current.floating == false)
+		end
+	)
+	slider(3, "Sound effects", "Lasers, explosions, your suit", "sfxVolume", current.sfxVolume)
+	slider(4, "Music", "Space music; disco in boss fights", "musicVolume", current.musicVolume)
+	toggle(
+		6,
 		"Controls hint",
 		"The list of controls along the bottom of the screen",
 		current.showControls ~= false,
@@ -257,7 +270,7 @@ refresh = function()
 		end
 	)
 	toggle(
-		4,
+		5,
 		"Galaxy boundary",
 		"The glowing box around your region",
 		current.showBounds ~= false,
@@ -268,7 +281,18 @@ refresh = function()
 			applyBounds()
 		end
 	)
-	codeRow(6)
+	toggle(
+		7,
+		"Auto-incubate",
+		"A free incubator chamber starts your next egg, even offline",
+		current.autoIncubate ~= false,
+		"On",
+		"Off",
+		function()
+			save("autoIncubate", current.autoIncubate == false)
+		end
+	)
+	codeRow(8)
 end
 
 local function build()

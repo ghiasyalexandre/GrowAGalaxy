@@ -25,6 +25,7 @@ export type PlanetRecord = {
 	star: string?,
 	slot: number?,
 	custom: { [string]: any }?, -- per-planet customisation (none on sale yet)
+	locked: boolean?, -- protected from selling (by hand, in bulk or automatically)
 }
 
 -- An unhatched egg (Config.Eggs). Its planet was chosen on the server when
@@ -71,6 +72,10 @@ export type Settings = {
 	pvp: boolean,
 	showBounds: boolean, -- draw your galaxy region's boundary box
 	showControls: boolean, -- the controls hint along the bottom of the screen
+	floating: boolean, -- false: walk on floors (magnetic boots); float only in open space
+	autoIncubate: boolean, -- start the next waiting egg when a chamber frees up
+	keepNewTypes: boolean, -- auto-sell never sells a planet type not discovered before
+	autoSell: { [string]: boolean }, -- rarity -> sell such planets as they hatch
 }
 
 export type Profile = {
@@ -110,6 +115,7 @@ export type Profile = {
 	-- Daily wheel (Config.Wheel): unix seconds of the next free spin and the
 	-- index of the last prize won (0 = never spun).
 	wheel: { nextSpin: number, lastPrize: number },
+	discovered: { [string]: boolean }, -- planet types ever owned (the Planet Index)
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.
 	boosts: { mining: number, star: number },
@@ -150,6 +156,7 @@ export type ProfileView = {
 	-- Hatches as the owner may see them: rarity and times, not the planet.
 	hatches: { [string]: { rarity: string, startedAt: number, endsAt: number } },
 	wheel: { nextSpin: number, lastPrize: number },
+	discovered: { [string]: boolean },
 }
 
 export type RegionInfo = {

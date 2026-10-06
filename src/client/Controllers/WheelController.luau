@@ -4,6 +4,9 @@
 -- six equal segments with their Stardust prizes, the exact odds beside the
 -- wheel, the countdown and the Spin button.
 --
+-- The ISS Star Lounge's Daily Wheel kiosk (prompt OpenPanel = "Wheel")
+-- opens the same panel.
+--
 -- Spin asks the server (WheelSystem), which picks and grants the prize first;
 -- the wheel then turns to land on it. With Reduced effects the wheel turns
 -- less than once in a second and the rim lights and badge stay still. There
@@ -11,6 +14,7 @@
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -468,6 +472,12 @@ function WheelController.init()
 end
 
 function WheelController.start()
+	-- The ISS Star Lounge kiosk opens the wheel too.
+	ProximityPromptService.PromptTriggered:Connect(function(prompt)
+		if prompt:GetAttribute("OpenPanel") == "Wheel" and not gui.Enabled then
+			open()
+		end
+	end)
 	local elapsed = 0
 	RunService.Heartbeat:Connect(function(dt)
 		elapsed += dt

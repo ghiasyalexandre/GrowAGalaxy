@@ -7,6 +7,13 @@
 --       puts one of your waiting eggs into that chamber (or the first free
 --       one). DataSystem.startHatch moves the egg and records the hatch in one
 --       step; the end time comes from the planet's rarity.
+--   "fill"  -> (ok, message) the oldest waiting eggs into every free chamber.
+--
+-- With the autoIncubate setting a chamber that frees up takes the next
+-- waiting egg by itself (also while offline). Hatched planets of a rarity
+-- the player auto-sells are sold on the spot (DataSystem.advanceHatches).
+-- Hatches of Config.Eggs.ANNOUNCE_RARITY or rarer are announced to the
+-- whole server and listed in the hatch feed (the ISS Egg Lab board).
 --
 -- Hatches are saved as unix start and end times, so they keep going while
 -- the player is offline. Every second (and when a profile loads) any hatch
@@ -29,9 +36,9 @@ local Workspace = game:GetService("Workspace")
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
-local HatchMath = require(ReplicatedStorage.Shared.Logic.HatchMath)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Notify = require(script.Parent.Parent.Util.Notify)
+local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local StationSystem = require(script.Parent.StationSystem)
 
@@ -42,6 +49,12 @@ local P = Config.Planets
 local SUMMARY_DELAY = 9
 
 local HatchSystem = {}
+
+export type FeedEntry = { name: string, typeId: string, at: number }
+
+-- Fires after a rare hatch joins the feed.
+HatchSystem.feedChanged = Signal.new() :: Signal.Signal<()>
+local feed: { FeedEntry } = {}
 
 local requestLimit = RateLimiter.new(4, 2)
 local elapsed = 0
@@ -74,28 +87,76 @@ local function show(player: Player)
 	end
 end
 
--- Completes every finished hatch. Returns the planet types granted.
-local function settle(player: Player, now: number): { string }
-	local profile = DataSystem.getProfile(player)
-	local granted: { string } = {}
-	if profile == nil or next(profile.hatches) == nil then
-		return granted
+local function announceRank(): number
+	return P.RARITIES[E.ANNOUNCE_RARITY].index
+end
+
+-- A rare hatch: everyone in the server hears about it, and it joins the feed.
+local function announce(player: Player, typeId: string)
+	local def = P.BY_ID[typeId]
+	if def == nil or P.RARITIES[def.rarity].index < announceRank() then
+		return
 	end
-	for _, chamber in HatchMath.due(profile.hatches, now) do
-		local planetId, typeId = DataSystem.completeHatch(player, chamber, now)
-		if planetId and typeId then
-			table.insert(granted, typeId)
-			local part = chamberPart(player, tonumber(chamber) or 0)
-			if part then
-				part:SetAttribute("HatchedType", typeId)
-				part:SetAttribute("HatchedAt", Workspace:GetServerTimeNow())
-			end
+	table.insert(feed, 1, { name = player.DisplayName, typeId = typeId, at = os.time() })
+	while #feed > E.HATCH_FEED_SIZE do
+		table.remove(feed)
+	end
+	HatchSystem.feedChanged:Fire()
+	local rarity = P.RARITIES[def.rarity].displayName
+	for _, other in Players:GetPlayers() do
+		if other ~= player then
+			Notify.send(other, `{player.DisplayName} hatched a {rarity} {def.displayName}!`)
 		end
 	end
-	if #granted > 0 then
-		show(player)
+end
+
+-- Completes every finished hatch (DataSystem.advanceHatches) and shows the
+-- newest one per chamber popping out. Returns what hatched.
+local function settle(player: Player, now: number): { DataSystem.HatchResult }
+	local results = DataSystem.advanceHatches(player, now)
+	if #results == 0 then
+		return results
 	end
-	return granted
+	local latest: { [string]: string } = {}
+	for _, result in results do
+		latest[result.chamber] = result.typeId
+		announce(player, result.typeId)
+	end
+	for chamber, typeId in latest do
+		local part = chamberPart(player, tonumber(chamber) or 0)
+		if part then
+			part:SetAttribute("HatchedType", typeId)
+			part:SetAttribute("HatchedAt", Workspace:GetServerTimeNow())
+		end
+	end
+	show(player)
+	return results
+end
+
+local function typesOf(results: { DataSystem.HatchResult }): { string }
+	local types: { string } = {}
+	for _, result in results do
+		table.insert(types, result.typeId)
+	end
+	return types
+end
+
+-- What was sold on hatching, as " (3 sold for 120 Stardust)", or "".
+local function soldText(results: { DataSystem.HatchResult }): string
+	local count, total, full = 0, 0, false
+	for _, result in results do
+		if result.sold then
+			count += 1
+			total += result.sold
+			full = full or result.reason == "full"
+		end
+	end
+	if count == 0 then
+		return ""
+	end
+	return ` ({count} auto-sold for {total} {Config.Economy.CURRENCY_NAME}{if full
+		then "; your planet storage is full"
+		else ""})`
 end
 
 -- "Aurora World (Rare), 2x Basalt World (Common)"
@@ -167,6 +228,13 @@ local function onRequest(player: Player, action: unknown, a: unknown, b: unknown
 	end
 	if action == "start" then
 		return start(player, a, b)
+	elseif action == "fill" then
+		local started = DataSystem.fillChambers(player)
+		show(player)
+		if started == 0 then
+			return false, "No free chamber, or no eggs waiting."
+		end
+		return true, `{started} {if started == 1 then "egg is" else "eggs are"} incubating.`
 	end
 	return false, "That isn't something the incubator does."
 end
@@ -182,8 +250,8 @@ function HatchSystem.start()
 					Notify.send(
 						player,
 						`While you were away, {#hatched} {if #hatched == 1 then "egg" else "eggs"} hatched: {summary(
-							hatched
-						)}. Equip {if #hatched == 1 then "it" else "them"} from Planets (P).`
+							typesOf(hatched)
+						)}{soldText(hatched)}. See them in Planets (P).`
 					)
 				end
 			end)
@@ -198,18 +266,30 @@ function HatchSystem.start()
 		elapsed = 0
 		local now = os.time()
 		for _, player in Players:GetPlayers() do
-			local hatched = settle(player, now)
-			for _, typeId in hatched do
-				local def = P.BY_ID[typeId]
+			for _, result in settle(player, now) do
+				local def = P.BY_ID[result.typeId]
 				if def then
+					local rarity = P.RARITIES[def.rarity].displayName
 					Notify.send(
 						player,
-						`A {def.displayName} hatched ({P.RARITIES[def.rarity].displayName})! Equip it from Planets (P).`
+						if result.sold
+							then `A {def.displayName} hatched ({rarity}) and was sold for {result.sold} {Config.Economy.CURRENCY_NAME}{if result.reason
+									== "full"
+								then ": your planet storage is full"
+								else ""}.`
+							else `A {def.displayName} hatched ({rarity}){if result.new
+								then ": a new type for your Planet Index!"
+								else "!"} Equip it from Planets (P).`
 					)
 				end
 			end
 		end
 	end)
+end
+
+-- The latest rare hatches in this server, newest first.
+function HatchSystem.feed(): { FeedEntry }
+	return table.clone(feed)
 end
 
 return HatchSystem

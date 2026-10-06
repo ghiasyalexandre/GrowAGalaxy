@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (overhaul stages 1-5 merged into `main`).
+Last updated: 2026-10-05 (stage 35 merged into `main`).
 
 ## Status by stage
 
@@ -40,6 +40,7 @@ Last updated: 2026-10-05 (overhaul stages 1-5 merged into `main`).
 | 32. Overhaul stage 3: ISS Planet Egg Lab (mystery eggs with exact odds rolled and saved on the server at purchase, chosen-planet eggs, PolicyService paid-random-item check with a safe "unknown" default, odds and details disclosure) ([doc](docs/stage-32-planet-eggs.md)) | Merged | Passing (205 tests) | **Not yet** |
 | 33. Overhaul stage 4: hangar Incubator Bay with 5 chambers (atomic start, unix timestamps so eggs hatch offline, exactly-once grant that frees the chamber, offline summary, forming and reveal visuals, visitors view only) ([doc](docs/stage-33-hangar-incubator.md)) | Merged | Passing (211 tests) | **Not yet** |
 | 34. Overhaul stage 5: Daily Wheel (free spin every 24 h, server picks and grants before the animation, fixed prizes and shown odds, reduced-motion spin) ([doc](docs/stage-34-daily-wheel.md)) | Merged | Passing (215 tests) | **Not yet** |
+| 35. ISS directory, Top Stardust board, Daily Wheel kiosk, rare-hatch board and planet gallery; planet selling, locking, bulk and auto-sell, filters, Equip best, Planet Index; multi-buy eggs, auto-incubate with offline chaining, Fill all; Floating off (walk on floors); save v16 ([doc](docs/stage-35-iss-gacha-inventory.md)) | Merged | Passing (225 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 
@@ -67,7 +68,8 @@ Last updated: 2026-10-05 (overhaul stages 1-5 merged into `main`).
   [planet inventory and migration](docs/stage-31-planet-inventory.md) (join with an existing
   save first, to see the v15 migration), [Planet Egg Lab](docs/stage-32-planet-eggs.md),
   [incubator](docs/stage-33-hangar-incubator.md) (including leaving and rejoining while an egg
-  hatches), [Daily Wheel](docs/stage-34-daily-wheel.md). Report Output errors. Nothing in these
+  hatches), [Daily Wheel](docs/stage-34-daily-wheel.md), then
+  [stage 35](docs/stage-35-iss-gacha-inventory.md) (walking, selling, auto-sell, multi-buy, ISS boards). Report Output errors. Nothing in these
   stages spends Robux or needs new product ids.
 
 - Optional purchases (stage 17) are built but off. To launch them: create the passes and
