@@ -638,6 +638,12 @@ function ConfigCheck.run(config: any): { string }
 	end
 	for index, slot in stars.SLOTS do
 		local where = `Stars slot {index}`
+		if
+			slot.orbit * math.sin(math.rad(math.abs(slot.tilt))) + largestPlanet
+			> galaxy.SYSTEM_HALF_HEIGHT
+		then
+			fail(`{where}: a tilted orbit reaches past Galaxy.SYSTEM_HALF_HEIGHT`)
+		end
 		if slot.orbit + largestPlanet > galaxy.SYSTEM_RADIUS then
 			fail(`{where}: orbit reaches past Galaxy.SYSTEM_RADIUS`)
 		end
@@ -756,11 +762,15 @@ function ConfigCheck.run(config: any): { string }
 	if planetOrbits[#planetOrbits] + planetExtent > galaxy.SYSTEM_RADIUS then
 		fail("Galaxy: the outermost orbit reaches beyond SYSTEM_RADIUS")
 	end
-	if galaxy.MIN_STAR_SPACING < galaxy.SYSTEM_RADIUS + galaxy.STAR_MAX_RADIUS then
-		fail("Galaxy: MIN_STAR_SPACING must keep every planet out of a neighbouring star")
+	if
+		galaxy.WALL_MARGIN < galaxy.SYSTEM_RADIUS
+		or galaxy.WALL_MARGIN_Y < galaxy.SYSTEM_HALF_HEIGHT
+	then
+		fail("Galaxy: the wall margins must keep a whole footprint inside the region")
 	end
-	if galaxy.WALL_MARGIN < galaxy.SYSTEM_RADIUS then
-		fail("Galaxy: WALL_MARGIN must be at least SYSTEM_RADIUS")
+	-- The footprint's height covers the tallest star and the most tilted orbit.
+	if galaxy.STAR_MAX_RADIUS > galaxy.SYSTEM_HALF_HEIGHT then
+		fail("Galaxy: SYSTEM_HALF_HEIGHT must cover the biggest star")
 	end
 
 	local previousSize = nil
@@ -784,18 +794,17 @@ function ConfigCheck.run(config: any): { string }
 		if expansion.maxSystems < previousSystems then
 			fail(`Galaxy: expansion {level} allows fewer systems than the one before`)
 		end
-		-- Enough room for maxSystems stars on a MIN_STAR_SPACING lattice?
+		-- Enough room for maxSystems footprints on a lattice?
+		local spacing = 2 * galaxy.SYSTEM_RADIUS
 		local fit = 1
-		for _, axis in { size.x, size.y } do
+		for _, axis in { size.x, size.z } do
 			local inner = axis - 2 * galaxy.WALL_MARGIN
-			if inner < 0 then
-				fit = 0
-			else
-				fit *= math.floor(inner / galaxy.MIN_STAR_SPACING) + 1
-			end
+			fit *= if inner < 0 then 0 else math.floor(inner / spacing) + 1
 		end
-		local innerDepth = size.z - 2 * galaxy.WALL_MARGIN
-		fit *= if innerDepth < 0 then 0 else math.floor(innerDepth / galaxy.MIN_STAR_SPACING) + 1
+		local innerHeight = size.y - 2 * galaxy.WALL_MARGIN_Y
+		fit *= if innerHeight < 0
+			then 0
+			else math.floor(innerHeight / (2 * galaxy.SYSTEM_HALF_HEIGHT)) + 1
 		if fit < expansion.maxSystems then
 			fail(`Galaxy: expansion {level} cannot physically fit {expansion.maxSystems} systems`)
 		end

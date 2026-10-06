@@ -47,10 +47,20 @@ local BLACK_HOLE = S.ORDER[#S.ORDER]
 
 local REJECTIONS: { [string]: string } = {
 	Invalid = "That isn't a valid spot.",
-	OutOfBounds = "Stars must sit inside your galaxy, away from its edges.",
+	OutOfBounds = "Stars must sit inside your galaxy, away from its side walls.",
+	TooHigh = "Too high or too low: keep the star inside your galaxy's height.",
 	TooClose = "Too close to another star: its planets need room.",
 	AtCapacity = "Your galaxy can't hold more stars yet.",
 }
+
+-- The message for a placement rejection, with how far off a clash is.
+local function rejectionText(rejection: string?, short: number?): string
+	local text = REJECTIONS[rejection or "Invalid"] or REJECTIONS.Invalid
+	if rejection == "TooClose" and short then
+		text ..= ` Move it {short} studs further away.`
+	end
+	return text
+end
 
 local StarSystem = {}
 
@@ -125,9 +135,10 @@ local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean
 	if not PlacementRules.hasCapacity(owned, galaxy.expansion) then
 		return false, REJECTIONS.AtCapacity
 	end
-	local ok, rejection = PlacementRules.checkStar(pos, galaxy.expansion, positions(galaxy.stars))
+	local ok, rejection, short =
+		PlacementRules.checkStar(pos, galaxy.expansion, positions(galaxy.stars))
 	if not ok then
-		return false, REJECTIONS[rejection or "Invalid"]
+		return false, rejectionText(rejection, short)
 	end
 	local cost = StarMath.placeCost(def.id, owned) :: number
 	if not DataSystem.spendStardust(player, cost) then
@@ -166,10 +177,10 @@ local function move(player: Player, starId: unknown, rawPos: unknown): (boolean,
 	end
 	local id = starId :: string
 	local galaxy = profile.galaxy
-	local ok, rejection =
+	local ok, rejection, short =
 		PlacementRules.checkStar(pos, galaxy.expansion, positions(galaxy.stars, id))
 	if not ok then
-		return false, REJECTIONS[rejection or "Invalid"]
+		return false, rejectionText(rejection, short)
 	end
 	DataSystem.updateStar(player, id, { pos = pos })
 	model:PivotTo(CFrame.new(RegionSystem.toWorld(region, pos)))

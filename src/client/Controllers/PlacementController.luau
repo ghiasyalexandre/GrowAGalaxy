@@ -1,22 +1,29 @@
 --!strict
--- Placing or moving a star with a ghost preview. The ghost floats ahead of
--- the camera; the player changes its distance and height, can snap it to a
--- grid, and sees at once whether the spot is valid (green) or not (red, with
--- the reason). A faint sphere shows the room the star's planets will need.
--- Confirming asks the server (StarRequest), which re-checks everything.
+-- Placing or moving a star with a ghost preview (Logic/PlacementRules, the
+-- same rules the server re-runs on confirm).
 --
--- Controls (bound above everything else while placing):
---   Confirm   Enter / ButtonA / touch     Cancel   Backspace / ButtonB / touch
---   Higher    E / DPadUp / touch          Lower    Q / DPadDown / touch
---   Nearer / farther: mouse wheel / DPadLeft, DPadRight
+-- The ghost sits on a horizontal plane at its elevation, under your aim: the
+-- mouse on a computer, the middle of the screen on a gamepad or phone (turn
+-- the camera to steer it). It's always kept inside your galaxy's build box,
+-- which is drawn as a glowing frame, and it starts at the valid spot nearest
+-- your aim. Each other star shows its reserved footprint as a faint disc; the
+-- ghost's own disc turns green (valid) or red, and the panel says why not.
+--
+-- Controls (on-screen buttons on every device, plus):
+--   Confirm   Enter / ButtonA          Cancel   Backspace / ButtonB
+--   Higher    E / DPadUp / wheel up    Lower    Q / DPadDown / wheel down
 --   Snap to grid on/off: T / ButtonY
 
 local ContextActionService = game:GetService("ContextActionService")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
+local Input = require(script.Parent.Parent.Input)
+local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -33,12 +40,15 @@ local CURRENCY = Config.Economy.CURRENCY_NAME
 local PRIORITY = Enum.ContextActionPriority.High.Value + 10
 local VALID = Color3.fromRGB(90, 230, 130)
 local INVALID = Color3.fromRGB(255, 80, 70)
+local FRAME = Color3.fromRGB(95, 227, 255)
+local SNAP_GRID = G.GRID_SNAP * 4
 
 local REASONS: { [string]: string } = {
 	Invalid = "Not a valid spot",
-	OutOfBounds = "Outside your galaxy (or too near its edge)",
-	TooClose = "Too close to another star",
-	AtCapacity = "Your galaxy is full",
+	OutOfBounds = "Too near your galaxy's edge",
+	TooHigh = "Too high or too low: press Lower / Higher",
+	TooClose = "Too close to another star's planets",
+	AtCapacity = "Your galaxy is full: expand it in the Shipyard",
 }
 
 export type Options = { mode: "place", typeId: string } | { mode: "move", starId: string }
@@ -46,30 +56,24 @@ export type Options = { mode: "place", typeId: string } | { mode: "move", starId
 local PlacementController = {}
 
 local active: Options? = nil
-local distance = S.GHOST_DISTANCE
-local height = 0
+local spot: Types.Vec3 = { x = 0, y = 0, z = 0 } -- region space
+local valid = false
 local snapping = false
 local busy = false
 local ghost: Part
 local footprint: Part
-local info: BillboardGui
-local infoText: TextLabel
-local current: Types.Vec3? = nil -- region-space spot, when valid
+local frameParts: { Part } = {}
+local discs: { Part } = {}
+local gui: ScreenGui
+local statusLabel: TextLabel
+local detailLabel: TextLabel
+local confirmButton: TextButton
 local starSource: () -> { [string]: Model } = function()
 	return {}
 end
 local renderConnection: RBXScriptConnection? = nil
 
-local ACTIONS = {
-	"Confirm",
-	"Cancel",
-	"Higher",
-	"Lower",
-	"Nearer",
-	"Farther",
-	"Snap",
-	"Wheel",
-}
+local ACTIONS = { "Confirm", "Cancel", "Higher", "Lower", "Snap", "Wheel" }
 
 local function regionCFrame(): CFrame?
 	local slot = ClientState.mySlot()
@@ -100,9 +104,71 @@ local function count(t: { [string]: any }): number
 	return n
 end
 
+local function localPart(shape: Enum.PartType, color: Color3, material: Enum.Material): Part
+	local part = Instance.new("Part")
+	part.Shape = shape
+	part.Color = color
+	part.Material = material
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.CastShadow = false
+	return part
+end
+
+-- A glowing frame around the build box, and a faint disc for every other
+-- star's footprint.
+local function drawGuides(region: CFrame, expansion: number, except: string?)
+	for _, part in frameParts do
+		part:Destroy()
+	end
+	for _, part in discs do
+		part:Destroy()
+	end
+	table.clear(frameParts)
+	table.clear(discs)
+	local box = PlacementRules.buildBox(expansion)
+	local lo = Vector3.new(box.min.x, box.min.y, box.min.z)
+	local hi = Vector3.new(box.max.x, box.max.y, box.max.z)
+	local size = hi - lo
+	local function edge(a: Vector3, b: Vector3)
+		local part = localPart(Enum.PartType.Block, FRAME, Enum.Material.Neon)
+		local mid = (a + b) / 2
+		part.Size = Vector3.new(1.5, 1.5, (b - a).Magnitude)
+		part.CFrame = region * CFrame.lookAt(mid, b)
+		part.Transparency = 0.35
+		part.Parent = Workspace.CurrentCamera
+		table.insert(frameParts, part)
+	end
+	for _, y in { lo.Y, hi.Y } do
+		edge(Vector3.new(lo.X, y, lo.Z), Vector3.new(hi.X, y, lo.Z))
+		edge(Vector3.new(lo.X, y, hi.Z), Vector3.new(hi.X, y, hi.Z))
+		edge(Vector3.new(lo.X, y, lo.Z), Vector3.new(lo.X, y, hi.Z))
+		edge(Vector3.new(hi.X, y, lo.Z), Vector3.new(hi.X, y, hi.Z))
+	end
+	if size.Y > 1 then
+		for _, x in { lo.X, hi.X } do
+			for _, z in { lo.Z, hi.Z } do
+				edge(Vector3.new(x, lo.Y, z), Vector3.new(x, hi.Y, z))
+			end
+		end
+	end
+	for _, other in others(region, except) do
+		local disc = localPart(Enum.PartType.Cylinder, FRAME, Enum.Material.ForceField)
+		disc.Size = Vector3.new(G.SYSTEM_HALF_HEIGHT * 2, G.SYSTEM_RADIUS * 2, G.SYSTEM_RADIUS * 2)
+		disc.CFrame = region
+			* CFrame.new(other.x, other.y, other.z)
+			* CFrame.Angles(0, 0, math.pi / 2)
+		disc.Transparency = 0.7
+		disc.Parent = Workspace.CurrentCamera
+		table.insert(discs, disc)
+	end
+end
+
 local function stop()
 	active = nil
-	current = nil
+	valid = false
 	for _, name in ACTIONS do
 		ContextActionService:UnbindAction("GaG_Place" .. name)
 	end
@@ -112,15 +178,23 @@ local function stop()
 	end
 	ghost.Parent = nil
 	footprint.Parent = nil
+	for _, part in frameParts do
+		part:Destroy()
+	end
+	for _, part in discs do
+		part:Destroy()
+	end
+	table.clear(frameParts)
+	table.clear(discs)
+	gui.Enabled = false
 end
 
 local function confirm()
 	local options = active
-	local spot = current
 	if options == nil or busy then
 		return
 	end
-	if spot == nil then
+	if not valid then
 		ClientState.notify:Fire("Find a valid (green) spot first.")
 		return
 	end
@@ -141,62 +215,98 @@ local function confirm()
 	end
 end
 
+-- The point under the aim on the horizontal plane at the ghost's height, in
+-- region space, or nil when the aim runs parallel to the plane.
+local function aimPoint(region: CFrame): Types.Vec3?
+	local camera = Workspace.CurrentCamera
+	local ray: Ray
+	if Input.device() == "keyboard" then
+		local mouse = UserInputService:GetMouseLocation()
+		ray = camera:ViewportPointToRay(mouse.X, mouse.Y)
+	else
+		local size = camera.ViewportSize
+		ray = camera:ViewportPointToRay(size.X / 2, size.Y / 2)
+	end
+	local origin = region:PointToObjectSpace(ray.Origin)
+	local direction = region:VectorToObjectSpace(ray.Direction)
+	if math.abs(direction.Y) < 1e-3 then
+		return nil
+	end
+	local t = (spot.y - origin.Y) / direction.Y
+	if t < 0 then
+		-- The plane is behind the aim: use the point straight ahead instead.
+		t = S.GHOST_DISTANCE
+	end
+	t = math.min(t, S.GHOST_MAX_DISTANCE * 3)
+	local hit = origin + direction * t
+	return { x = hit.X, y = spot.y, z = hit.Z }
+end
+
 local function update()
 	local options = active
 	local region = regionCFrame()
-	local camera = Workspace.CurrentCamera
 	local profile = ClientState.profile
-	if options == nil or region == nil or camera == nil or profile == nil then
+	if options == nil or region == nil or profile == nil then
 		return
 	end
-	local world = camera.CFrame.Position
-		+ camera.CFrame.LookVector * distance
-		+ Vector3.new(0, height, 0)
-	local p = region:PointToObjectSpace(world)
-	local spot: Types.Vec3 = { x = p.X, y = p.Y, z = p.Z }
-	if snapping then
-		spot = PlacementRules.snap(spot, G.GRID_SNAP * 4)
+	local aimed = aimPoint(region)
+	if aimed then
+		local target = PlacementRules.clamp(aimed, profile.expansion)
+		if snapping then
+			target = PlacementRules.clamp(PlacementRules.snap(target, SNAP_GRID), profile.expansion)
+		end
+		spot = { x = target.x, y = spot.y, z = target.z }
 	end
-	world = region:PointToWorldSpace(Vector3.new(spot.x, spot.y, spot.z))
 
 	local except = if options.mode == "move" then options.starId else nil
-	local ok, rejection = PlacementRules.checkStar(spot, profile.expansion, others(region, except))
-	local lines: { string } = {}
+	local ok, rejection, short =
+		PlacementRules.checkStar(spot, profile.expansion, others(region, except))
+	local title: string
+	local reason: string? = nil
 	if options.mode == "place" then
 		local owned = count(starSource())
-		if not PlacementRules.hasCapacity(owned, profile.expansion) then
-			ok, rejection = false, "AtCapacity"
-		end
 		local def = S.BY_ID[options.typeId]
 		local cost = StarMath.placeCost(options.typeId, owned) or 0
-		table.insert(lines, `{if def then def.displayName else "Star"}: {cost} {CURRENCY}`)
-		if profile.stardust < cost then
-			table.insert(lines, `You need {cost - profile.stardust} more {CURRENCY}`)
+		title = `{if def then def.displayName else "Star"}  ·  {cost} {CURRENCY}`
+		if not PlacementRules.hasCapacity(owned, profile.expansion) then
+			ok, rejection = false, "AtCapacity"
+		elseif profile.stardust < cost then
+			ok = false
+			reason = `You need {cost - profile.stardust} more {CURRENCY}`
 		end
 	else
-		table.insert(lines, "Moving star")
+		title = "Moving a star (its planets come along)"
 	end
-	table.insert(
-		lines,
-		`Height {math.floor(spot.y)}  ·  {math.floor(distance)} studs away{if snapping
-			then "  ·  snap"
-			else ""}`
-	)
-	table.insert(
-		lines,
-		if ok
-			then "Enter to confirm · Backspace to cancel"
-			else REASONS[rejection or "Invalid"] or REASONS.Invalid
-	)
-
-	current = if ok then spot else nil
+	if not ok and reason == nil then
+		local text = REASONS[rejection or "Invalid"] or REASONS.Invalid
+		if rejection == "TooClose" and short then
+			text ..= `: {short} studs short`
+		end
+		reason = text
+	end
+	valid = ok
 	local color = if ok then VALID else INVALID
+	local world = region:PointToWorldSpace(Vector3.new(spot.x, spot.y, spot.z))
 	ghost.CFrame = CFrame.new(world)
-	footprint.CFrame = ghost.CFrame
 	ghost.Color = color
+	footprint.CFrame = region
+		* CFrame.new(spot.x, spot.y, spot.z)
+		* CFrame.Angles(0, 0, math.pi / 2)
 	footprint.Color = color
-	infoText.Text = table.concat(lines, "\n")
-	infoText.TextColor3 = color
+	statusLabel.Text = title
+	detailLabel.Text = (if ok then "Valid spot" else reason or "")
+		.. `  ·  height {math.floor(spot.y)}{if snapping then "  ·  snap on" else ""}`
+	detailLabel.TextColor3 = color
+	confirmButton.AutoButtonColor = ok
+	confirmButton.BackgroundTransparency = if ok then 0 else 0.5
+end
+
+local function raise(step: number)
+	local profile = ClientState.profile
+	if profile then
+		local box = PlacementRules.buildBox(profile.expansion)
+		spot = { x = spot.x, y = math.clamp(spot.y + step, box.min.y, box.max.y), z = spot.z }
+	end
 end
 
 local function handle(
@@ -205,8 +315,7 @@ local function handle(
 	input: InputObject
 ): Enum.ContextActionResult
 	if name == "Wheel" then
-		local step = if input.Position.Z > 0 then S.GHOST_STEP else -S.GHOST_STEP
-		distance = math.clamp(distance + step, S.GHOST_MIN_DISTANCE, S.GHOST_MAX_DISTANCE)
+		raise(if input.Position.Z > 0 then S.GHOST_STEP else -S.GHOST_STEP)
 		return Enum.ContextActionResult.Sink
 	end
 	if state ~= Enum.UserInputState.Begin then
@@ -218,28 +327,22 @@ local function handle(
 		stop()
 		ClientState.notify:Fire("Placement cancelled.")
 	elseif name == "Higher" then
-		height += S.GHOST_STEP
+		raise(S.GHOST_STEP)
 	elseif name == "Lower" then
-		height -= S.GHOST_STEP
-	elseif name == "Nearer" then
-		distance = math.max(S.GHOST_MIN_DISTANCE, distance - S.GHOST_STEP)
-	elseif name == "Farther" then
-		distance = math.min(S.GHOST_MAX_DISTANCE, distance + S.GHOST_STEP)
+		raise(-S.GHOST_STEP)
 	elseif name == "Snap" then
 		snapping = not snapping
 	end
 	return Enum.ContextActionResult.Sink
 end
 
-local BINDINGS: { [string]: { keys: { any }, touch: boolean } } = {
-	Confirm = { keys = { Enum.KeyCode.Return, Enum.KeyCode.ButtonA }, touch = true },
-	Cancel = { keys = { Enum.KeyCode.Backspace, Enum.KeyCode.ButtonB }, touch = true },
-	Higher = { keys = { Enum.KeyCode.E, Enum.KeyCode.DPadUp }, touch = true },
-	Lower = { keys = { Enum.KeyCode.Q, Enum.KeyCode.DPadDown }, touch = true },
-	Nearer = { keys = { Enum.KeyCode.DPadLeft }, touch = true },
-	Farther = { keys = { Enum.KeyCode.DPadRight }, touch = true },
-	Snap = { keys = { Enum.KeyCode.T, Enum.KeyCode.ButtonY }, touch = false },
-	Wheel = { keys = { Enum.UserInputType.MouseWheel }, touch = false },
+local BINDINGS: { [string]: { any } } = {
+	Confirm = { Enum.KeyCode.Return, Enum.KeyCode.ButtonA },
+	Cancel = { Enum.KeyCode.Backspace, Enum.KeyCode.ButtonB },
+	Higher = { Enum.KeyCode.E, Enum.KeyCode.DPadUp },
+	Lower = { Enum.KeyCode.Q, Enum.KeyCode.DPadDown },
+	Snap = { Enum.KeyCode.T, Enum.KeyCode.ButtonY },
+	Wheel = { Enum.UserInputType.MouseWheel },
 }
 
 -- Starts placing (shop) or moving (manage panel) a star.
@@ -248,10 +351,12 @@ function PlacementController.begin(options: Options)
 		stop()
 	end
 	local profile = ClientState.profile
-	if regionCFrame() == nil or profile == nil then
+	local region = regionCFrame()
+	if region == nil or profile == nil then
 		ClientState.notify:Fire("Your galaxy isn't ready yet.")
 		return
 	end
+	local except: string? = nil
 	if options.mode == "place" then
 		local owned = count(starSource())
 		if not PlacementRules.hasCapacity(owned, profile.expansion) then
@@ -265,10 +370,31 @@ function PlacementController.begin(options: Options)
 			)
 			return
 		end
+	else
+		except = options.starId
 	end
+
+	-- Start at the valid spot nearest to where the camera looks (a moved
+	-- star starts where it is).
+	local camera = Workspace.CurrentCamera
+	local look = camera.CFrame.Position + camera.CFrame.LookVector * S.GHOST_DISTANCE
+	local p = region:PointToObjectSpace(look)
+	local wanted: Types.Vec3 = { x = p.X, y = p.Y, z = p.Z }
+	if options.mode == "move" then
+		local model = starSource()[options.starId]
+		if model then
+			local at = region:PointToObjectSpace(model:GetPivot().Position)
+			wanted = { x = at.X, y = at.Y, z = at.Z }
+		end
+	end
+	local start = PlacementRules.nearestValid(wanted, profile.expansion, others(region, except))
+	if start == nil then
+		ClientState.notify:Fire("There's no free room left in your galaxy. Move a star or expand.")
+		return
+	end
+	spot = start
+
 	active = options
-	distance = S.GHOST_DISTANCE
-	height = 0
 	local ghostType = S.DEFAULT_TYPE
 	if options.mode == "place" then
 		ghostType = options.typeId
@@ -277,23 +403,18 @@ function PlacementController.begin(options: Options)
 		local typeId = model and model:GetAttribute("TypeId")
 		ghostType = if type(typeId) == "string" then typeId else ghostType
 	end
-	local def = S.BY_ID[ghostType]
 	ghost.Size = Vector3.one * StarMath.radius(ghostType, 1) * 2
-	ghost.Color = Color3.fromHex(def.color)
 	ghost.Parent = Workspace.CurrentCamera
 	footprint.Parent = Workspace.CurrentCamera
-	for name, binding in BINDINGS do
+	drawGuides(region, profile.expansion, except)
+	for name, keys in BINDINGS do
 		ContextActionService:BindActionAtPriority("GaG_Place" .. name, function(_, state, input)
 			return handle(name, state, input)
-		end, binding.touch, PRIORITY, table.unpack(binding.keys))
-		if binding.touch then
-			ContextActionService:SetTitle("GaG_Place" .. name, name)
-		end
+		end, false, PRIORITY, table.unpack(keys))
 	end
+	gui.Enabled = true
 	renderConnection = RunService.RenderStepped:Connect(update)
-	ClientState.notify:Fire(
-		"Aim where the star should go. E / Q: higher / lower. Wheel: distance. T: snap."
-	)
+	update()
 end
 
 function PlacementController.isActive(): boolean
@@ -305,43 +426,81 @@ function PlacementController.setStarSource(source: () -> { [string]: Model })
 	starSource = source
 end
 
+local function buildPanel()
+	gui = Theme.screen("Placement", Players.LocalPlayer:WaitForChild("PlayerGui"))
+	gui.Enabled = false
+	gui.DisplayOrder = 7
+	local panel = Theme.panel(gui, "Panel")
+	panel.AnchorPoint = Vector2.new(0.5, 1)
+	panel.Position = UDim2.new(0.5, 0, 1, -110)
+	panel.Size = UDim2.new(0.9, 0, 0, 112)
+	local limit = Instance.new("UISizeConstraint")
+	limit.MaxSize = Vector2.new(560, 112)
+	limit.Parent = panel
+	statusLabel = Theme.label(panel, {
+		Position = UDim2.fromOffset(14, 6),
+		Size = UDim2.new(1, -28, 0, 22),
+		Font = Enum.Font.GothamBlack,
+		TextSize = 16,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+	detailLabel = Theme.label(panel, {
+		Position = UDim2.fromOffset(14, 28),
+		Size = UDim2.new(1, -28, 0, 20),
+		TextSize = 13,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+	local row = Instance.new("Frame")
+	row.BackgroundTransparency = 1
+	row.Position = UDim2.fromOffset(10, 56)
+	row.Size = UDim2.new(1, -20, 0, 46)
+	row.Parent = panel
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = row
+	local function button(
+		order: number,
+		text: string,
+		style: Theme.ButtonStyle,
+		onClick: () -> ()
+	): TextButton
+		local b = Theme.button(row, text, style, onClick)
+		b.LayoutOrder = order
+		b.Size = UDim2.new(0.2, -7, 1, 0)
+		return b
+	end
+	button(1, "Lower", "primary", function()
+		raise(-S.GHOST_STEP)
+	end)
+	button(2, "Higher", "primary", function()
+		raise(S.GHOST_STEP)
+	end)
+	button(3, "Snap", "special", function()
+		snapping = not snapping
+	end)
+	button(4, "Cancel", "primary", function()
+		stop()
+		ClientState.notify:Fire("Placement cancelled.")
+	end)
+	confirmButton = button(5, "Confirm", "buy", function()
+		task.spawn(confirm)
+	end)
+end
+
 function PlacementController.init()
-	ghost = Instance.new("Part")
+	ghost = localPart(Enum.PartType.Ball, VALID, Enum.Material.Neon)
 	ghost.Name = "GaG_StarGhost"
-	ghost.Shape = Enum.PartType.Ball
-	ghost.Material = Enum.Material.Neon
 	ghost.Transparency = 0.35
-	ghost.Anchored = true
-	ghost.CanCollide = false
-	ghost.CanQuery = false
-	ghost.CanTouch = false
 
-	footprint = Instance.new("Part")
+	footprint = localPart(Enum.PartType.Cylinder, VALID, Enum.Material.ForceField)
 	footprint.Name = "GaG_StarFootprint"
-	footprint.Shape = Enum.PartType.Ball
-	footprint.Material = Enum.Material.ForceField
-	footprint.Size = Vector3.one * G.SYSTEM_RADIUS * 2
-	footprint.Transparency = 0.6
-	footprint.Anchored = true
-	footprint.CanCollide = false
-	footprint.CanQuery = false
-	footprint.CanTouch = false
+	footprint.Size = Vector3.new(G.SYSTEM_HALF_HEIGHT * 2, G.SYSTEM_RADIUS * 2, G.SYSTEM_RADIUS * 2)
+	footprint.Transparency = 0.5
 
-	info = Instance.new("BillboardGui")
-	info.Name = "Info"
-	info.Size = UDim2.fromOffset(300, 70)
-	info.StudsOffsetWorldSpace = Vector3.new(0, 30, 0)
-	info.AlwaysOnTop = true
-	info.LightInfluence = 0
-	info.Adornee = ghost
-	info.Parent = ghost
-	infoText = Instance.new("TextLabel")
-	infoText.Size = UDim2.fromScale(1, 1)
-	infoText.BackgroundTransparency = 1
-	infoText.Font = Enum.Font.GothamBold
-	infoText.TextScaled = true
-	infoText.TextStrokeTransparency = 0.3
-	infoText.Parent = info
+	buildPanel()
 end
 
 return PlacementController

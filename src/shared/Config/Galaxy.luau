@@ -3,7 +3,7 @@
 --
 -- Orbit radii are fixed per slot, so bodies can never collide and a whole
 -- solar system always fits inside SYSTEM_RADIUS. Placement then only has to
--- keep stars MIN_STAR_SPACING apart and WALL_MARGIN inside the region walls.
+-- keep systems' footprints apart (Logic/PlacementRules) and inside the walls.
 -- Logic/ConfigCheck verifies these numbers stay consistent.
 
 export type Vec3 = { x: number, y: number, z: number }
@@ -23,11 +23,16 @@ local Galaxy = {
 	PLANET_ORBIT_RADII = { 52, 96, 140, 184 } :: { number },
 	MOON_ORBIT_RADII = { 11, 16 } :: { number },
 
-	SYSTEM_RADIUS = 222, -- nothing in a system reaches further than this from its star
-	-- Two thirds of 2 x SYSTEM_RADIUS: neighbours' outer orbits may cross,
-	-- but no planet ever reaches another star (SYSTEM_RADIUS + STAR_MAX_RADIUS).
-	MIN_STAR_SPACING = 296,
-	WALL_MARGIN = 222, -- star centres stay this far inside the region walls
+	-- A system's reserved footprint: a flat disc around its star that its
+	-- largest layout never leaves. Nothing reaches further than SYSTEM_RADIUS
+	-- sideways or SYSTEM_HALF_HEIGHT up or down (orbits tilt only a little).
+	-- Two systems may not overlap footprints; they may stack vertically.
+	SYSTEM_RADIUS = 222,
+	SYSTEM_HALF_HEIGHT = 48,
+	-- Star centres stay this far inside the side/front/back walls, and the
+	-- floor and ceiling, so footprints stay inside the region.
+	WALL_MARGIN = 222,
+	WALL_MARGIN_Y = 48,
 
 	GRID_SNAP = 10, -- optional placement snapping, studs
 
