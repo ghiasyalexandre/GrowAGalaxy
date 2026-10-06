@@ -771,6 +771,49 @@ function ConfigCheck.run(config: any): { string }
 		fail("Eggs: HATCH_FEED_SIZE must be a positive whole number")
 	end
 
+	-- Tutorial: unique steps, known pointers, auto modes and one final step at
+	-- the end.
+	local tutorial = config.Tutorial
+	local stepIds: { [string]: boolean } = {}
+	local HUD_TARGETS = {
+		LaunchShip = true,
+		StarShop = true,
+		Planets = true,
+		Hangar = true,
+		Station = true,
+		Shipyard = true,
+		Store = true,
+	}
+	local WORLD_TARGETS = { collect = true, eggLab = true, incubator = true, star = true }
+	for index, step in tutorial.STEPS do
+		local where = `Tutorial step {index} ({step.id})`
+		if stepIds[step.id] then
+			fail(`{where}: id is used twice`)
+		end
+		stepIds[step.id] = true
+		if step.hud and not HUD_TARGETS[step.hud] then
+			fail(`{where}: unknown HUD target {step.hud}`)
+		end
+		if step.world and not WORLD_TARGETS[step.world] then
+			fail(`{where}: unknown world target {step.world}`)
+		end
+		if step.auto and step.auto ~= "move" and step.auto ~= "fly" then
+			fail(`{where}: auto must be "move" or "fly"`)
+		end
+		if (step.auto or step.final) and not step.ack then
+			fail(`{where}: auto and final steps must be ack steps`)
+		end
+		if step.final and index ~= #tutorial.STEPS then
+			fail(`{where}: the final step must be the last`)
+		end
+	end
+	if config.World.EMISSIVE_DIM < 0 or config.World.EMISSIVE_DIM > 1 then
+		fail("World: EMISSIVE_DIM must be from 0 to 1")
+	end
+	if not isWhole(tutorial.FINISH_REWARD) or tutorial.FINISH_REWARD < 0 then
+		fail("Tutorial: FINISH_REWARD must be a whole number, 0 or more")
+	end
+
 	-- Daily wheel: fixed whole prizes whose weights are percentages.
 	local wheel = config.Wheel
 	if wheel.COOLDOWN <= 0 or wheel.SPIN_SECONDS <= 0 then

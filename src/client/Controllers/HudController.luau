@@ -52,7 +52,6 @@ local shown = Instance.new("NumberValue") -- the wallet number as displayed, twe
 local COUNT_UP = TweenInfo.new(0.9, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
 local BUMP = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local WALLET_GOLD = Color3.fromRGB(255, 214, 110)
-local tutorialLabel: TextLabel
 local sectorLabel: TextLabel
 local hintLabel: TextLabel
 local readoutLabel: TextLabel
@@ -329,30 +328,6 @@ local function build()
 	gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
 	buildWallet(gui)
-
-	-- Tutorial hint, top centre (Config.Tutorial).
-	tutorialLabel = makeLabel(gui, {
-		Name = "Tutorial",
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 16),
-		Size = UDim2.new(0.6, 0, 0, 30),
-		BackgroundColor3 = Color3.fromRGB(16, 20, 36),
-		BackgroundTransparency = 0.25,
-		Text = "",
-		TextScaled = false,
-		TextSize = 17,
-		TextWrapped = true,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = Color3.fromRGB(255, 230, 160),
-		Visible = false,
-	})
-	corner(tutorialLabel, 8)
-	-- Sprite sheet: an info tile just left of the hint.
-	local infoIcon = Sprites.icon(tutorialLabel, "Info", 34)
-	if infoIcon then
-		infoIcon.AnchorPoint = Vector2.new(1, 0.5)
-		infoIcon.Position = UDim2.new(0, -4, 0.5, 0)
-	end
 
 	hintLabel = makeLabel(gui, {
 		Name = "Hint",
@@ -678,13 +653,6 @@ local function refreshStardust()
 	end
 end
 
-local function refreshTutorial()
-	local profile = ClientState.profile
-	local step = if profile then Config.Tutorial.STEPS[profile.tutorialStep] else nil
-	tutorialLabel.Visible = step ~= nil
-	tutorialLabel.Text = if step then `Next: {step.text}` else ""
-end
-
 -- Sector, star production and Stardust waiting at the Collect console.
 local function refreshSector()
 	local slot = ClientState.mySlot()
@@ -834,7 +802,6 @@ local function refreshReadout()
 		then Enum.TextXAlignment.Center
 		else Enum.TextXAlignment.Left
 	readoutLabel.Size = UDim2.new(0, if flying then 460 else 220, 0, 24)
-	tutorialLabel.Position = UDim2.new(0.5, 0, 0, if flying then 104 else 16)
 	local settings = ClientState.profile and ClientState.profile.settings
 	hintLabel.Visible = settings == nil or settings.showControls ~= false
 	reticle.Visible = flying
@@ -899,9 +866,6 @@ function HudController.init()
 		end
 		if field == "incomeRate" or field == "uncollected" or field == "*" then
 			refreshSector()
-		end
-		if field == "tutorialStep" or field == "*" then
-			refreshTutorial()
 		end
 		if field == "boosts" or field == "*" then
 			boostsAt = os.clock()

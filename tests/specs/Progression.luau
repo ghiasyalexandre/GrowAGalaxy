@@ -14,6 +14,39 @@ return function(T, Loader)
 			T.equal(Progression.tutorialStep(all), 0)
 		end)
 
+		T.test("the tutorial starts with a welcome, ends with a reward, skips no basics", function()
+			local steps = Config.Tutorial.STEPS
+			T.equal(steps[1].id, "welcome")
+			T.truthy(steps[#steps].final, "the last step pays the reward")
+			T.truthy(Config.Tutorial.FINISH_REWARD > 0)
+			local ids = {}
+			for _, step in steps do
+				ids[step.id] = true
+				-- Every step has kid-sized text: a title and a few sentences.
+				T.truthy(#step.title > 0 and #step.title <= 32, `{step.id} title`)
+				T.truthy(#step.text <= 220, `{step.id} text is short`)
+			end
+			for _, needed in
+				{
+					"move",
+					"launch",
+					"fly",
+					"mine",
+					"star",
+					"collect",
+					"egg",
+					"incubate",
+					"equip",
+					"levelup",
+				}
+			do
+				T.truthy(ids[needed], `teaches {needed}`)
+			end
+			-- Already-done steps are skipped: someone who mined first starts at the welcome.
+			T.equal(Progression.tutorialStep({ asteroidsMined = 3 }), 1)
+			T.equal(Progression.tutorialStep({ tutorialWelcome = 1, tutorialMoved = 1 }), 3)
+		end)
+
 		T.test("achievements are earned at their goal, once", function()
 			local earned = Progression.earnedAchievements({ starsPlaced = 1 }, {})
 			T.truthy(table.find(earned, "FirstLight"))
@@ -36,6 +69,12 @@ return function(T, Loader)
 				planetsEquipped = true, -- StarSystem equipPlanet
 				planetLevels = true, -- StarSystem levelPlanet
 				planetsHatched = true, -- HatchSystem
+				eggsBought = true, -- EggSystem
+				eggsIncubated = true, -- HatchSystem
+				tutorialWelcome = true, -- TutorialSystem (ack steps)
+				tutorialMoved = true,
+				tutorialFlew = true,
+				tutorialFinished = true,
 				starEvolutions = true,
 				blackHoles = true,
 			}

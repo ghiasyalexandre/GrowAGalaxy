@@ -216,6 +216,7 @@ local function start(player: Player, eggId: unknown, rawChamber: unknown): (bool
 		return false, "That egg can't go in there."
 	end
 	show(player)
+	DataSystem.addStat(player, "eggsIncubated", 1)
 	return true,
 		`Your egg is in chamber {index}. It hatches in {EggMath.durationText(
 			hatch.endsAt - hatch.startedAt
@@ -234,6 +235,7 @@ local function onRequest(player: Player, action: unknown, a: unknown, b: unknown
 		if started == 0 then
 			return false, "No free chamber, or no eggs waiting."
 		end
+		DataSystem.addStat(player, "eggsIncubated", started)
 		return true, `{started} {if started == 1 then "egg is" else "eggs are"} incubating.`
 	end
 	return false, "That isn't something the incubator does."

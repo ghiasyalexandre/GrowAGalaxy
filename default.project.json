@@ -97,6 +97,9 @@
         },
         "WheelRequest": {
           "$className": "RemoteFunction"
+        },
+        "TutorialRequest": {
+          "$className": "RemoteFunction"
         }
       }
     },
