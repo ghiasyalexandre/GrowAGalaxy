@@ -9,7 +9,16 @@
 -- the Star Shop and the Shipyard are HUD buttons). The ship berth and its
 -- docking zone sit off the -Z edge. Hangar upgrades (HangarSystem) are built
 -- on the deck at Config.Hangar pads, inside the "Hangar" model.
+--
+-- Incubator Bay: an annex off the left side (-X), through a doorway in the
+-- left wall, holding Config.Eggs.HATCH_SLOTS incubator chambers in a row
+-- ("Incubator" model, parts "Chamber1".., tagged "GaG_Incubator" with
+-- Chamber and OwnerUserId attributes). Each chamber's base has an
+-- "Incubate" prompt (attribute HatchChamber). HatchSystem writes each
+-- chamber's state into its attributes; clients draw the eggs, progress and
+-- reveals from them (HatchController).
 
+local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
@@ -25,6 +34,12 @@ local BERTH_PAD = 20
 local BERTH_Z = LENGTH / 2 + 4 + BERTH_PAD / 2 -- berth centre, along -Z
 local BERTH_Z_NEAR = BERTH_Z - BERTH_PAD / 2
 local PANEL_DARK = "#252A36"
+-- The doorway to the Incubator Bay in the left wall, between the hangar pads
+-- at z -20 and -4 (Config.Hangar PAD_RADIUS 4), and the bay itself.
+local DOOR_FROM, DOOR_TO = -16, -8
+local BAY_WIDTH = 24 -- x, beyond the left wall
+local BAY_FROM, BAY_TO = -30, 6 -- z
+local INCUBATOR_TAG = "GaG_Incubator"
 
 local StationBuilder = {}
 
@@ -97,31 +112,110 @@ function StationBuilder.build(
 
 	-- Half walls down both sides with a window band and a glowing top trim;
 	-- a rail across the back. The front stays open towards the berth.
-	for _, side in { -1, 1 } do
-		local x = side * (WIDTH / 2 - 0.5)
+	-- A run of half wall from z0 to z1, with its window band and top trim.
+	local function wallRun(x: number, z0: number, z1: number, windowFrom: number, windowTo: number)
+		local length, middle = z1 - z0, (z0 + z1) / 2
 		Build.part({
 			name = "Wall",
-			size = Vector3.new(1, WALL_HEIGHT, LENGTH),
-			cframe = at(x, FLOOR_Y + WALL_HEIGHT / 2, 0),
+			size = Vector3.new(1, WALL_HEIGHT, length),
+			cframe = at(x, FLOOR_Y + WALL_HEIGHT / 2, middle),
 			color = COLORS.hullAlt,
 			material = Enum.Material.Metal,
 			parent = station,
 		})
 		Build.part({
 			name = "Window",
-			size = Vector3.new(1.2, 2.2, LENGTH - 8),
-			cframe = at(x, FLOOR_Y + 4.2, 0),
+			size = Vector3.new(1.2, 2.2, windowTo - windowFrom),
+			cframe = at(x, FLOOR_Y + 4.2, (windowFrom + windowTo) / 2),
 			color = COLORS.glass,
 			material = Enum.Material.Glass,
 			transparency = 0.35,
 			parent = station,
 		})
-		neon("WallTrim", Vector3.new(1.4, 0.4, LENGTH), at(x, FLOOR_Y + WALL_HEIGHT, 0))
+		neon("WallTrim", Vector3.new(1.4, 0.4, length), at(x, FLOOR_Y + WALL_HEIGHT, middle))
+	end
+	for _, side in { -1, 1 } do
+		local x = side * (WIDTH / 2 - 0.5)
+		local half = LENGTH / 2
+		if side < 0 then
+			-- The left wall has the doorway to the Incubator Bay.
+			wallRun(x, -half, DOOR_FROM, -half + 4, DOOR_FROM - 2)
+			wallRun(x, DOOR_TO, half, DOOR_TO + 2, half - 4)
+		else
+			wallRun(x, -half, half, -half + 4, half - 4)
+		end
 		neon(
 			"FloorStrip",
 			Vector3.new(0.5, 0.15, LENGTH - 4),
 			at(side * (WIDTH / 2 - 2), FLOOR_Y + 0.08, 0)
 		)
+	end
+
+	-- Incubator Bay: a floor beyond the doorway, a low rail round its edge,
+	-- and the incubator chambers in a row along the far side.
+	local bayX = -WIDTH / 2 - BAY_WIDTH / 2
+	local bayLength = BAY_TO - BAY_FROM
+	local bayMiddle = (BAY_FROM + BAY_TO) / 2
+	Build.part({
+		name = "BayFloor",
+		size = Vector3.new(BAY_WIDTH, 2, bayLength),
+		cframe = at(bayX, FLOOR_Y - 1, bayMiddle),
+		color = COLORS.deck,
+		material = Enum.Material.DiamondPlate,
+		parent = station,
+	})
+	Build.part({
+		name = "BayRail",
+		size = Vector3.new(0.6, 3, bayLength),
+		cframe = at(-WIDTH / 2 - BAY_WIDTH + 0.3, FLOOR_Y + 1.5, bayMiddle),
+		color = COLORS.hullAlt,
+		material = Enum.Material.Metal,
+		parent = station,
+	})
+	for _, z in { BAY_FROM + 0.3, BAY_TO - 0.3 } do
+		Build.part({
+			name = "BayRail",
+			size = Vector3.new(BAY_WIDTH, 3, 0.6),
+			cframe = at(bayX, FLOOR_Y + 1.5, z),
+			color = COLORS.hullAlt,
+			material = Enum.Material.Metal,
+			parent = station,
+		})
+	end
+	local incubator = Build.model("Incubator", station)
+	local chambers = Config.Eggs.HATCH_SLOTS
+	local spacing = (bayLength - 8) / math.max(chambers - 1, 1)
+	for index = 1, chambers do
+		local z = BAY_FROM + 4 + (index - 1) * spacing
+		local base = Build.part({
+			name = `Chamber{index}`,
+			shape = Enum.PartType.Cylinder,
+			size = Vector3.new(1.4, 5, 5),
+			cframe = at(bayX - 4, FLOOR_Y + 0.7, z) * CFrame.Angles(0, 0, math.pi / 2),
+			color = PANEL_DARK,
+			material = Enum.Material.Metal,
+			parent = incubator,
+		})
+		base:SetAttribute("Chamber", index)
+		base:SetAttribute("OwnerUserId", ownerUserId)
+		CollectionService:AddTag(base, INCUBATOR_TAG)
+		local dome = Build.part({
+			name = "Dome",
+			shape = Enum.PartType.Ball,
+			size = Vector3.one * 4.6,
+			cframe = at(bayX - 4, FLOOR_Y + 1.4 + 2.1, z),
+			color = COLORS.glass,
+			material = Enum.Material.Glass,
+			transparency = 0.7,
+			collide = false,
+			parent = base,
+		})
+		dome.CanQuery = false
+		local prompt =
+			Build.prompt(base, { action = "Incubate an egg", object = `Chamber {index}` })
+		prompt.Name = "Incubate"
+		prompt.MaxActivationDistance = 10
+		prompt:SetAttribute("HatchChamber", index)
 	end
 	Build.part({
 		name = "Rail",

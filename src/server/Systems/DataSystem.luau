@@ -14,6 +14,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 local Config = require(ReplicatedStorage.Shared.Config)
 local DailyMath = require(ReplicatedStorage.Shared.Logic.DailyMath)
 local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
+local HatchMath = require(ReplicatedStorage.Shared.Logic.HatchMath)
 local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
@@ -316,6 +317,46 @@ function DataSystem.buyEgg(
 	push(player, "eggsBought", profile.eggsBought)
 	push(player, "eggs", ProfileSchema.eggsView(profile))
 	return id, nil
+end
+
+-- Puts a waiting egg into an incubator chamber ("1".."HATCH_SLOTS") in one
+-- step: the egg leaves the inventory and the hatch record (same planet,
+-- start and end times from its rarity) is saved together. Returns the
+-- hatch, or nil if the egg isn't the player's or the chamber isn't free.
+function DataSystem.startHatch(player: Player, eggId: string, chamber: number): Types.HatchRecord?
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil
+	end
+	local hatch = HatchMath.begin(profile.eggs, profile.hatches, eggId, chamber, os.time())
+	if hatch then
+		push(player, "eggs", ProfileSchema.eggsView(profile))
+		push(player, "hatches", ProfileSchema.hatchesView(profile))
+	end
+	return hatch
+end
+
+-- Finishes a hatch whose time is up, in one step: the hatch record goes and
+-- the planet joins the inventory, so it is granted exactly once and the
+-- chamber is free again. Returns the new planet's id and type, or nil if
+-- the chamber has nothing ready (`now` is unix seconds).
+function DataSystem.completeHatch(player: Player, chamber: string, now: number): (string?, string?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil, nil
+	end
+	local typeId = HatchMath.finish(profile.hatches, chamber, now)
+	if typeId == nil then
+		return nil, nil
+	end
+	local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
+	profile.nextPlanetId = nextId
+	profile.planets[id] = { typeId = typeId, level = 1 }
+	profile.stats.planetsHatched = (profile.stats.planetsHatched or 0) + 1
+	push(player, "hatches", ProfileSchema.hatchesView(profile))
+	pushPlanets(player, profile)
+	DataSystem.statChanged:Fire(player, "planetsHatched")
+	return id, typeId
 end
 
 -- Sets an owned planet's level (already validated and paid for by the
