@@ -42,6 +42,7 @@
 --                                                       "buyChosen", typeId, price?) -> (ok, message, policy?)
 --   HatchRequest     RemoteFunction  client -> server  ("start", eggId, chamber?) -> (ok, message)
 --   WheelRequest     RemoteFunction  client -> server  ("spin") -> (ok, message, prizeIndex?)
+--   TutorialRequest  RemoteFunction  client -> server  ("ack", stepIndex | "skip") -> (ok, message)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -74,6 +75,7 @@ local Net = {
 	EggRequest = folder:WaitForChild("EggRequest") :: RemoteFunction,
 	HatchRequest = folder:WaitForChild("HatchRequest") :: RemoteFunction,
 	WheelRequest = folder:WaitForChild("WheelRequest") :: RemoteFunction,
+	TutorialRequest = folder:WaitForChild("TutorialRequest") :: RemoteFunction,
 }
 
 return Net

@@ -199,6 +199,7 @@ function HangarBuilder.pad(def: HangarDef, floor: CFrame): Model
 
 	model:SetAttribute("State", "pad")
 	model:SetAttribute("UpgradeId", def.id)
+	Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
 	return model
 end
 
@@ -686,6 +687,7 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 	model:SetAttribute("UpgradeId", def.id)
 	if site then
 		-- Built away from its pad: no name plate on the deck.
+		Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
 		return model
 	end
 	-- Name plate at the front edge, facing the deck's centre line.
@@ -701,6 +703,7 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 	plate.CanCollide = false
 	model:SetAttribute("State", "built")
 	model:SetAttribute("UpgradeId", def.id)
+	Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
 	return model
 end
 

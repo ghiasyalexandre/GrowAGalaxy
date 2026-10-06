@@ -98,7 +98,7 @@ local function makeSun(at: Vector3): Part
 	local light = Instance.new("PointLight")
 	light.Color = SUN
 	light.Range = 18
-	light.Brightness = 3
+	light.Brightness = 3 * (1 - Config.World.EMISSIVE_DIM)
 	light.Parent = sun
 	if not ClientState.reducedEffects then
 		local flames = Instance.new("Fire")

@@ -163,6 +163,22 @@ function Build.console(name: string, title: string, floor: CFrame, parent: Insta
 	return pedestal
 end
 
+-- Dims everything that glows under `root` by `share` (0..1): Neon parts get
+-- a darker colour, lights and beams less brightness. Call once, after
+-- building.
+function Build.dimEmissive(root: Instance, share: number)
+	local keep = 1 - math.clamp(share, 0, 1)
+	local items = root:GetDescendants()
+	table.insert(items, root)
+	for _, item in items do
+		if item:IsA("BasePart") and item.Material == Enum.Material.Neon then
+			item.Color = Color3.new(item.Color.R * keep, item.Color.G * keep, item.Color.B * keep)
+		elseif item:IsA("Light") or item:IsA("Beam") then
+			(item :: any).Brightness *= keep
+		end
+	end
+end
+
 function Build.prompt(parent: BasePart, props: PromptProps): ProximityPrompt
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.ActionText = props.action

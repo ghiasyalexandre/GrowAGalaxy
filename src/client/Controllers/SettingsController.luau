@@ -10,6 +10,7 @@
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
+--   How to play     opens the tutorial guide (TutorialController)
 --   Codes           a box to redeem codes for rewards (CodeSystem)
 --
 -- Sliders preview live and save when released.
@@ -292,7 +293,14 @@ refresh = function()
 			save("autoIncubate", current.autoIncubate == false)
 		end
 	)
-	codeRow(8)
+	local guideRow = rowFrame(8, "How to play", "Every tutorial step and tips")
+	local guideButton = Theme.button(guideRow, "Open guide", "primary", function()
+		ClientState.openGuide:Fire()
+	end)
+	guideButton.AnchorPoint = Vector2.new(1, 0.5)
+	guideButton.Position = UDim2.new(1, -10, 0.5, 0)
+	guideButton.Size = UDim2.fromOffset(150, 36)
+	codeRow(9)
 end
 
 local function build()

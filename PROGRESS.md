@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 36 merged into `main`).
+Last updated: 2026-10-05 (stage 37 merged into `main`).
 
 ## Status by stage
 
@@ -42,6 +42,7 @@ Last updated: 2026-10-05 (stage 36 merged into `main`).
 | 34. Overhaul stage 5: Daily Wheel (free spin every 24 h, server picks and grants before the animation, fixed prizes and shown odds, reduced-motion spin) ([doc](docs/stage-34-daily-wheel.md)) | Merged | Passing (215 tests) | **Not yet** |
 | 35. ISS directory, Top Stardust board, Daily Wheel kiosk, rare-hatch board and planet gallery; planet selling, locking, bulk and auto-sell, filters, Equip best, Planet Index; multi-buy eggs, auto-incubate with offline chaining, Fill all; Floating off (walk on floors); save v16 ([doc](docs/stage-35-iss-gacha-inventory.md)) | Merged | Passing (225 tests) | **Not yet** |
 | 36. Daily Wheel spins cost 1,000 Stardust (still once a day, paid-random-item policy applies); planet storage 200 | Merged | Passing | **Not yet** |
+| 37. Full kid-friendly tutorial (13 steps, device-specific words, HUD arrows, world markers, How to play guide, finish reward), star prompts from 90 studs, station/hangar/arena glow dimmed 20% ([doc](docs/stage-37-tutorial.md)) | Merged | Passing (227 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

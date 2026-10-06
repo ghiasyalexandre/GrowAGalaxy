@@ -168,6 +168,7 @@ function DodgeballBuilder.build(parent: Instance): Model
 		textColor = FRAME_COLOR,
 	}).CanCollide =
 		false
+	Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
 	return model
 end
 

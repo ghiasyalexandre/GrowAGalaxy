@@ -437,6 +437,7 @@ function StationBuilder.build(
 	local spawn = at(0, FLOOR_Y + 3, -2)
 	Build.marker("StationSpawn", spawn, station)
 
+	Build.dimEmissive(station, Config.World.EMISSIVE_DIM)
 	return {
 		model = station,
 		spawn = spawn,

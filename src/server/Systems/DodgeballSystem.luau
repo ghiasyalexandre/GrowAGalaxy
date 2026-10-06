@@ -98,7 +98,7 @@ local function setHeld(player: Player, on: boolean)
 	local light = Instance.new("PointLight")
 	light.Color = SUN_COLOR
 	light.Range = 10
-	light.Brightness = 2
+	light.Brightness = 2 * (1 - Config.World.EMISSIVE_DIM)
 	light.Parent = sun
 	local weld = Instance.new("WeldConstraint")
 	weld.Part0 = hand

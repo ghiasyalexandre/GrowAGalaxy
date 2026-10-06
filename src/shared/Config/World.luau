@@ -17,6 +17,9 @@ local World = {
 	REGION_EDGE_THICKNESS = 4,
 
 	-- Personal station distance in front of the region's near face (towards the ISS).
+	-- Share by which every glow (Neon colours, lights, beams) of player
+	-- stations, hangar upgrades and the Zero G Dodgeball arena is dimmed.
+	EMISSIVE_DIM = 0.2,
 	STATION_DISTANCE = 140,
 
 	EARTH_CENTER = { x = 0, y = -3000, z = 0 } :: Vec3,
