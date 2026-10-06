@@ -27,6 +27,7 @@ local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
 local StarMath = require(ReplicatedStorage.Shared.Logic.StarMath)
+local WheelMath = require(ReplicatedStorage.Shared.Logic.WheelMath)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 type Profile = Types.Profile
@@ -357,6 +358,29 @@ function DataSystem.completeHatch(player: Player, chamber: string, now: number):
 	pushPlanets(player, profile)
 	DataSystem.statChanged:Fire(player, "planetsHatched")
 	return id, typeId
+end
+
+-- The daily wheel (Config.Wheel): if a free spin is ready at `now` (unix
+-- seconds), records the spin (next one a COOLDOWN later), remembers the
+-- prize and adds its Stardust, all in one step and before the client's
+-- animation starts. The prize is fixed: no multiplier applies. Returns
+-- whether it spun.
+function DataSystem.spinWheel(player: Player, prizeIndex: number, now: number): boolean
+	local profile = DataSystem.getProfile(player)
+	local prize = Config.Wheel.PRIZES[prizeIndex]
+	if profile == nil or prize == nil then
+		return false
+	end
+	local nextSpin = WheelMath.spin(profile.wheel.nextSpin, now)
+	if nextSpin == nil then
+		return false
+	end
+	profile.wheel.nextSpin = nextSpin
+	profile.wheel.lastPrize = prizeIndex
+	profile.stardust += prize.stardust
+	push(player, "stardust", profile.stardust)
+	push(player, "wheel", table.clone(profile.wheel))
+	return true
 end
 
 -- Sets an owned planet's level (already validated and paid for by the

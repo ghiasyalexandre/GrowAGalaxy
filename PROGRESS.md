@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (overhaul stage 4 merged into `main`).
+Last updated: 2026-10-05 (overhaul stages 1-5 merged into `main`).
 
 ## Status by stage
 
@@ -39,7 +39,7 @@ Last updated: 2026-10-05 (overhaul stage 4 merged into `main`).
 | 31. Overhaul stage 2: owned planets (28 types, 6 rarities, levels 1-5, distinct looks), planet inventory and Planets panel, equip/move/unequip with income settled first, 3-9 orbits per star, save v15 migration ([doc](docs/stage-31-planet-inventory.md)) | Merged | Passing (197 tests + orbit smoke) | **Not yet** |
 | 32. Overhaul stage 3: ISS Planet Egg Lab (mystery eggs with exact odds rolled and saved on the server at purchase, chosen-planet eggs, PolicyService paid-random-item check with a safe "unknown" default, odds and details disclosure) ([doc](docs/stage-32-planet-eggs.md)) | Merged | Passing (205 tests) | **Not yet** |
 | 33. Overhaul stage 4: hangar Incubator Bay with 5 chambers (atomic start, unix timestamps so eggs hatch offline, exactly-once grant that frees the chamber, offline summary, forming and reveal visuals, visitors view only) ([doc](docs/stage-33-hangar-incubator.md)) | Merged | Passing (211 tests) | **Not yet** |
-| 34. Overhaul stage 5 (daily wheel, polish) | In progress | | |
+| 34. Overhaul stage 5: Daily Wheel (free spin every 24 h, server picks and grants before the animation, fixed prizes and shown odds, reduced-motion spin) ([doc](docs/stage-34-daily-wheel.md)) | Merged | Passing (215 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 
@@ -61,6 +61,14 @@ Last updated: 2026-10-05 (overhaul stage 4 merged into `main`).
   `[Config]` warnings. ProfileStore runs in mock mode (API services off), so nothing saves.
 
 ## Needs the user
+
+- **Overhaul (stages 30-34) Studio playtest**, in this order, following each doc's test table:
+  star placement (row 30: place, stack and move stars, check the build box and messages), then
+  [planet inventory and migration](docs/stage-31-planet-inventory.md) (join with an existing
+  save first, to see the v15 migration), [Planet Egg Lab](docs/stage-32-planet-eggs.md),
+  [incubator](docs/stage-33-hangar-incubator.md) (including leaving and rejoining while an egg
+  hatches), [Daily Wheel](docs/stage-34-daily-wheel.md). Report Output errors. Nothing in these
+  stages spends Robux or needs new product ids.
 
 - Optional purchases (stage 17) are built but off. To launch them: create the passes and
   developer products, fill in the ids and review prices, following
