@@ -1,89 +1,78 @@
-# Grow a Galaxy
+# Grow a Galaxy 2
 
-A multiplayer space exploration, asteroid mining and galaxy tycoon for Roblox. Players fly
-mining ships out of a stylised ISS hub, mine asteroids scattered across space for **Stardust**,
-and spend it on their own three-dimensional galaxy: stars that produce Stardust, upgraded by
-adding orbiting planets.
+A Roblox space game. You float around a space station, fly a little ship out to mine asteroids
+for Stardust, and spend it building your own galaxy: stars you place in 3D, with planets
+orbiting them that you hatch from eggs. Stars and planets earn more Stardust, which you spend on
+bigger stars, better ships and more eggs.
 
-The game is built in stages. Each stage has its own report in [`docs/`](docs) with the Studio
-hierarchy, setup, manual test steps, acceptance criteria and known limitations.
+There's also opt-in PvP, Death Star raids, a zero-g dodgeball arena, a daily wheel and a bunch
+of hangar upgrades to show off.
 
-| Stage | Status |
-|---|---|
-| 1. Foundation: config, save data, ISS hub, galaxy regions | [Merged](docs/stage-1-foundation.md) |
-| 2. Movement and ships: zero-g suit, Starter Shuttle, flight, docking, mining laser | [Merged](docs/stage-2-movement-ships.md) |
-| 3. Stardust and asteroid mining: scattered asteroids, weak points, Stardust rewards | [Merged](docs/stage-3-stardust-mining.md) |
-| 4. Star tycoon: place stars in 3D, collect their Stardust, upgrade them with planets | [Merged](docs/stage-4-star-tycoon.md) |
-| 5. Progression: click-to-shoot laser, Shipyard, expansions, achievements, tutorial | [Merged](docs/stage-5-progression.md) |
-| 6. Atmosphere and polish: sparkles, saved settings, ship paint, Golden Beam | [Merged](docs/stage-6-polish.md) |
-| 7. Star and planet tiers: 8 star types to Black Hole, bought planets in 8 tiers | [Merged](docs/stage-7-star-planet-tiers.md) |
-| 8. UI juice: reward orbs, wallet count-up, achievement banner, themed panels | [Merged](docs/stage-8-ui-juice.md) |
-| 9. Boost, heavier laser shots, Star Shop button and sturdier client start-up | [Merged](docs/stage-9-boost-laser-feel.md) |
-| 10. Stellar spectacle: star birth, level-up, supernova and planet effects, celebrations, shop and goal polish | [Merged](docs/stage-10-stellar-spectacle.md) |
-| 11. Sprite sheet UI: icons, button and panel skins, progress bars (needs the sheet uploaded) | [Merged](docs/stage-11-sprite-ui.md) |
-| 12. UI kit atlas, hover animations, vivid sparkles (needs the atlas uploaded) | [Merged](docs/stage-12-ui-kit.md) |
-| 13. Evolve at max level (level resets, max +2 per tier), orbit per evolution, lit planets, system inspector with time slider | [Merged](docs/stage-13-evolution-orbits.md) |
-| 14. 11-ship ladder (Micro Recon to Meteor Slicer), imported ship models, Shipyard Ships tab | [Merged](docs/stage-14-ships.md) |
-| 15. Opt-in PvP, ship explosions and debris, over-the-shoulder camera, slower laser bolts | [Merged](docs/stage-15-pvp.md) |
-| 16. Hangar station with upgrade pads, HUD Shipyard and Launch Ship buttons | [Merged](docs/stage-16-hangar.md) |
-| 17. Optional Robux purchases (off until configured): passes, boosts, packs, ship passes, Galaxy Store | [Merged](docs/stage-17-monetization.md) |
-| 18. Daily prizes (14 days), flashier Galaxy Store, premium shortcut | [Merged](docs/stage-18-daily-premium.md) |
-| 19. Roomier ISS, Saturn V raid beacon, Death Star raids in three difficulties | [Merged](docs/stage-19-iss-raids.md) |
-| 20. Polish: floating posture, Death Star overhaul, random asteroid groups, curved progression | [Merged](docs/stage-20-polish.md) |
-| 21. Vanity hangar and Showcase Dock, ship paint, 5-level upgrades, settings and music, solar flares, golden swarms | [Merged](docs/stage-21-hangar-paint-settings.md) |
-| 22. Hangar / Station travel buttons, Zero G Dodgeball minigame | [Merged](docs/stage-22-dodgeball.md) |
-| 23. Pilot becomes the ship, laser/boost colours, rockets, Stardust trails | [Merged](docs/stage-23-rockets-trails.md) |
-| 24. Planet levels, livelier planets, pricier expansions | [Merged](docs/stage-24-planet-levels.md) |
-| 7. Polish | Not started |
-| 8. Monetization | Not started |
-| 9. Expansion | Not started |
+## What's in there
 
-Current status and next steps: [`PROGRESS.md`](PROGRESS.md). Working notes for contributors
-and AI assistants: [`CLAUDE.md`](CLAUDE.md).
+Roughly, by area:
 
-Code is written outside Studio and checked by CI (format, lint, type check, unit tests, build,
-and a smoke test that runs the world builders).
-**CI cannot run the game**, so every stage report separates what CI verified from what still
-needs a playtest in Studio.
+- **Flying and mining**: spacesuit movement (or walking, if you turn floating off), 11 ships,
+  click-to-shoot mining laser, asteroids with weak points, golden asteroid swarms.
+- **The tycoon**: 8 star types up to a black hole, levelling and evolving, up to 9 orbits per
+  star, 28 planet types in 6 rarities with their own looks.
+- **Eggs**: buy planet eggs at the ISS, hatch them in your hangar's incubator (keeps going
+  while you're offline), then equip, level, lock or sell planets.
+- **Your station**: the hangar deck, upgrade pads, a showcase dock for ships, a highlight
+  colour you can pick.
+- **Social and extras**: visiting other players' hangars, raids, dodgeball, daily prizes and
+  wheel, codes, achievements, a kid-friendly tutorial.
+- **Monetization**: a few game passes and dev products, wired up but only active with real ids
+  configured.
 
-## Working on it in Roblox Studio
+[`PROGRESS.md`](PROGRESS.md) has the stage-by-stage history and what still needs testing in
+Studio. Each stage has its own notes in [`docs/`](docs) (what changed, how to test it, known
+gaps). [`CLAUDE.md`](CLAUDE.md) has the conventions and the full list of checks.
 
-1. Install [Rokit](https://github.com/rojo-rbx/rokit), then run `rokit install` in this folder.
-   It installs the pinned Rojo, StyLua, Selene, Lune and luau-lsp.
-2. Install the Rojo plugin in Studio (`rojo plugin install`, or Plugins → Manage Plugins).
-3. Run `rojo serve` in this folder.
-4. In Studio, open the game's place (or a new Baseplate), open the Rojo plugin and click
-   **Connect**. Code changes in `src/` now sync into Studio live.
-5. To test saving, publish the place and turn on Game Settings → Security →
-   **Enable Studio Access to API Services**. Without it, ProfileStore runs in mock mode and
-   prints that data will not be saved.
+## How it's built
 
-## Project layout
+Everything is written in VS Code and synced into Studio with Rojo. The place file is close to
+empty: the ISS, Earth, player regions, stations, ships and asteroids are all built by code when
+the server starts (`src/server/World`). The only things made in Studio are the imported ship
+models, music and a couple of boss assets, saved as `.rbxm` files under `assets/roblox`.
 
-| Folder | Studio location | What lives there |
-|---|---|---|
-| `src/shared` | ReplicatedStorage/Shared | Config, save schema types, pure logic, remotes access |
-| `src/shared/Config` | ReplicatedStorage/Shared/Config | Every tunable number (prices, stats, recipes, sizes) |
-| `src/shared/Logic` | ReplicatedStorage/Shared/Logic | Pure rules shared by client and server, unit-tested |
-| `src/server` | ServerScriptService/Server | Server bootstrap, Systems, world builders |
-| `src/client` | StarterPlayer/StarterPlayerScripts/Client | Client bootstrap, state, input layer, controllers |
-| `vendor` | ServerScriptService/Vendor | ProfileStore (Apache-2.0, by loleris) |
-| `tests` | not synced | Lune unit tests for `src/shared/Logic`, and the world smoke test |
+- `src/shared` is synced to ReplicatedStorage. It holds `Config` (every number you'd want to
+  tweak), `Logic` (pure game rules with unit tests), the save types and the remote access
+  (`Net.luau`).
+- `src/server` holds the server systems and world builders.
+- `src/client` holds the client controllers and UI.
+- `src/first` is the loading screen (ReplicatedFirst).
+- `vendor` is ProfileStore (by loleris) for saving.
+- `tests` holds Lune tests, which aren't synced.
 
-Remotes are declared in `default.project.json` under ReplicatedStorage/Remotes and used only
-through `src/shared/Net.luau`.
+The server is authoritative for anything that matters (Stardust, saves, purchases, egg rolls);
+the client does input, camera, UI and effects. Config is sanity-checked at server start and in
+the tests, so a bad tuning edit shows up straight away.
 
-Tuning: edit the modules in `src/shared/Config`. The server checks them for inconsistencies at
-startup (`Logic/ConfigCheck`), and so do the unit tests.
+## Getting set up
+
+1. Install [Rokit](https://github.com/rojo-rbx/rokit) and run `rokit install` here. That gets
+   the pinned Rojo, StyLua, Selene, Lune and luau-lsp. (On Windows the tools end up in
+   `%USERPROFILE%\.rokit\bin`, which you may need to add to PATH.)
+2. Install the Rojo plugin in Studio (`rojo plugin install`).
+3. Run `rojo serve default.project.json`, open the place in Studio and hit Connect in the Rojo
+   plugin.
+4. Saving only works on a published place with **Enable Studio Access to API Services** turned
+   on. Otherwise ProfileStore runs in mock mode and nothing is kept.
 
 ## Checks
 
+CI runs the same thing:
+
 ```sh
-stylua --check src tests      # format
-selene src                    # lint
-lune run tests/run            # unit tests
-rojo build -o build.rbxl      # build a place file
-lune run tests/WorldSmoke build.rbxl   # run the world builders outside Studio
+stylua --check src tests
+selene src
+lune run tests/run
+rojo sourcemap default.project.json -o sourcemap.json
+luau-lsp analyze --sourcemap=sourcemap.json --definitions=globalTypes.d.luau --ignore="**/ProfileStore.luau" src
+rojo build -o build.rbxl && lune run tests/WorldSmoke build.rbxl && lune run tests/OrbitSmoke build.rbxl
 ```
 
-CI also type-checks with luau-lsp (see `.github/workflows/ci.yml`).
+The smoke tests build the world and spin up the orbit code outside Studio, which catches a lot,
+but nothing here can actually play the game. Anything about feel, UI layout or saving still
+needs a playtest.
