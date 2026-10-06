@@ -547,15 +547,16 @@ function DataSystem.setAutoSell(player: Player, rarity: unknown, on: unknown): b
 	return true
 end
 
--- The daily wheel (Config.Wheel): if a free spin is ready at `now` (unix
--- seconds), records the spin (next one a COOLDOWN later), remembers the
--- prize and adds its Stardust, all in one step and before the client's
+-- The daily wheel (Config.Wheel): if a spin is ready at `now` (unix
+-- seconds) and the player has SPIN_COST Stardust, takes the cost, records
+-- the spin (next one a COOLDOWN later), remembers the prize and adds its
+-- Stardust, all in one step and before the client's
 -- animation starts. The prize is fixed: no multiplier applies. Returns
 -- whether it spun.
 function DataSystem.spinWheel(player: Player, prizeIndex: number, now: number): boolean
 	local profile = DataSystem.getProfile(player)
 	local prize = Config.Wheel.PRIZES[prizeIndex]
-	if profile == nil or prize == nil then
+	if profile == nil or prize == nil or profile.stardust < Config.Wheel.SPIN_COST then
 		return false
 	end
 	local nextSpin = WheelMath.spin(profile.wheel.nextSpin, now)
@@ -564,7 +565,7 @@ function DataSystem.spinWheel(player: Player, prizeIndex: number, now: number): 
 	end
 	profile.wheel.nextSpin = nextSpin
 	profile.wheel.lastPrize = prizeIndex
-	profile.stardust += prize.stardust
+	profile.stardust += prize.stardust - Config.Wheel.SPIN_COST
 	push(player, "stardust", profile.stardust)
 	push(player, "wheel", table.clone(profile.wheel))
 	return true

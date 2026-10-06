@@ -2,8 +2,8 @@
 -- Daily prize wheel rules (Config.Wheel), shared by the server's WheelSystem,
 -- the wheel panel and the tests.
 --
--- One free spin per COOLDOWN seconds, measured from the last spin (unix
--- seconds); there are no paid spins. A spin's prize is pick(roll) for a
+-- One spin per COOLDOWN seconds, measured from the last spin (unix
+-- seconds), for SPIN_COST Stardust. A spin's prize is pick(roll) for a
 -- whole roll from 1 to total() drawn on the server, so prize i's chance is
 -- exactly its weight / total(). Prizes are fixed Stardust amounts: no pass,
 -- boost or trail multiplies them.
@@ -35,12 +35,12 @@ function WheelMath.pick(roll: number): number
 	return #W.PRIZES
 end
 
--- Whether a free spin is ready at `now`.
+-- Whether a spin is ready at `now`.
 function WheelMath.ready(nextSpin: number, now: number): boolean
 	return now >= nextSpin
 end
 
--- Seconds until the next free spin (0 when ready).
+-- Seconds until the next spin (0 when ready).
 function WheelMath.wait(nextSpin: number, now: number): number
 	return math.max(nextSpin - now, 0)
 end

@@ -18,7 +18,7 @@ float as usual. Falls are capped at 40 studs/s so the flight guard never trips
   Inventory) and a sort switch (rarity / income / level).
 - **Per planet:** **Lock / Unlock** (a locked planet can never be sold, by hand, in bulk or
   automatically), **Lv up**, **Equip / Unequip**, and **Sell** (inventory and unlocked only;
-  Rare and rarer ask "Sure?" first). The header shows owned/500, planets in orbit with their
+  Rare and rarer ask "Sure?" first). The header shows owned/200, planets in orbit with their
   production, and your **Planet Index** (types found, out of 28).
 - **Equip best:** fills every orbit of every star with your best-earning planets. Planets
   already in orbit that make the cut don't move; income is settled first.
@@ -34,7 +34,7 @@ Legendary 3,000, Interstellar 10,000, plus half of the Stardust spent levelling 
 A mystery egg's expected sale value (~300) stays below the cheapest egg (500), which
 ConfigCheck enforces, so buying eggs to sell them never pays.
 
-**Storage:** at most 500 planets. A planet that hatches when you're full is sold
+**Storage:** at most 200 planets (stage 36; was 500). A planet that hatches when you're full is sold
 automatically, so nothing is lost.
 
 ## Gacha

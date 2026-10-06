@@ -1,6 +1,8 @@
 --!strict
--- The daily prize wheel (HUD button on the right): one free spin every
--- COOLDOWN seconds, no paid spins. Prizes are fixed Stardust amounts that no
+-- The daily prize wheel (HUD button on the right): one spin every COOLDOWN
+-- seconds, costing SPIN_COST Stardust (never Robux). Because Stardust can
+-- be bought, a spin is a paid random item: it's only offered where
+-- PolicyService allows those (as mystery eggs). Prizes are fixed Stardust amounts that no
 -- multiplier touches; `weight` out of the prizes' total is the exact chance,
 -- shown on the wheel. The server picks the prize and grants it before the
 -- client's spin animation starts.
@@ -9,6 +11,7 @@ export type Prize = { stardust: number, weight: number, color: string }
 
 return {
 	COOLDOWN = 24 * 60 * 60,
+	SPIN_COST = 1000, -- Stardust per spin
 	PRIZES = {
 		{ stardust = 1000, weight = 40, color = "#5FE3FF" },
 		{ stardust = 2500, weight = 25, color = "#5CFF8A" },

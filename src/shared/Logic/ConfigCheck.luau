@@ -776,6 +776,9 @@ function ConfigCheck.run(config: any): { string }
 	if wheel.COOLDOWN <= 0 or wheel.SPIN_SECONDS <= 0 then
 		fail("Wheel: COOLDOWN and SPIN_SECONDS must be positive")
 	end
+	if not isWhole(wheel.SPIN_COST) or wheel.SPIN_COST < 0 then
+		fail("Wheel: SPIN_COST must be a whole number, 0 or more")
+	end
 	local wheelTotal = 0
 	for index, prize in wheel.PRIZES do
 		if not isWhole(prize.stardust) or prize.stardust <= 0 then
