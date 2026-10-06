@@ -10,7 +10,8 @@
 -- are rounded only when shown.
 --
 -- Hatch time by rarity: round(10 x 180^(rarityIndex / 5)) seconds, index 0
--- (Common) to 5 (Interstellar): 10 s, 28 s, 80 s, 226 s, 637 s, 1,800 s.
+-- (Common) to 5 (Interstellar), rounded up to the next HATCH_ROUND (30 s):
+-- 30 s, 30 s, 90 s, 240 s, 660 s, 1,800 s.
 --
 -- Levels 1 to MAX_LEVEL: each level adds LEVEL_INCOME_STEP of the base
 -- income (x3 at level 5) and grows the planet by LEVEL_SIZE_STEP; level
@@ -46,6 +47,7 @@ export type PlanetTypeDef = {
 }
 
 local WEIGHT_TOTAL = 1200000
+local HATCH_ROUND = 30 -- hatch times are whole multiples of this
 
 local RARITY_ORDER: { Rarity } =
 	{ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Interstellar" }
@@ -68,7 +70,8 @@ for index: number, id: Rarity in RARITY_ORDER do
 		index = index - 1,
 		weight = spec.weight,
 		color = spec.color,
-		hatchSeconds = math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5),
+		hatchSeconds = math.ceil(math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5) / HATCH_ROUND)
+			* HATCH_ROUND,
 	}
 end
 

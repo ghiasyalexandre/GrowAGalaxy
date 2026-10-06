@@ -23,8 +23,10 @@ return function(T, Loader)
 			for _, step in steps do
 				ids[step.id] = true
 				-- Every step has kid-sized text: a title and a few sentences.
-				T.truthy(#step.title > 0 and #step.title <= 32, `{step.id} title`)
-				T.truthy(#step.text <= 220, `{step.id} text is short`)
+				T.truthy(#step.title > 0 and #step.title <= 24, `{step.id} title`)
+				for _, text in { step.text, step.gamepad or "", step.touch or "" } do
+					T.truthy(#text <= Config.Tutorial.MAX_TEXT, `{step.id} text is short`)
+				end
 			end
 			for _, needed in
 				{

@@ -176,7 +176,7 @@ local function pickBerth(berths: { CFrame }, ignore: Ship?): CFrame?
 	if idlest and idlestBerth then
 		Notify.send(
 			idlest.owner,
-			"Your ship was stowed to free a berth. Launch it again from any hangar."
+			"Your ship was stowed to free a dock. Launch it again from any hangar."
 		)
 		despawn(idlest)
 		return idlestBerth
@@ -403,7 +403,7 @@ function ShipSystem.launch(player: Player, hangar: string)
 	if berth == nil then
 		Notify.send(
 			player,
-			"Every berth here is busy. Move clear of the berths or try again in a moment."
+			"Every dock here is busy. Move clear of the docks or try again in a moment."
 		)
 		return
 	end
@@ -418,8 +418,8 @@ function ShipSystem.launch(player: Player, hangar: string)
 	Notify.send(
 		player,
 		if existing
-			then `Your {ship.info.displayName} is back at a berth.`
-			else `Your {ship.info.displayName} is ready at the berth. Float over and board it.`
+			then `Your {ship.info.displayName} is back at a dock.`
+			else `Your {ship.info.displayName} is ready at the dock. Float over and board it.`
 	)
 end
 
@@ -459,7 +459,7 @@ local function dock(player: Player)
 	end
 	local berth = pickBerth(berths, ship)
 	if berth == nil then
-		Notify.send(player, "Every berth here is busy. Try again in a moment.")
+		Notify.send(player, "Every dock here is busy. Try again in a moment.")
 		return
 	end
 

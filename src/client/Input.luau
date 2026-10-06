@@ -8,8 +8,8 @@
 --                   (FreeCursor only once Alt is held past ALT_TAP_TIME)
 --   lookDelta(dt)   steering in radians since the last call (x = yaw right,
 --                   y = pitch down). Ship mode only.
---   pressed         Signal fired with "Stabilize", "Exit", "Dock" or "Shoulder"
---                   (a quick tap of Alt or D-pad right)
+--   pressed         Signal fired with "Stabilize", "Exit", "Dock", "CursorToggle"
+--                   (M) or "Shoulder" (a quick tap of Alt or D-pad right)
 --   setMode(mode)   "suit" or "ship": which actions are bound
 --   device()        "keyboard", "gamepad" or "touch", the last one used
 --   hint(mode)      one-line control summary for the HUD
@@ -108,6 +108,15 @@ local BINDINGS: { [string]: Binding } = {
 		modes = { ship = true },
 		touch = true,
 	},
+	-- Flying: switch between steering with the mouse and a free cursor, to
+	-- click the HUD (PvP, Planets...) without leaving the ship.
+	CursorToggle = {
+		keys = { Enum.KeyCode.M },
+		title = "Cursor",
+		hold = false,
+		modes = { ship = true },
+		touch = false,
+	},
 	-- Tap: over-the-shoulder camera. Hold (flying): free the mouse cursor.
 	FreeCursor = {
 		keys = { Enum.KeyCode.LeftAlt, Enum.KeyCode.RightAlt, Enum.KeyCode.DPadRight },
@@ -120,8 +129,19 @@ local BINDINGS: { [string]: Binding } = {
 }
 
 -- Bind order, so touch buttons always appear in the same places.
-local ORDER =
-	{ "Up", "Down", "Brake", "Beam", "Boost", "Rocket", "Stabilize", "Exit", "Dock", "FreeCursor" }
+local ORDER = {
+	"Up",
+	"Down",
+	"Brake",
+	"Beam",
+	"Boost",
+	"Rocket",
+	"Stabilize",
+	"Exit",
+	"Dock",
+	"FreeCursor",
+	"CursorToggle",
+}
 
 -- Above the default character controls, so Space and A don't also jump.
 local PRIORITY = Enum.ContextActionPriority.High.Value
@@ -135,7 +155,7 @@ local HINTS: { [Mode]: { [Device]: string } } = {
 		touch = "Thumbstick to float  ·  Up, Down and Brake buttons",
 	},
 	ship = {
-		keyboard = "Mouse steer  ·  Click laser  ·  Q rocket  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  Alt shoulder view (hold: cursor)",
+		keyboard = "Mouse steer  ·  Click laser  ·  Q rocket  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  M mouse cursor on/off  ·  Alt shoulder view",
 		gamepad = "Right stick steer  ·  RT laser  ·  B rocket  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit  ·  D-pad right shoulder",
 		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser to fire  ·  Rocket  ·  Boost  ·  Exit to leave",
 	},

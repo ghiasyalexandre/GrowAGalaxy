@@ -6,22 +6,19 @@
 --                                        random-egg eligibility (EggMath.Policy)
 --   "buyMystery", expectedTotal?, count? -> (ok, message) `count` random eggs
 --                                        (Config.Eggs.MULTI_BUY, default 1),
---                                        each at its own rising price, bought
---                                        together or not at all
---   "buyChosen", typeId, expectedPrice? -> (ok, message) one egg of that type
+--                                        bought together or not at all
 --
 -- A mystery egg's planet is rolled here with the server's own Random the
 -- moment it is bought and saved with the egg (DataSystem.buyEgg); it never
--- changes and the client isn't told what it is until it hatches. Chosen
--- eggs are never random. If the client's expected price differs from the
--- server's (another purchase raised it), nothing is bought.
+-- changes and the client isn't told what it is until it hatches. Planets
+-- can't be bought directly: eggs are the only way. If the client's expected
+-- price differs from the server's, nothing is bought.
 --
 -- Paid random items: Stardust can be bought with Robux, so mystery eggs are
 -- sold only to players whose PolicyService policy says paid random items are
 -- allowed. Until Roblox has answered (or if it fails) the policy is
--- "unknown" and random eggs stay off, rechecked every POLICY_RETRY seconds;
--- chosen eggs are always available. There are no paid luck boosts, rerolls,
--- hatch speed-ups or trading.
+-- "unknown" and random eggs stay off, rechecked every POLICY_RETRY seconds.
+-- There are no paid luck boosts, rerolls, hatch speed-ups or trading.
 
 local Players = game:GetService("Players")
 local PolicyService = game:GetService("PolicyService")
@@ -47,8 +44,8 @@ local rng = Random.new()
 
 local POLICY_MESSAGES: { [string]: string } = {
 	allowed = "",
-	restricted = "Mystery eggs aren't available in your region. You can still choose a planet.",
-	unknown = "We couldn't check whether mystery eggs are allowed for you yet, so they're off for now. You can still choose a planet.",
+	restricted = "Planet eggs aren't available in your region.",
+	unknown = "We couldn't check whether planet eggs are allowed for you yet, so they're off for now. Try again in a moment.",
 }
 
 -- Asks Roblox once; on failure tries again after POLICY_RETRY seconds while
@@ -139,25 +136,6 @@ local function buyMystery(player: Player, expected: unknown, rawCount: unknown):
 			else "them"} in your hangar's incubator.`
 end
 
-local function buyChosen(player: Player, typeId: unknown, expected: unknown): (boolean, string)
-	local profile = DataSystem.getProfile(player)
-	local def = if type(typeId) == "string" then P.BY_ID[typeId] else nil
-	if profile == nil or def == nil then
-		return false, "That isn't a planet you can choose."
-	end
-	local price = EggMath.guaranteedPrice(profile.eggsBought, def.id) :: number
-	if not expectedMatches(expected, price) then
-		return false, `The price changed to {price} {CURRENCY}. Check it and try again.`
-	end
-	local id, problem = DataSystem.buyEgg(player, def.id, true, price)
-	if id == nil then
-		return false, PROBLEMS[problem or "NoProfile"]
-	end
-	DataSystem.addStat(player, "eggsBought", 1)
-	return true,
-		`{def.displayName} egg bought for {price} {CURRENCY}! Hatch it in your hangar's incubator.`
-end
-
 local function onRequest(
 	player: Player,
 	action: unknown,
@@ -175,9 +153,6 @@ local function onRequest(
 		return true, POLICY_MESSAGES[policy], policy
 	elseif action == "buyMystery" then
 		local ok, message = buyMystery(player, a, b)
-		return ok, message, nil
-	elseif action == "buyChosen" then
-		local ok, message = buyChosen(player, a, b)
 		return ok, message, nil
 	end
 	return false, "That isn't something the Egg Lab does.", nil

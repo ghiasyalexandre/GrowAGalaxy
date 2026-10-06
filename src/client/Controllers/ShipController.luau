@@ -92,6 +92,9 @@ type Flight = {
 	shoulder: number, -- 0 to 1, smoothed over-the-shoulder offset
 }
 
+-- M pressed while flying: the mouse cursor is free instead of steering.
+local cursorFree = false
+
 local ShipController = {}
 
 local flight: Flight? = nil
@@ -156,6 +159,7 @@ local function leave()
 	end
 	UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 	UserInputService.MouseIconEnabled = true
+	cursorFree = false
 
 	ClientState.flight.speed = 0
 	ClientState.flight.throttle = 0
@@ -239,8 +243,11 @@ local function update(dt: number)
 		return
 	end
 
-	-- Mouse steering locks the cursor; hold Alt to use the cursor instead.
-	local steerWithMouse = Input.device() == "keyboard" and not Input.isHeld("FreeCursor")
+	-- Mouse steering locks the cursor; M (or holding Alt) frees it to click
+	-- the HUD.
+	local steerWithMouse = Input.device() == "keyboard"
+		and not Input.isHeld("FreeCursor")
+		and not cursorFree
 	UserInputService.MouseBehavior = if steerWithMouse
 		then Enum.MouseBehavior.LockCenter
 		else Enum.MouseBehavior.Default
@@ -504,7 +511,14 @@ function ShipController.init()
 		if flight == nil then
 			return
 		end
-		if action == "Exit" then
+		if action == "CursorToggle" then
+			cursorFree = not cursorFree
+			ClientState.notify:Fire(
+				if cursorFree
+					then "Mouse cursor on: click any button. Press M to steer again."
+					else "Steering with the mouse again."
+			)
+		elseif action == "Exit" then
 			Net.ShipRequest:FireServer("exit")
 		elseif action == "Dock" then
 			if ClientState.flight.dock == "none" then

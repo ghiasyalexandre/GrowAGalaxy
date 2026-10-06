@@ -8,7 +8,7 @@
 --   RegionsChanged   RemoteEvent     server -> client  ({ Types.RegionInfo })
 --   ShipRequest      RemoteEvent     client -> server  (action: "exit" | "dock" | "launch")
 --   ShipState        RemoteEvent     server -> client  (ship: Model?, info: Types.ShipInfo?)
---   SuitRecover      RemoteEvent     client -> server  ("hangar" | "station") travel buttons
+--   SuitRecover      RemoteEvent     client -> server  ("hangar" | "station" | "visit", userId?) travel
 --   BeamInput        RemoteEvent     client -> server  (action: "start" | "aim" | "stop",
 --                                                       aim: Vector3?) aim in ship space
 --   Notify           RemoteEvent     server -> client  (text: string)
@@ -43,6 +43,7 @@
 --   HatchRequest     RemoteFunction  client -> server  ("start", eggId, chamber?) -> (ok, message)
 --   WheelRequest     RemoteFunction  client -> server  ("spin") -> (ok, message, prizeIndex?)
 --   TutorialRequest  RemoteFunction  client -> server  ("ack", stepIndex | "skip") -> (ok, message)
+--   ChatAnnounce     RemoteEvent     server -> all     (text: string, colorHex: string) a chat system message
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -76,6 +77,7 @@ local Net = {
 	HatchRequest = folder:WaitForChild("HatchRequest") :: RemoteFunction,
 	WheelRequest = folder:WaitForChild("WheelRequest") :: RemoteFunction,
 	TutorialRequest = folder:WaitForChild("TutorialRequest") :: RemoteFunction,
+	ChatAnnounce = folder:WaitForChild("ChatAnnounce") :: RemoteEvent,
 }
 
 return Net

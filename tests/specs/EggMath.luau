@@ -36,23 +36,12 @@ return function(T, Loader)
 			T.equal(EggMath.percentText(EggMath.percent("Singularity")), "0.25%")
 		end)
 
-		T.test("prices start at PRICE_BASE and grow with each egg", function()
-			T.equal(EggMath.price(0), E.PRICE_BASE)
-			local last = 0
-			for bought = 0, 40 do
-				local price = EggMath.price(bought)
-				T.truthy(price >= last and price == math.floor(price), `egg {bought}`)
-				last = price
+		T.test("every mystery egg costs a flat 1,000 Stardust", function()
+			T.equal(E.PRICE_BASE, 1000)
+			for bought = 0, 200, 25 do
+				T.equal(EggMath.price(bought), 1000, `egg {bought}`)
 			end
-			T.equal(
-				EggMath.guaranteedPrice(0, "Basalt"),
-				E.PRICE_BASE * E.GUARANTEED_MULTIPLIER.Common
-			)
-			T.equal(
-				EggMath.guaranteedPrice(3, "DimensionalRift"),
-				EggMath.price(3) * E.GUARANTEED_MULTIPLIER.Interstellar
-			)
-			T.equal(EggMath.guaranteedPrice(0, "Nope"), nil)
+			T.equal(EggMath.guaranteedPrice, nil, "planets can't be bought directly")
 		end)
 
 		T.test("a batch costs each egg's own price in turn", function()
@@ -67,12 +56,6 @@ return function(T, Loader)
 			T.truthy(EggMath.isBatchSize(1) and EggMath.isBatchSize(10))
 			T.falsy(EggMath.isBatchSize(7))
 			T.falsy(EggMath.isBatchSize("10"))
-		end)
-
-		T.test("a chosen planet always costs more than a mystery egg", function()
-			for _, rarity in P.RARITY_ORDER do
-				T.truthy(E.GUARANTEED_MULTIPLIER[rarity] > 1, rarity)
-			end
 		end)
 
 		T.test("random eggs only when the policy is known to allow them", function()

@@ -943,7 +943,30 @@ function DataSystem.redeemCode(player: Player, code: string): (any, string?)
 	if profile.redeemedCodes[code] then
 		return nil, "You've already redeemed that code."
 	end
+	local P = Config.Planets
+	if def.allPlanets then
+		local free = P.MAX_PLANETS - PlanetInventory.count(profile.planets)
+		if free < #P.ORDER then
+			return nil,
+				`You need {#P.ORDER} free planet spaces (you have {math.max(free, 0)}). Sell some planets first.`
+		end
+	end
 	profile.redeemedCodes[code] = true
+	if def.allPlanets then
+		for _, typeId in P.ORDER do
+			local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
+			profile.nextPlanetId = nextId
+			profile.planets[id] = { typeId = typeId, level = 1 }
+			profile.discovered[typeId] = true
+		end
+		push(player, "discovered", table.clone(profile.discovered))
+		pushPlanets(player, profile)
+	end
+	if def.allShips then
+		for _, shipId in Config.Ships.ORDER do
+			DataSystem.grantShip(player, shipId)
+		end
+	end
 	if def.stardust then
 		DataSystem.addStardust(player, def.stardust)
 	end

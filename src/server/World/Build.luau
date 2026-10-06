@@ -224,8 +224,8 @@ function Build.dockZone(cframe: CFrame, size: Vector3, ownerUserId: number, pare
 	return zone
 end
 
--- Glowing square outline on a floor, marking a berth.
-function Build.berthOutline(floor: CFrame, size: number, parent: Instance)
+-- Glowing square outline on a floor, marking a ship dock.
+function Build.dockOutline(floor: CFrame, size: number, parent: Instance)
 	local half = size / 2
 	for _, edge in
 		{
@@ -236,7 +236,7 @@ function Build.berthOutline(floor: CFrame, size: number, parent: Instance)
 		}
 	do
 		Build.part({
-			name = "BerthOutline",
+			name = "DockOutline",
 			size = edge.size,
 			cframe = floor * CFrame.new(edge.offset),
 			color = COLORS.accent,

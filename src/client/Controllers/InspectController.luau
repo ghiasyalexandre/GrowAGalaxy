@@ -183,6 +183,7 @@ function InspectController.close()
 	table.clear(labels)
 	gui.Enabled = false
 	ClientState.inspecting = false
+	StarController.setPromptsShown(true)
 	-- Flying, the ship's chase camera takes over again by itself.
 	local camera = Workspace.CurrentCamera
 	if ClientState.mode ~= "ship" then
@@ -245,6 +246,8 @@ function InspectController.open(model: Model)
 	end
 	current = model
 	ClientState.inspecting = true
+	-- The Manage and Inspect prompts would cover the system being viewed.
+	StarController.setPromptsShown(false)
 	-- Frame the whole system: back far enough to see its outermost orbit.
 	local outer = S.SLOTS[StarMath.slots(typeId)].orbit
 	distance = outer * 2.4

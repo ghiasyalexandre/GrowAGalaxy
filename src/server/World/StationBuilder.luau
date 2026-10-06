@@ -417,16 +417,16 @@ function StationBuilder.build(
 		end
 	end
 	Build.part({
-		name = "BerthPad",
+		name = "DockPad",
 		size = Vector3.new(BERTH_PAD, 2, BERTH_PAD),
 		cframe = at(0, FLOOR_Y - 1, -BERTH_Z),
 		color = COLORS.deck,
 		material = Enum.Material.DiamondPlate,
 		parent = station,
 	})
-	Build.berthOutline(at(0, FLOOR_Y + 0.1, -BERTH_Z), 16, station)
+	Build.dockOutline(at(0, FLOOR_Y + 0.1, -BERTH_Z), 16, station)
 	local berth = at(0, FLOOR_Y + 6, -BERTH_Z)
-	Build.marker("StationBerth", berth, station)
+	Build.marker("StationDock", berth, station)
 	local dockZone = Build.dockZone(
 		at(0, FLOOR_Y + 9, -BERTH_Z - 13),
 		Vector3.new(60, 36, 70),
