@@ -36,7 +36,7 @@ and orbit smoke tests). Not yet playtested in Studio. No Robux involved.**
    Shipyard).
 5. With two clients: Visit the other player; they get a message.
 6. Egg Lab: every egg 1,000; no "Choose a planet" tab.
-7. Hatch a Legendary (e.g. from `PlanetzPlz`... codes don't hatch, so use eggs) and watch the
-   chat in both clients.
+7. Hatch a Legendary or Interstellar from an egg (rare: use a test server with lots of eggs)
+   and watch the chat in both clients.
 8. Hatch times: a Common takes 30 s.
 9. Fresh profile: the tutorial card shows one line per step, the dots and the green flash.
