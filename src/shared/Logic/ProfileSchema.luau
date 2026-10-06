@@ -52,7 +52,24 @@ local ProfileSchema = {}
 --    same level) in the same slot, or in inventory when that slot is past
 --    its star's new capacity (at most 9). Stars no longer save planets.
 --    Also new: eggs, hangar hatches and the daily wheel (start empty).
-ProfileSchema.VERSION = 15
+-- 16: settings gain floating, autoIncubate, keepNewTypes and autoSell
+--    (defaults: float, auto-incubate on, keep new types, auto-sell off);
+--    planets may be locked; `discovered` (the Planet Index) starts as every
+--    type the player owns. No existing data changes.
+ProfileSchema.VERSION = 16
+
+-- Auto-sell choices: only rarities players may auto-sell, set to true.
+local function autoSellSettings(raw: any): { [string]: boolean }
+	local result: { [string]: boolean } = {}
+	if type(raw) == "table" then
+		for _, rarity in Config.Planets.AUTO_SELL_RARITIES do
+			if raw[rarity] == true then
+				result[rarity] = true
+			end
+		end
+	end
+	return result
+end
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -64,6 +81,10 @@ local function defaultSettings(): Types.Settings
 		pvp = Config.Combat.PVP_DEFAULT,
 		showBounds = true,
 		showControls = true,
+		floating = true,
+		autoIncubate = true,
+		keepNewTypes = true,
+		autoSell = {},
 	}
 end
 
@@ -101,6 +122,7 @@ function ProfileSchema.default(): Profile
 		eggsBought = 0,
 		hatches = {},
 		wheel = { nextSpin = 0, lastPrize = 0 },
+		discovered = {},
 		trail = nil,
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
@@ -523,6 +545,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 			typeId = raw.typeId,
 			level = math.clamp(count(raw.level) or 1, 1, Config.Planets.MAX_LEVEL),
 			custom = if type(raw.custom) == "table" then raw.custom else nil,
+			locked = if raw.locked == true then true else nil,
 		}
 		local star = if type(raw.star) == "string" then data.galaxy.stars[raw.star] else nil
 		local slot = count(raw.slot)
@@ -538,6 +561,20 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 	data.planets = planets
 	data.nextPlanetId = math.max(count(data.nextPlanetId) or 1, highestId(rawPlanets) + 1)
+
+	-- The Planet Index: known types ever discovered, plus every type owned.
+	local discovered: { [string]: boolean } = {}
+	if type(data.discovered) == "table" then
+		for typeId, seen in data.discovered do
+			if type(typeId) == "string" and seen == true then
+				discovered[typeId] = true
+			end
+		end
+	end
+	for _, planet in planets do
+		discovered[planet.typeId] = true
+	end
+	data.discovered = discovered
 
 	-- Eggs and hatches: their planets were chosen when bought; never rerolled.
 	local eggs: { [string]: Types.EggRecord } = {}
@@ -635,6 +672,16 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 		showControls = if type(settings.showControls) == "boolean"
 			then settings.showControls
 			else fallback.showControls,
+		floating = if type(settings.floating) == "boolean"
+			then settings.floating
+			else fallback.floating,
+		autoIncubate = if type(settings.autoIncubate) == "boolean"
+			then settings.autoIncubate
+			else fallback.autoIncubate,
+		keepNewTypes = if type(settings.keepNewTypes) == "boolean"
+			then settings.keepNewTypes
+			else fallback.keepNewTypes,
+		autoSell = autoSellSettings(settings.autoSell),
 	}
 
 	local receipts: { string } = {}
@@ -687,6 +734,7 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		eggsBought = profile.eggsBought,
 		hatches = ProfileSchema.hatchesView(profile),
 		wheel = table.clone(profile.wheel),
+		discovered = table.clone(profile.discovered),
 	}
 end
 

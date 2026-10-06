@@ -709,6 +709,32 @@ function ConfigCheck.run(config: any): { string }
 		fail("Planets: LEGACY_FALLBACK must be a planet type")
 	end
 
+	-- Selling: a whole value per rarity, auto-sell only for real rarities,
+	-- and no profit from buying mystery eggs to sell them.
+	local expectedSale = 0
+	for _, rarityId in planets.RARITY_ORDER do
+		local value = planets.SELL_VALUE[rarityId]
+		if not isWhole(value) or value <= 0 then
+			fail(`Planets: SELL_VALUE.{rarityId} must be a positive whole number`)
+		else
+			expectedSale += planets.RARITIES[rarityId].weight / planets.WEIGHT_TOTAL * value
+		end
+	end
+	if expectedSale >= config.Eggs.PRICE_BASE then
+		fail("Planets: a mystery egg's expected SELL_VALUE must stay below Eggs.PRICE_BASE")
+	end
+	if planets.SELL_LEVEL_REFUND < 0 or planets.SELL_LEVEL_REFUND > 1 then
+		fail("Planets: SELL_LEVEL_REFUND must be from 0 to 1")
+	end
+	for _, rarityId in planets.AUTO_SELL_RARITIES do
+		if planets.RARITIES[rarityId] == nil then
+			fail(`Planets: AUTO_SELL_RARITIES names unknown rarity {rarityId}`)
+		end
+	end
+	if not isWhole(planets.MAX_PLANETS) or planets.MAX_PLANETS < 1 then
+		fail("Planets: MAX_PLANETS must be a positive whole number")
+	end
+
 	-- Eggs: prices that only grow, a multiplier for every rarity, sensible
 	-- incubator limits.
 	local eggs = config.Eggs
@@ -729,6 +755,20 @@ function ConfigCheck.run(config: any): { string }
 	end
 	if eggs.POLICY_RETRY <= 0 then
 		fail("Eggs: POLICY_RETRY must be positive")
+	end
+	if not table.find(eggs.MULTI_BUY, 1) then
+		fail("Eggs: MULTI_BUY must offer single eggs (1)")
+	end
+	for _, size in eggs.MULTI_BUY do
+		if not isWhole(size) or size < 1 or size > eggs.MAX_UNHATCHED then
+			fail("Eggs: MULTI_BUY sizes must be whole, from 1 to MAX_UNHATCHED")
+		end
+	end
+	if planets.RARITIES[eggs.ANNOUNCE_RARITY] == nil then
+		fail("Eggs: ANNOUNCE_RARITY must be a rarity")
+	end
+	if not isWhole(eggs.HATCH_FEED_SIZE) or eggs.HATCH_FEED_SIZE < 1 then
+		fail("Eggs: HATCH_FEED_SIZE must be a positive whole number")
 	end
 
 	-- Daily wheel: fixed whole prizes whose weights are percentages.

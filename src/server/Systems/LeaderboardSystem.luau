@@ -8,6 +8,9 @@
 --               reads: when their profile loads, every WRITE_INTERVAL
 --               seconds if it changed, and when they leave.
 --
+-- The top balances are read back every READ_INTERVAL seconds for the ISS
+-- Star Lounge board (top()); names are looked up once per user and cached.
+--
 -- Writes run one player at a time in their own threads and are spread over
 -- the interval, so a full server stays far below Roblox's write budget. A
 -- failed write is retried on the next round. The leaderboard store is
@@ -27,6 +30,9 @@ local LeaderboardSystem = {}
 
 local store: OrderedDataStore? = nil
 local written: { [Player]: number } = {} -- last value saved for each player
+export type Entry = { name: string, stardust: number }
+local top: { Entry } = {}
+local names: { [number]: string } = {}
 local latest: { [Player]: number } = {} -- last balance seen, for writing on leave
 
 local function write(userId: number, value: number): boolean
@@ -88,6 +94,48 @@ local function showLive()
 	end
 end
 
+local function nameOf(userId: number): string
+	local known = names[userId]
+	if known then
+		return known
+	end
+	local ok, name = pcall(function()
+		return Players:GetNameFromUserIdAsync(userId)
+	end)
+	local result = if ok and type(name) == "string" then name else `Player {userId}`
+	names[userId] = result
+	return result
+end
+
+-- Reads the top balances (yields).
+local function readTop()
+	local target = store
+	if target == nil then
+		return
+	end
+	local ok, pages = pcall(function()
+		return target:GetSortedAsync(false, L.BOARD_SIZE)
+	end)
+	if not ok then
+		warn(`[LeaderboardSystem] Couldn't read the top balances: {pages}`)
+		return
+	end
+	local entries: { Entry } = {}
+	for _, item in (pages :: DataStorePages):GetCurrentPage() do
+		local userId = tonumber(item.key)
+		if userId and type(item.value) == "number" then
+			table.insert(entries, { name = nameOf(userId), stardust = item.value })
+		end
+	end
+	top = entries
+end
+
+-- The latest top balances read from the global leaderboard (empty until
+-- the first read, and where the data store isn't available).
+function LeaderboardSystem.top(): { Entry }
+	return table.clone(top)
+end
+
 function LeaderboardSystem.start()
 	-- The player list works even where the data store doesn't (Studio).
 	task.spawn(function()
@@ -115,6 +163,12 @@ function LeaderboardSystem.start()
 		end
 		written[player] = nil
 		latest[player] = nil
+	end)
+	task.spawn(function()
+		while true do
+			readTop()
+			task.wait(L.READ_INTERVAL)
+		end
 	end)
 	task.spawn(function()
 		while true do

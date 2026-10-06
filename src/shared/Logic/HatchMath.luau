@@ -11,6 +11,10 @@
 --   finish  removes a due hatch and returns its planet type, once: a second
 --           call finds nothing. A type this server doesn't know is left to
 --           hatch on a server that does.
+--   advance finishes everything due at `now`, oldest first; with
+--           `autoStart` each freed chamber takes the oldest waiting egg,
+--           starting when the last one ended, so incubation carries on
+--           through time spent offline.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -83,6 +87,85 @@ function HatchMath.finish(
 	end
 	hatches[chamber] = nil
 	return hatch.outcome
+end
+
+local function eggNumber(id: string): number
+	return tonumber(string.match(id, "%d+")) or 0
+end
+
+-- The oldest waiting egg's id, if any.
+function HatchMath.oldestEgg(eggs: { [string]: Types.EggRecord }): string?
+	local best: string? = nil
+	for id in eggs do
+		if best == nil or eggNumber(id) < eggNumber(best) then
+			best = id
+		end
+	end
+	return best
+end
+
+export type Hatched = { typeId: string, chamber: string, at: number }
+
+-- Finishes every hatch due at `now` in the order they ended (and, with
+-- autoStart, any eggs that started and finished in a freed chamber since).
+function HatchMath.advance(
+	eggs: { [string]: Types.EggRecord },
+	hatches: { [string]: Types.HatchRecord },
+	now: number,
+	autoStart: boolean
+): { Hatched }
+	local results: { Hatched } = {}
+	local stuck: { [string]: boolean } = {} -- unknown types, left in place
+	while true do
+		local chamber: string? = nil
+		local ended = math.huge
+		for key, hatch in hatches do
+			if not stuck[key] and hatch.endsAt <= now then
+				if
+					hatch.endsAt < ended
+					or (hatch.endsAt == ended and (tonumber(key) or 0) < (tonumber(chamber) or 0))
+				then
+					chamber, ended = key, hatch.endsAt
+				end
+			end
+		end
+		if chamber == nil then
+			return results
+		end
+		local key = chamber :: string
+		local typeId = HatchMath.finish(hatches, key, now)
+		if typeId == nil then
+			stuck[key] = true
+		else
+			table.insert(results, { typeId = typeId, chamber = key, at = ended })
+			local eggId = if autoStart then HatchMath.oldestEgg(eggs) else nil
+			if eggId then
+				HatchMath.begin(eggs, hatches, eggId, tonumber(key) or 0, ended)
+			end
+		end
+	end
+end
+
+-- Puts the oldest waiting eggs into every free chamber at `now`. Returns
+-- how many started.
+function HatchMath.fill(
+	eggs: { [string]: Types.EggRecord },
+	hatches: { [string]: Types.HatchRecord },
+	now: number
+): number
+	local started = 0
+	for chamber = 1, E.HATCH_SLOTS do
+		if hatches[tostring(chamber)] == nil then
+			local eggId = HatchMath.oldestEgg(eggs)
+			if eggId == nil then
+				break
+			end
+			if HatchMath.begin(eggs, hatches, eggId, chamber, now) then
+				started += 1
+			end
+		end
+	end
+	return started
 end
 
 return HatchMath

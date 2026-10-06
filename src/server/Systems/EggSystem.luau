@@ -4,7 +4,10 @@
 -- EggRequest (RemoteFunction, client -> server):
 --   "status"                          -> (ok, message, policy) the player's
 --                                        random-egg eligibility (EggMath.Policy)
---   "buyMystery", expectedPrice?      -> (ok, message) one random egg
+--   "buyMystery", expectedTotal?, count? -> (ok, message) `count` random eggs
+--                                        (Config.Eggs.MULTI_BUY, default 1),
+--                                        each at its own rising price, bought
+--                                        together or not at all
 --   "buyChosen", typeId, expectedPrice? -> (ok, message) one egg of that type
 --
 -- A mystery egg's planet is rolled here with the server's own Random the
@@ -27,6 +30,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
+local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 
@@ -93,11 +97,11 @@ end
 
 local PROBLEMS: { [string]: string } = {
 	NoProfile = "Your save isn't ready yet. Try again in a moment.",
-	Full = `You can hold {E.MAX_UNHATCHED} eggs at once. Hatch some at your hangar first.`,
+	Full = `You can hold {E.MAX_UNHATCHED} unhatched eggs at once. Hatch some at your hangar first.`,
 	Poor = `You don't have enough {CURRENCY}.`,
 }
 
-local function buyMystery(player: Player, expected: unknown): (boolean, string)
+local function buyMystery(player: Player, expected: unknown, rawCount: unknown): (boolean, string)
 	local profile = DataSystem.getProfile(player)
 	if profile == nil then
 		return false, PROBLEMS.NoProfile
@@ -109,17 +113,30 @@ local function buyMystery(player: Player, expected: unknown): (boolean, string)
 		end
 		return false, POLICY_MESSAGES[policy]
 	end
-	local price = EggMath.price(profile.eggsBought)
-	if not expectedMatches(expected, price) then
-		return false, `The price changed to {price} {CURRENCY}. Check it and try again.`
+	local count = if rawCount == nil then 1 else rawCount
+	if not EggMath.isBatchSize(count) then
+		return false, "You can't buy that many at once."
 	end
-	local outcome = EggMath.pick(rng:NextInteger(1, P.WEIGHT_TOTAL))
-	local id, problem = DataSystem.buyEgg(player, outcome, false, price)
-	if id == nil then
+	local n = count :: number
+	local prices, total = EggMath.batch(profile.eggsBought, n)
+	if not expectedMatches(expected, total) then
+		return false,
+			`The price changed to {Format.commas(total)} {CURRENCY}. Check it and try again.`
+	end
+	local outcomes: { string } = {}
+	for _ = 1, n do
+		table.insert(outcomes, EggMath.pick(rng:NextInteger(1, P.WEIGHT_TOTAL)))
+	end
+	local ids, problem = DataSystem.buyEggs(player, outcomes, false, prices)
+	if ids == nil then
 		return false, PROBLEMS[problem or "NoProfile"]
 	end
-	DataSystem.addStat(player, "eggsBought", 1)
-	return true, `Mystery egg bought for {price} {CURRENCY}! Hatch it in your hangar's incubator.`
+	DataSystem.addStat(player, "eggsBought", n)
+	return true,
+		`{if n == 1 then "Mystery egg" else `{n} mystery eggs`} bought for {Format.commas(total)} {CURRENCY}! Hatch {if n
+				== 1
+			then "it"
+			else "them"} in your hangar's incubator.`
 end
 
 local function buyChosen(player: Player, typeId: unknown, expected: unknown): (boolean, string)
@@ -157,7 +174,7 @@ local function onRequest(
 		end
 		return true, POLICY_MESSAGES[policy], policy
 	elseif action == "buyMystery" then
-		local ok, message = buyMystery(player, a)
+		local ok, message = buyMystery(player, a, b)
 		return ok, message, nil
 	elseif action == "buyChosen" then
 		local ok, message = buyChosen(player, a, b)

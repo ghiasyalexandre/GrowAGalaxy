@@ -292,32 +292,54 @@ export type EggProblem = "NoProfile" | "Full" | "Poor"
 -- mystery eggs cost more) and saves the egg with its planet already chosen.
 -- Nothing yields in between, so the Stardust and the egg are saved together
 -- or not at all. Returns the new egg id, or nil and why.
+function DataSystem.buyEggs(
+	player: Player,
+	outcomes: { string },
+	guaranteed: boolean,
+	prices: { number }
+): ({ string }?, EggProblem?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or #outcomes == 0 or #outcomes ~= #prices then
+		return nil, "NoProfile"
+	end
+	local total = 0
+	for _, price in prices do
+		local whole = wholePositive(price)
+		if whole == nil then
+			return nil, "NoProfile"
+		end
+		total += whole
+	end
+	if EggMath.held(profile.eggs, profile.hatches) + #outcomes > Config.Eggs.MAX_UNHATCHED then
+		return nil, "Full"
+	end
+	if profile.stardust < total then
+		return nil, "Poor"
+	end
+	profile.stardust -= total
+	profile.eggsBought += #outcomes
+	local ids: { string } = {}
+	local now = os.time()
+	for _, outcome in outcomes do
+		local id = `e{profile.nextEggId}`
+		profile.nextEggId += 1
+		profile.eggs[id] = { outcome = outcome, guaranteed = guaranteed, boughtAt = now }
+		table.insert(ids, id)
+	end
+	push(player, "stardust", profile.stardust)
+	push(player, "eggsBought", profile.eggsBought)
+	push(player, "eggs", ProfileSchema.eggsView(profile))
+	return ids, nil
+end
+
 function DataSystem.buyEgg(
 	player: Player,
 	outcome: string,
 	guaranteed: boolean,
 	price: number
 ): (string?, EggProblem?)
-	local profile = DataSystem.getProfile(player)
-	local whole = wholePositive(price)
-	if profile == nil or whole == nil then
-		return nil, "NoProfile"
-	end
-	if EggMath.held(profile.eggs, profile.hatches) >= Config.Eggs.MAX_UNHATCHED then
-		return nil, "Full"
-	end
-	if profile.stardust < whole then
-		return nil, "Poor"
-	end
-	profile.stardust -= whole
-	profile.eggsBought += 1
-	local id = `e{profile.nextEggId}`
-	profile.nextEggId += 1
-	profile.eggs[id] = { outcome = outcome, guaranteed = guaranteed, boughtAt = os.time() }
-	push(player, "stardust", profile.stardust)
-	push(player, "eggsBought", profile.eggsBought)
-	push(player, "eggs", ProfileSchema.eggsView(profile))
-	return id, nil
+	local ids, problem = DataSystem.buyEggs(player, { outcome }, guaranteed, { price })
+	return if ids then ids[1] else nil, problem :: EggProblem?
 end
 
 -- Puts a waiting egg into an incubator chamber ("1".."HATCH_SLOTS") in one
@@ -337,27 +359,192 @@ function DataSystem.startHatch(player: Player, eggId: string, chamber: number): 
 	return hatch
 end
 
--- Finishes a hatch whose time is up, in one step: the hatch record goes and
--- the planet joins the inventory, so it is granted exactly once and the
--- chamber is free again. Returns the new planet's id and type, or nil if
--- the chamber has nothing ready (`now` is unix seconds).
-function DataSystem.completeHatch(player: Player, chamber: string, now: number): (string?, string?)
+export type HatchResult = {
+	typeId: string,
+	chamber: string,
+	at: number,
+	planetId: string?, -- kept: the new planet's id
+	sold: number?, -- sold on hatching: the Stardust it paid
+	reason: string?, -- why it was sold: "auto" or "full"
+	new: boolean, -- a type the player had never owned before
+}
+
+-- Finishes every hatch whose time is up at `now` (unix seconds), in the
+-- order they ended, in one step (Logic/HatchMath). With the autoIncubate
+-- setting a freed chamber takes the oldest waiting egg from the moment it
+-- freed, so incubation carries on offline. Each hatched planet is granted
+-- exactly once: it joins the inventory, or is sold at once (paying its
+-- sale value) when its rarity is set to auto-sell (and, with keepNewTypes,
+-- it isn't a type the player has never had) or the inventory is full.
+function DataSystem.advanceHatches(player: Player, now: number): { HatchResult }
 	local profile = DataSystem.getProfile(player)
-	if profile == nil then
-		return nil, nil
+	if profile == nil or next(profile.hatches) == nil then
+		return {}
 	end
-	local typeId = HatchMath.finish(profile.hatches, chamber, now)
-	if typeId == nil then
-		return nil, nil
+	local settings = profile.settings
+	local hatched = HatchMath.advance(profile.eggs, profile.hatches, now, settings.autoIncubate)
+	if #hatched == 0 then
+		return {}
 	end
-	local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
-	profile.nextPlanetId = nextId
-	profile.planets[id] = { typeId = typeId, level = 1 }
-	profile.stats.planetsHatched = (profile.stats.planetsHatched or 0) + 1
+	local results: { HatchResult } = {}
+	local earned = 0
+	for _, item in hatched do
+		local def = Config.Planets.BY_ID[item.typeId]
+		local isNew = not profile.discovered[item.typeId]
+		profile.discovered[item.typeId] = true
+		local result: HatchResult = {
+			typeId = item.typeId,
+			chamber = item.chamber,
+			at = item.at,
+			new = isNew,
+		}
+		local full = PlanetInventory.count(profile.planets) >= Config.Planets.MAX_PLANETS
+		local auto = settings.autoSell[def.rarity] == true and not (settings.keepNewTypes and isNew)
+		if full or auto then
+			local value = PlanetInventory.sellValue({ typeId = item.typeId, level = 1 })
+			earned += value
+			result.sold = value
+			result.reason = if full then "full" else "auto"
+		else
+			local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
+			profile.nextPlanetId = nextId
+			profile.planets[id] = { typeId = item.typeId, level = 1 }
+			result.planetId = id
+		end
+		profile.stats.planetsHatched = (profile.stats.planetsHatched or 0) + 1
+		table.insert(results, result)
+	end
+	profile.stardust += earned
+	if earned > 0 then
+		push(player, "stardust", profile.stardust)
+	end
+	push(player, "eggs", ProfileSchema.eggsView(profile))
 	push(player, "hatches", ProfileSchema.hatchesView(profile))
+	push(player, "discovered", table.clone(profile.discovered))
 	pushPlanets(player, profile)
 	DataSystem.statChanged:Fire(player, "planetsHatched")
-	return id, typeId
+	return results
+end
+
+-- Puts the oldest waiting eggs into every free chamber now. Returns how
+-- many started.
+function DataSystem.fillChambers(player: Player): number
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return 0
+	end
+	local started = HatchMath.fill(profile.eggs, profile.hatches, os.time())
+	if started > 0 then
+		push(player, "eggs", ProfileSchema.eggsView(profile))
+		push(player, "hatches", ProfileSchema.hatchesView(profile))
+	end
+	return started
+end
+
+-- Sells planets from the inventory in one step: every id that may be sold
+-- (PlanetInventory.canSell: owned, not in orbit, not locked) is removed and
+-- pays its sale value; the rest are left alone. Returns how many sold and
+-- the Stardust paid.
+function DataSystem.sellPlanets(player: Player, ids: { string }): (number, number)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return 0, 0
+	end
+	local sold, total = 0, 0
+	for _, id in ids do
+		if PlanetInventory.canSell(profile.planets, id) then
+			total += PlanetInventory.sellValue(profile.planets[id])
+			profile.planets[id] = nil
+			sold += 1
+		end
+	end
+	if sold > 0 then
+		profile.stardust += total
+		push(player, "stardust", profile.stardust)
+		push(player, "planets", ProfileSchema.planetsView(profile))
+		DataSystem.addStat(player, "planetsSold", sold)
+	end
+	return sold, total
+end
+
+-- Locks (protects from any selling) or unlocks an owned planet.
+function DataSystem.setPlanetLocked(player: Player, planetId: string, locked: boolean): boolean
+	local profile = DataSystem.getProfile(player)
+	local planet = if profile then profile.planets[planetId] else nil
+	if profile == nil or planet == nil then
+		return false
+	end
+	planet.locked = if locked then true else nil
+	push(player, "planets", ProfileSchema.planetsView(profile))
+	return true
+end
+
+-- Rearranges planets into the best-earning layout (PlanetInventory.best),
+-- settling income first. Returns the ids of the stars whose planets changed.
+function DataSystem.equipBest(player: Player): { string }
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return {}
+	end
+	local layout = PlanetInventory.best(profile.planets, profile.galaxy.stars)
+	local changed: { [string]: boolean } = {}
+	local moves = 0
+	for id, planet in profile.planets do
+		local target = layout[id]
+		if
+			planet.star ~= (if target then target.star else nil)
+			or planet.slot ~= (if target then target.slot else nil)
+		then
+			moves += 1
+		end
+	end
+	if moves == 0 then
+		return {}
+	end
+	DataSystem.settleIncome(player)
+	for id, planet in profile.planets do
+		local target = layout[id]
+		if
+			planet.star ~= (if target then target.star else nil)
+			or planet.slot ~= (if target then target.slot else nil)
+		then
+			if planet.star then
+				changed[planet.star] = true
+			end
+			if target then
+				changed[target.star] = true
+			end
+			planet.star = if target then target.star else nil
+			planet.slot = if target then target.slot else nil
+		end
+	end
+	pushPlanets(player, profile)
+	local list: { string } = {}
+	for starId in changed do
+		table.insert(list, starId)
+	end
+	return list
+end
+
+-- Turns automatic selling of newly hatched planets of `rarity` on or off
+-- (only Config.Planets.AUTO_SELL_RARITIES).
+function DataSystem.setAutoSell(player: Player, rarity: unknown, on: unknown): boolean
+	local profile = DataSystem.getProfile(player)
+	if
+		profile == nil
+		or type(rarity) ~= "string"
+		or type(on) ~= "boolean"
+		or table.find(Config.Planets.AUTO_SELL_RARITIES, rarity) == nil
+	then
+		return false
+	end
+	if on then
+		profile.settings.autoSell[rarity] = true
+	else
+		profile.settings.autoSell[rarity] = nil
+	end
+	push(player, "settings", table.clone(profile.settings))
+	return true
 end
 
 -- The daily wheel (Config.Wheel): if a free spin is ready at `now` (unix
@@ -691,6 +878,9 @@ local BOOLEAN_SETTINGS = {
 	pvp = true,
 	showBounds = true,
 	showControls = true,
+	floating = true,
+	autoIncubate = true,
+	keepNewTypes = true,
 }
 -- Player settings that are volumes, 0 to 1.
 local VOLUME_SETTINGS = { sfxVolume = true, musicVolume = true }

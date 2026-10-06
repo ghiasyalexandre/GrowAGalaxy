@@ -15,6 +15,13 @@
 -- hoops), Ship Showroom (ship models turning on pads) and the Raid Airlock.
 -- Gravity is off, so players float; floors give them something to push on.
 --
+-- Boards (parts tagged "GaG_IssBoard", attribute Board, a SurfaceGui with
+-- Title and Body labels): the Arrival directory (fixed text), the Star
+-- Lounge's Stardust leaderboard and the Egg Lab's rare-hatch feed (filled
+-- in by IssBoardSystem). The Star Lounge also has the Daily Wheel kiosk
+-- (prompt attribute OpenPanel = "Wheel"), and the Egg Lab an "EggGallery"
+-- marker that clients circle with one planet of each rarity.
+--
 -- Parts tagged "GaG_Spin" (with a SpinSpeed attribute, radians per second)
 -- are turned by every client (SpinController). The parts named in
 -- WorldSystem.MARKERS are the contract with the rest of the game.
@@ -218,6 +225,76 @@ local function hoop(parent: Instance, center: Vector3, radius: number, color: st
 	end
 end
 
+local BOARD_TAG = "GaG_IssBoard"
+
+-- A wall board with a title and a body text, readable on `face`.
+local function board(
+	name: string,
+	kind: string,
+	size: Vector3,
+	cframe: CFrame,
+	face: Enum.NormalId,
+	title: string,
+	body: string,
+	accent: string,
+	parent: Instance
+): Part
+	local part = Build.part({
+		name = name,
+		size = size,
+		cframe = cframe,
+		color = "#141A2E",
+		material = Enum.Material.SmoothPlastic,
+		parent = parent,
+	})
+	part:SetAttribute("Board", kind)
+	CollectionService:AddTag(part, BOARD_TAG)
+	local gui = Instance.new("SurfaceGui")
+	gui.Name = "Board"
+	gui.Face = face
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	gui.PixelsPerStud = 40
+	gui.LightInfluence = 0
+	gui.Parent = part
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 24)
+	pad.PaddingRight = UDim.new(0, 24)
+	pad.PaddingTop = UDim.new(0, 16)
+	pad.Parent = gui
+	local heading = Instance.new("TextLabel")
+	heading.Name = "Title"
+	heading.BackgroundTransparency = 1
+	heading.Size = UDim2.new(1, 0, 0, 56)
+	heading.Font = Enum.Font.GothamBlack
+	heading.TextScaled = true
+	heading.TextColor3 = Color3.fromHex(accent)
+	heading.Text = title
+	heading.Parent = gui
+	local text = Instance.new("TextLabel")
+	text.Name = "Body"
+	text.BackgroundTransparency = 1
+	text.Position = UDim2.fromOffset(0, 66)
+	text.Size = UDim2.new(1, 0, 1, -86)
+	text.Font = Enum.Font.GothamMedium
+	text.TextSize = 30
+	text.TextWrapped = true
+	text.RichText = true
+	text.TextXAlignment = Enum.TextXAlignment.Left
+	text.TextYAlignment = Enum.TextYAlignment.Top
+	text.TextColor3 = Color3.fromRGB(225, 232, 255)
+	text.Text = body
+	text.Parent = gui
+	local edge = neon(
+		`{name}Edge`,
+		Vector3.new(size.X + 0.4, 0.3, 0.3),
+		cframe * CFrame.new(0, -size.Y / 2, 0),
+		accent,
+		parent
+	)
+	edge.CanQuery = false
+	return part
+end
+
 local function lounge(parent: Instance, span: Span)
 	-- The galaxy hologram over a round table.
 	Build.part({
@@ -260,6 +337,38 @@ local function lounge(parent: Instance, span: Span)
 	end
 	holo.PrimaryPart = core
 	spin(holo, 0.5)
+	-- The Stardust leaderboard on the wall (IssBoardSystem fills it in).
+	board(
+		"StardustBoard",
+		"Stardust",
+		Vector3.new(20, 9, 0.4),
+		CFrame.new(span.center, 3, 13.6),
+		Enum.NormalId.Front,
+		"Top Stardust",
+		"Loading...",
+		"#FFD36B",
+		parent
+	)
+	-- The Daily Wheel kiosk: opens the wheel panel (WheelController).
+	local kiosk = Build.console(
+		"WheelKiosk",
+		"Daily Wheel\nOne free spin a day",
+		wallSpot(span.center),
+		parent
+	)
+	local wheelTop = neon(
+		"KioskWheel",
+		Vector3.new(0.4, 3, 3),
+		kiosk.CFrame * CFrame.new(0, 3.4, 0) * CFrame.Angles(0, math.pi / 2, 0),
+		"#FFB020",
+		parent
+	)
+	wheelTop.Shape = Enum.PartType.Cylinder
+	spin(wheelTop, 0.8)
+	local kioskPrompt =
+		Build.prompt(kiosk, { action = "Spin the Daily Wheel", object = "Daily Wheel" })
+	kioskPrompt:SetAttribute("OpenPanel", "Wheel")
+	kioskPrompt.MaxActivationDistance = 12
 	-- Couches along both walls.
 	for _, z in { -10.5, 10.5 } do
 		for _, x in { span.center - 11, span.center + 11 } do
@@ -359,6 +468,21 @@ local function eggLab(parent: Instance, span: Span)
 	end
 	display.PrimaryPart = big
 	spin(display, 0.35)
+	-- Clients circle the egg with one planet of each rarity (IssGalleryController).
+	local gallery = Build.marker("EggGallery", CFrame.new(span.center, FLOOR_Y + 7, 0), parent)
+	CollectionService:AddTag(gallery, "GaG_EggGallery")
+	-- The latest rare hatches in this server (IssBoardSystem fills it in).
+	board(
+		"HatchFeedBoard",
+		"HatchFeed",
+		Vector3.new(18, 9, 0.4),
+		CFrame.new(span.center - 4, 3, -13.6),
+		Enum.NormalId.Back,
+		"Rare hatches",
+		"No rare planets hatched in this server yet. Will yours be the first?",
+		"#FF6EC8",
+		parent
+	)
 	-- Shelves of small eggs along both walls, one per rarity.
 	for side, z in { -11, 11 } do
 		Build.part({
@@ -501,6 +625,24 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 		if decal then
 			decal:Destroy()
 		end
+		board(
+			"Directory",
+			"Directory",
+			Vector3.new(24, 9, 0.4),
+			CFrame.new(span.center, 3, 13.6),
+			Enum.NormalId.Front,
+			"ISS Directory",
+			table.concat({
+				"<b>Observation Cupola</b>: the view",
+				"<b>Star Lounge</b>: top Stardust, the Daily Wheel",
+				"<b>Planet Egg Lab</b>: planet eggs, odds, rare hatches",
+				"<b>Navigation</b>: route to your station",
+				"<b>Zero G Dodgeball</b> · <b>Ship Showroom</b> · <b>Raid Airlock</b>",
+				"Your station: hatch eggs in the hangar's Incubator Bay",
+			}, "\n"),
+			"#4FC3F7",
+			parent
+		)
 		Build.sign({
 			name = "Welcome",
 			text = "Welcome to Grow a Galaxy!\nPress Launch Ship to fly. Raid the Death Star through the Raid Airlock.",

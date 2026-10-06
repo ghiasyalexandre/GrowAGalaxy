@@ -18,8 +18,9 @@
 --   ShopRequest      RemoteFunction  client -> server  (action: "buyShip" | "selectShip" |
 --                                                       "buyEquipment" | "expand", id: string?)
 --                                                       -> (ok: boolean, message: string)
---   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects" | "pvp",
---                                                       value: boolean)
+--   SettingChanged   RemoteEvent     client -> server  (name: "stabilization" | "reducedEffects" | "pvp" |
+--                                                       "floating" | "autoIncubate" | "keepNewTypes" | ...,
+--                                                       value: boolean) or ("autoSell", rarity, on)
 --   Reward           RemoteEvent     server -> client  (kind: "collect" | "mine" | "achievement",
 --                                                       amount: number, position: Vector3?,
 --                                                       label: string?) celebrate earned Stardust

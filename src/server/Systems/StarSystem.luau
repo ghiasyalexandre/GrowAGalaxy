@@ -18,6 +18,11 @@
 --                                               elsewhere
 --   "unequipPlanet", planetId                   back to the planet inventory
 --   "levelPlanet", planetId                     next level (in orbit or not)
+--   "sellPlanets", { planetId }                 sell inventory planets (never
+--                                               in orbit or locked) for Stardust
+--   "lockPlanet", planetId, locked: boolean     protect a planet from selling
+--   "equipBest"                                 fill every orbit with the
+--                                               best-earning planets
 -- Every request is validated here: ownership, Config.Stars, the region's
 -- bounds and star spacing (Logic/PlacementRules), capacity, orbits and
 -- cost. The client's ghost preview and panels run the same rules but are
@@ -34,6 +39,7 @@ local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
+local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local PlacementRules = require(ReplicatedStorage.Shared.Logic.PlacementRules)
 local PlanetInventory = require(ReplicatedStorage.Shared.Logic.PlanetInventory)
@@ -364,6 +370,65 @@ local function levelPlanet(player: Player, planetId: unknown): (boolean, string)
 			else " once it orbits a star"}.`
 end
 
+-- Star and planet income per second (before passes, boosts and trails).
+local function baseIncome(profile: Types.Profile): number
+	return StarMath.totalIncome(profile.galaxy.stars, profile.planets)
+end
+
+local function sellPlanets(player: Player, rawIds: unknown): (boolean, string)
+	if type(rawIds) ~= "table" then
+		return false, REJECTIONS.Invalid
+	end
+	local ids: { string } = {}
+	for index, id in rawIds :: { any } do
+		if
+			type(index) ~= "number"
+			or type(id) ~= "string"
+			or index > Config.Planets.MAX_PLANETS
+		then
+			return false, REJECTIONS.Invalid
+		end
+		table.insert(ids, id)
+	end
+	local sold, total = DataSystem.sellPlanets(player, ids)
+	if sold == 0 then
+		return false, "Nothing sold: planets in orbit or locked can't be sold."
+	end
+	return true,
+		`Sold {sold} {if sold == 1 then "planet" else "planets"} for {Format.commas(total)} {CURRENCY}.{if sold
+				< #ids
+			then " Planets in orbit or locked were kept."
+			else ""}`
+end
+
+local function lockPlanet(player: Player, planetId: unknown, locked: unknown): (boolean, string)
+	if type(planetId) ~= "string" or type(locked) ~= "boolean" then
+		return false, REJECTIONS.Invalid
+	end
+	if not DataSystem.setPlanetLocked(player, planetId, locked) then
+		return false, REJECTIONS.Invalid
+	end
+	return true, if locked then "Locked: this planet can't be sold." else "Unlocked."
+end
+
+local function equipBest(player: Player): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local before = baseIncome(profile)
+	local changed = DataSystem.equipBest(player)
+	if #changed == 0 then
+		return true, "Your best planets are already in orbit."
+	end
+	for _, starId in changed do
+		refresh(player, starId)
+	end
+	local after = baseIncome(profile)
+	return true,
+		`Planets rearranged: {Format.commas(before)} -> {Format.commas(after)} {CURRENCY}/s before boosts.`
+end
+
 local function onRequest(
 	player: Player,
 	action: unknown,
@@ -388,6 +453,12 @@ local function onRequest(
 		return unequipPlanet(player, a)
 	elseif action == "levelPlanet" then
 		return levelPlanet(player, a)
+	elseif action == "sellPlanets" then
+		return sellPlanets(player, a)
+	elseif action == "lockPlanet" then
+		return lockPlanet(player, a, b)
+	elseif action == "equipBest" then
+		return equipBest(player)
 	end
 	return false, REJECTIONS.Invalid
 end

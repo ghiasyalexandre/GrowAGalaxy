@@ -25,6 +25,24 @@ function EggMath.price(bought: number): number
 	return math.floor(E.PRICE_BASE * E.PRICE_GROWTH ^ math.max(bought, 0) + 0.5)
 end
 
+-- Buying `count` mystery eggs at once after `bought`: each at its own
+-- price, as if bought one by one. Returns the prices and their total.
+function EggMath.batch(bought: number, count: number): ({ number }, number)
+	local prices: { number } = {}
+	local total = 0
+	for index = 0, count - 1 do
+		local price = EggMath.price(bought + index)
+		table.insert(prices, price)
+		total += price
+	end
+	return prices, total
+end
+
+-- Whether `count` is one of the offered multi-buy sizes.
+function EggMath.isBatchSize(count: unknown): boolean
+	return type(count) == "number" and table.find(Config.Eggs.MULTI_BUY, count) ~= nil
+end
+
 -- The price of a chosen-planet egg of `typeId` after `bought` eggs, or nil
 -- for an unknown type.
 function EggMath.guaranteedPrice(bought: number, typeId: string): number?

@@ -17,6 +17,7 @@ type PlanetRecord = Types.PlanetRecord
 type StarRecord = Types.StarRecord
 
 export type Problem = "UnknownPlanet" | "UnknownStar" | "SlotLocked" | "SlotTaken"
+export type SellProblem = "UnknownPlanet" | "InOrbit" | "Locked"
 
 local PlanetInventory = {}
 
@@ -151,6 +152,122 @@ function PlanetInventory.releaseStar(planets: { [string]: PlanetRecord }, starId
 		end
 	end
 	return moved
+end
+
+-- What selling a planet pays: its rarity's SELL_VALUE plus SELL_LEVEL_REFUND
+-- of the Stardust its levels cost (Config.Planets), whole.
+function PlanetInventory.sellValue(planet: PlanetRecord): number
+	local def = Config.Planets.BY_ID[planet.typeId]
+	if def == nil then
+		return 0
+	end
+	local spent = 0
+	for level = 1, planet.level - 1 do
+		spent += StarMath.planetLevelCost(def.id, level) or 0
+	end
+	return (Config.Planets.SELL_VALUE[def.rarity] or 0)
+		+ math.floor(spent * Config.Planets.SELL_LEVEL_REFUND)
+end
+
+-- Whether a planet may be sold: owned, a known type, in the inventory (not
+-- in orbit) and not locked.
+function PlanetInventory.canSell(
+	planets: { [string]: PlanetRecord },
+	planetId: string
+): (boolean, SellProblem?)
+	local planet = planets[planetId]
+	if planet == nil or Config.Planets.BY_ID[planet.typeId] == nil then
+		return false, "UnknownPlanet"
+	end
+	if planet.star then
+		return false, "InOrbit"
+	end
+	if planet.locked then
+		return false, "Locked"
+	end
+	return true, nil
+end
+
+-- How many planets the player owns.
+function PlanetInventory.count(planets: { [string]: PlanetRecord }): number
+	local n = 0
+	for _ in planets do
+		n += 1
+	end
+	return n
+end
+
+local function idNumber(id: string): number
+	return tonumber(string.match(id, "%d+")) or 0
+end
+
+-- The most productive arrangement: every open orbit of every star filled
+-- with the best-earning planets (income is the same whichever star a planet
+-- orbits). Planets already in orbit that make the cut stay where they are;
+-- the rest of the chosen fill free slots in star then slot order. Returns
+-- planet id -> { star, slot } for every planet that should be in orbit;
+-- any planet missing from it should be in the inventory.
+function PlanetInventory.best(
+	planets: { [string]: PlanetRecord },
+	stars: { [string]: StarRecord }
+): { [string]: { star: string, slot: number } }
+	local starIds: { string } = {}
+	local open = 0
+	for id, star in stars do
+		table.insert(starIds, id)
+		open += StarMath.slots(star.typeId)
+	end
+	table.sort(starIds, function(a, b)
+		return idNumber(a) < idNumber(b)
+	end)
+	local candidates: { string } = {}
+	for id, planet in planets do
+		if Config.Planets.BY_ID[planet.typeId] then
+			table.insert(candidates, id)
+		end
+	end
+	table.sort(candidates, function(a, b)
+		local pa, pb = planets[a], planets[b]
+		local ia = StarMath.planetIncome(pa.typeId, pa.level)
+		local ib = StarMath.planetIncome(pb.typeId, pb.level)
+		if ia ~= ib then
+			return ia > ib
+		end
+		-- Equal earners: keep the ones already in orbit, so nothing moves.
+		local ea, eb =
+			pa.star ~= nil and stars[pa.star] ~= nil, pb.star ~= nil and stars[pb.star] ~= nil
+		if ea ~= eb then
+			return ea
+		end
+		return idNumber(a) < idNumber(b)
+	end)
+	local result: { [string]: { star: string, slot: number } } = {}
+	local taken: { [string]: boolean } = {}
+	local chosen: { string } = {}
+	for index = 1, math.min(open, #candidates) do
+		local id = candidates[index]
+		local planet = planets[id]
+		local star = if planet.star then stars[planet.star] else nil
+		if star and planet.slot and planet.slot <= StarMath.slots(star.typeId) then
+			result[id] = { star = planet.star :: string, slot = planet.slot }
+			taken[`{planet.star}#{planet.slot}`] = true
+		else
+			table.insert(chosen, id)
+		end
+	end
+	local next = 1
+	for _, starId in starIds do
+		for slot = 1, StarMath.slots(stars[starId].typeId) do
+			if next > #chosen then
+				return result
+			end
+			if not taken[`{starId}#{slot}`] then
+				result[chosen[next]] = { star = starId, slot = slot }
+				next += 1
+			end
+		end
+	end
+	return result
 end
 
 -- A new planet id ("p<n>") and the next counter.

@@ -356,6 +356,19 @@ local function incubate(eggId: string, chamber: number)
 	refresh()
 end
 
+local function fillAll()
+	if busy then
+		return
+	end
+	busy = true
+	local ok, message = Net.HatchRequest:InvokeServer("fill")
+	busy = false
+	ClientState.notify:Fire(
+		if type(message) == "string" then message else if ok then "Done" else "Failed"
+	)
+	refresh()
+end
+
 local function freeChamber(): number?
 	local profile = ClientState.profile
 	local hatches = if profile and profile.hatches then profile.hatches else {}
@@ -414,6 +427,33 @@ refresh = function()
 	Theme.clear(list)
 	table.clear(timerLabels)
 	local order = 0
+	-- Fill every free chamber at once, and the auto-incubate switch.
+	local tools = Theme.row(list, 40, order)
+	tools.BackgroundTransparency = 1
+	local free = running < E.HATCH_SLOTS and waiting > 0
+	local fill = Theme.button(
+		tools,
+		if free then "Fill all chambers" else "Nothing to fill",
+		if free then "buy" else "disabled",
+		if free then fillAll else nil
+	)
+	fill.Size = UDim2.new(0.5, -4, 1, -4)
+	local settings = if profile then profile.settings else nil
+	local auto = settings == nil or settings.autoIncubate ~= false
+	local toggle = Theme.button(
+		tools,
+		if auto then "Auto-incubate: ON" else "Auto-incubate: off",
+		if auto then "special" else "primary",
+		function()
+			if settings then
+				settings.autoIncubate = not auto
+			end
+			Net.SettingChanged:FireServer("autoIncubate", not auto)
+			refresh()
+		end
+	)
+	toggle.Position = UDim2.new(0.5, 4, 0, 0)
+	toggle.Size = UDim2.new(0.5, -4, 1, -4)
 	for index = 1, E.HATCH_SLOTS do
 		order += 1
 		local row = Theme.row(list, 40, order)
@@ -592,7 +632,7 @@ function HatchController.start()
 		end
 	end)
 	ClientState.profileChanged:Connect(function(field)
-		if field == "eggs" or field == "hatches" or field == "*" then
+		if field == "eggs" or field == "hatches" or field == "settings" or field == "*" then
 			refresh()
 		end
 	end)

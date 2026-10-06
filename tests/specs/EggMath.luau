@@ -55,6 +55,20 @@ return function(T, Loader)
 			T.equal(EggMath.guaranteedPrice(0, "Nope"), nil)
 		end)
 
+		T.test("a batch costs each egg's own price in turn", function()
+			local prices, total = EggMath.batch(3, 5)
+			T.equal(#prices, 5)
+			local sum = 0
+			for index, price in prices do
+				T.equal(price, EggMath.price(3 + index - 1))
+				sum += price
+			end
+			T.equal(total, sum)
+			T.truthy(EggMath.isBatchSize(1) and EggMath.isBatchSize(10))
+			T.falsy(EggMath.isBatchSize(7))
+			T.falsy(EggMath.isBatchSize("10"))
+		end)
+
 		T.test("a chosen planet always costs more than a mystery egg", function()
 			for _, rarity in P.RARITY_ORDER do
 				T.truthy(E.GUARANTEED_MULTIPLIER[rarity] > 1, rarity)

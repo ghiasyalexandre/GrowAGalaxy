@@ -16,6 +16,12 @@
 -- is faster, and launch() throws the player off a block (or back, when hit). Floors push a floating
 -- character up so its feet stay above them (they don't collide by themselves).
 -- Animations played on your own character replicate, so everyone sees them.
+--
+-- Floating off (the floating setting): wherever there's a floor within
+-- WALK_FLOOR_RANGE below the feet, the character walks and jumps on it
+-- instead, pulled down by a force on its own root (the world stays zero-g,
+-- so ships and everything else are unaffected). Off a floor's edge, in open
+-- space and in Zero G Dodgeball it floats as usual.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -57,12 +63,14 @@ type Suit = {
 	character: Model,
 	linear: LinearVelocity,
 	align: AlignOrientation,
+	gravity: VectorForce,
 	swim: AnimationTrack?,
 	swimIdle: AnimationTrack?,
 }
 
 local suit: Suit? = nil
-local active = false
+local active = false -- floating
+local walking = false -- on a floor with floating switched off
 local lastPosition: Vector3? = nil
 local settleUntil = 0
 local facing = CFrame.new()
@@ -129,6 +137,7 @@ end
 local function setup(character: Model)
 	suit = nil
 	active = false
+	walking = false
 	lastPosition = nil
 	local humanoid = character:WaitForChild("Humanoid", 10)
 	local root = character:WaitForChild("HumanoidRootPart", 10)
@@ -155,6 +164,15 @@ local function setup(character: Model)
 	linear.MaxForce = MAX_FORCE
 	linear.Enabled = false
 	linear.Parent = root
+
+	local gravity = Instance.new("VectorForce")
+	gravity.Name = "SuitGravity"
+	gravity.Attachment0 = attachment
+	gravity.RelativeTo = Enum.ActuatorRelativeTo.World
+	gravity.ApplyAtCenterOfMass = true
+	gravity.Force = Vector3.zero
+	gravity.Enabled = false
+	gravity.Parent = root
 
 	local align = Instance.new("AlignOrientation")
 	align.Name = "SuitStabilizer"
@@ -186,6 +204,7 @@ local function setup(character: Model)
 		character = character,
 		linear = linear,
 		align = align,
+		gravity = gravity,
 		swim = swim,
 		swimIdle = swimIdle,
 	}
@@ -274,12 +293,49 @@ local function keepAboveFloor(s: Suit, position: Vector3, velocity: Vector3): Ve
 	return Vector3.new(velocity.X, math.max(velocity.Y, rise), velocity.Z)
 end
 
+-- Whether the player has switched floating off (Settings).
+local function floatingOff(): boolean
+	local profile = ClientState.profile
+	return profile ~= nil and profile.settings ~= nil and profile.settings.floating == false
+end
+
+-- A walkable floor within WALK_FLOOR_RANGE below the feet.
+local function floorBelow(s: Suit): boolean
+	local params = RaycastParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = { s.character }
+	params.RespectCanCollide = true
+	local reach = legReach(s) + M.WALK_FLOOR_RANGE
+	return Workspace:Raycast(s.root.Position, Vector3.new(0, -reach, 0), params) ~= nil
+end
+
+-- Walking: the humanoid's own walking and jumping, our gravity, no thrust.
+local function setWalking(s: Suit, on: boolean)
+	if on == walking then
+		return
+	end
+	walking = on
+	s.gravity.Enabled = on
+	s.humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, on)
+	if not on then
+		s.gravity.Force = Vector3.zero
+	end
+end
+
 local function step(dt: number)
 	local s = suit
 	if s == nil or s.root.Parent == nil then
 		return
 	end
-	local shouldFloat = s.humanoid.Health > 0 and s.humanoid.SeatPart == nil
+	local free = s.humanoid.Health > 0 and s.humanoid.SeatPart == nil
+	local wantsWalk = free
+		and floatingOff()
+		and Players.LocalPlayer:GetAttribute("Dodgeball") ~= true
+		and floorBelow(s)
+	local shouldFloat = free and not wantsWalk
+	if not wantsWalk and walking then
+		setWalking(s, false)
+	end
 	if shouldFloat ~= active then
 		active = shouldFloat
 		s.linear.Enabled = active
@@ -290,8 +346,22 @@ local function step(dt: number)
 			facing = s.root.CFrame.Rotation
 			lean, roll = 0, 0
 		else
-			-- Seated (the ship's sit pose takes over) or dead.
+			-- Seated (the ship's sit pose takes over), walking or dead.
 			stopAnimations(s)
+		end
+	end
+	if wantsWalk then
+		setWalking(s, true)
+		s.humanoid.PlatformStand = false
+		s.gravity.Force = Vector3.new(0, -s.root.AssemblyMass * M.WALK_GRAVITY, 0)
+		-- Up (Space, A, R1) jumps: the suit's controls take those keys first.
+		if Input.isHeld("Up") and s.humanoid.FloorMaterial ~= Enum.Material.Air then
+			s.humanoid.Jump = true
+		end
+		local velocity = s.root.AssemblyLinearVelocity
+		if velocity.Y < -M.WALK_MAX_FALL_SPEED then
+			s.root.AssemblyLinearVelocity =
+				Vector3.new(velocity.X, -M.WALK_MAX_FALL_SPEED, velocity.Z)
 		end
 	end
 	if not active then
