@@ -161,6 +161,10 @@ return function(T, Loader)
 			end
 		end)
 
+		T.test("planet storage holds 200", function()
+			T.equal(P.MAX_PLANETS, 200)
+		end)
+
 		T.test("new ids count up", function()
 			local id, nextId = PlanetInventory.newId(7)
 			T.equal(id, "p7")

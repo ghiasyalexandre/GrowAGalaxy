@@ -20,6 +20,7 @@ return function(T, Loader)
 				T.equal(W.PRIZES[index].weight, pair[2])
 			end
 			T.equal(WheelMath.total(), 100)
+			T.equal(W.SPIN_COST, 1000, "a spin costs 1,000 Stardust")
 		end)
 
 		T.test("every roll lands on a prize, each prize on exactly its weight", function()

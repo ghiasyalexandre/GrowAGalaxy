@@ -112,7 +112,7 @@ export type Profile = {
 	nextEggId: number,
 	eggsBought: number, -- mystery eggs ever bought (their price grows with it)
 	hatches: { [string]: HatchRecord }, -- hangar hatch slot ("1".."5") -> incubation
-	-- Daily wheel (Config.Wheel): unix seconds of the next free spin and the
+	-- Daily wheel (Config.Wheel): unix seconds of the next spin and the
 	-- index of the last prize won (0 = never spun).
 	wheel: { nextSpin: number, lastPrize: number },
 	discovered: { [string]: boolean }, -- planet types ever owned (the Planet Index)

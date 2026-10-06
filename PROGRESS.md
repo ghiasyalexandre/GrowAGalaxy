@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 35 merged into `main`).
+Last updated: 2026-10-05 (stage 36 merged into `main`).
 
 ## Status by stage
 
@@ -41,6 +41,7 @@ Last updated: 2026-10-05 (stage 35 merged into `main`).
 | 33. Overhaul stage 4: hangar Incubator Bay with 5 chambers (atomic start, unix timestamps so eggs hatch offline, exactly-once grant that frees the chamber, offline summary, forming and reveal visuals, visitors view only) ([doc](docs/stage-33-hangar-incubator.md)) | Merged | Passing (211 tests) | **Not yet** |
 | 34. Overhaul stage 5: Daily Wheel (free spin every 24 h, server picks and grants before the animation, fixed prizes and shown odds, reduced-motion spin) ([doc](docs/stage-34-daily-wheel.md)) | Merged | Passing (215 tests) | **Not yet** |
 | 35. ISS directory, Top Stardust board, Daily Wheel kiosk, rare-hatch board and planet gallery; planet selling, locking, bulk and auto-sell, filters, Equip best, Planet Index; multi-buy eggs, auto-incubate with offline chaining, Fill all; Floating off (walk on floors); save v16 ([doc](docs/stage-35-iss-gacha-inventory.md)) | Merged | Passing (225 tests) | **Not yet** |
+| 36. Daily Wheel spins cost 1,000 Stardust (still once a day, paid-random-item policy applies); planet storage 200 | Merged | Passing | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

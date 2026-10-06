@@ -541,5 +541,5 @@ return {
 	-- Rarities a player may set to sell automatically when they hatch.
 	AUTO_SELL_RARITIES = { "Common", "Uncommon", "Rare", "Epic" } :: { string },
 	-- Planets a player may own at once; a planet hatching past it is sold.
-	MAX_PLANETS = 500,
+	MAX_PLANETS = 200,
 }

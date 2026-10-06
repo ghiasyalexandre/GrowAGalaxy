@@ -1,8 +1,13 @@
 # Stage 34 (overhaul stage 5): Daily Wheel
 
 **Status: code complete, CI-verified (format, lint, strict types, 215 unit tests, build, world
-and orbit smoke tests). Not yet playtested in Studio. No Robux involved: there are no paid
-spins.**
+and orbit smoke tests). Not yet playtested in Studio. No Robux involved.**
+
+**Stage 36 change:** a spin now costs **1,000 Stardust** (`Config.Wheel.SPIN_COST`), still once
+per 24 hours. Because Stardust can be bought with Robux, a paid spin counts as a paid random
+item: like mystery eggs it's only offered where PolicyService allows those, and stays off while
+that's unknown. The Spin button shows the price, "Need 1,000 Stardust" or "Unavailable". The
+cost is taken and the prize added in the same step; the smallest prize equals the cost.
 
 ## The wheel
 

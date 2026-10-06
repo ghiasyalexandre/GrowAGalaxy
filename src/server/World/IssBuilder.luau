@@ -350,12 +350,8 @@ local function lounge(parent: Instance, span: Span)
 		parent
 	)
 	-- The Daily Wheel kiosk: opens the wheel panel (WheelController).
-	local kiosk = Build.console(
-		"WheelKiosk",
-		"Daily Wheel\nOne free spin a day",
-		wallSpot(span.center),
-		parent
-	)
+	local kiosk =
+		Build.console("WheelKiosk", "Daily Wheel\nOne spin a day", wallSpot(span.center), parent)
 	local wheelTop = neon(
 		"KioskWheel",
 		Vector3.new(0.4, 3, 3),

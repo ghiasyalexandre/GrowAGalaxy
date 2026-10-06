@@ -1,6 +1,6 @@
 --!strict
 -- The Daily Wheel: a button on the right edge (next to Daily) with the time
--- to the next free spin and a badge when it's ready, and the wheel panel:
+-- to the next spin and a badge when it's ready, and the wheel panel:
 -- six equal segments with their Stardust prizes, the exact odds beside the
 -- wheel, the countdown and the Spin button.
 --
@@ -10,7 +10,8 @@
 -- Spin asks the server (WheelSystem), which picks and grants the prize first;
 -- the wheel then turns to land on it. With Reduced effects the wheel turns
 -- less than once in a second and the rim lights and badge stay still. There
--- are no paid spins.
+-- are no Robux spins: each costs Config.Wheel.SPIN_COST Stardust, and only
+-- where paid random items are allowed (EggRequest "status").
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -48,11 +49,13 @@ local chips: { Frame } = {}
 local bulbs: { Frame } = {}
 local status: TextLabel
 local spinButton: TextButton? = nil
-local spinReady: boolean? = nil -- what the Spin button currently shows
+local spinReady: string? = nil -- what the Spin button currently shows
 local spin: () -> ()
 local railLabel: TextLabel
 local badge: Frame
 local spinning = false
+-- Paid random prizes allowed for this player (EggRequest "status").
+local policy = "unknown"
 
 local function nextSpin(): number
 	local profile = ClientState.profile
@@ -61,6 +64,22 @@ end
 
 local function ready(): boolean
 	return WheelMath.ready(nextSpin(), Workspace:GetServerTimeNow())
+end
+
+local function affordable(): boolean
+	local profile = ClientState.profile
+	return profile ~= nil and profile.stardust >= W.SPIN_COST
+end
+
+local function fetchPolicy()
+	task.spawn(function()
+		local ok, okFlag, _, answer = pcall(function()
+			return Net.EggRequest:InvokeServer("status")
+		end)
+		if ok and okFlag and type(answer) == "string" then
+			policy = answer
+		end
+	end)
 end
 
 local function clockText(seconds: number): string
@@ -86,19 +105,31 @@ local function refresh()
 	badge.Visible = isReady
 	if gui.Enabled and not spinning then
 		status.Text = if isReady
-			then "Your free spin is ready!"
-			else `Next free spin in {clockText(left)}`
-		if spinReady ~= isReady or spinButton == nil then
+			then (if policy ~= "allowed"
+				then "The wheel isn't available for you (paid random prizes)."
+				else `Your spin is ready: {Format.commas(W.SPIN_COST)} {CURRENCY}`)
+			else `Next spin in {clockText(left)}`
+		local state = if not isReady
+			then "wait"
+			elseif policy ~= "allowed" then "blocked"
+			elseif not affordable() then "poor"
+			else "ready"
+		if spinReady ~= state or spinButton == nil then
 			-- Rebuilt rather than restyled: a button's look is set when made.
-			spinReady = isReady
+			spinReady = state
 			if spinButton then
 				spinButton:Destroy()
 			end
+			local cost = Format.commas(W.SPIN_COST)
 			local button = Theme.button(
 				panel,
-				if isReady then "SPIN" else "Come back tomorrow",
-				if isReady then "buy" else "disabled",
-				if isReady then spin else nil
+				if state == "ready"
+					then `SPIN · {cost}`
+					elseif state == "poor" then `Need {cost} {CURRENCY}`
+					elseif state == "blocked" then "Unavailable"
+					else "Come back tomorrow",
+				if state == "ready" then "buy" else "disabled",
+				if state == "ready" then spin else nil
 			)
 			button.AnchorPoint = Vector2.new(0.5, 1)
 			button.Position = UDim2.new(0.5, 0, 1, -12)
@@ -119,7 +150,7 @@ local function highlight(index: number)
 end
 
 spin = function()
-	if spinning or not ready() then
+	if spinning or not ready() or not affordable() or policy ~= "allowed" then
 		return
 	end
 	spinning = true
@@ -156,7 +187,7 @@ spin = function()
 	ClientState.celebrate:Fire(
 		"DAILY WHEEL",
 		`+{Format.commas(prize.stardust)} {CURRENCY}`,
-		`{EggMath.percentText(prize.weight / WheelMath.total() * 100)} chance  ·  next free spin in 24 h`,
+		`{EggMath.percentText(prize.weight / WheelMath.total() * 100)} chance  ·  next spin in 24 h`,
 		Color3.fromHex(prize.color),
 		prize.weight <= 6
 	)
@@ -166,6 +197,7 @@ end
 
 local function open()
 	gui.Enabled = true
+	fetchPolicy()
 	refresh()
 	Theme.popIn(panel)
 	if Input.device() == "gamepad" and spinButton then
@@ -325,7 +357,7 @@ local function buildOdds(parent: Frame)
 	Theme.label(list, {
 		LayoutOrder = 99,
 		Size = UDim2.new(1, 0, 0, 52),
-		Text = "One free spin every 24 hours. No paid spins. Prizes are fixed: no boost or pass changes them.",
+		Text = `One spin every 24 hours for {Format.commas(W.SPIN_COST)} {CURRENCY} (no Robux). Prizes are fixed: no boost or pass changes them.`,
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.None,
 		TextYAlignment = Enum.TextYAlignment.Top,
