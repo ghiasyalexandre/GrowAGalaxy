@@ -3,8 +3,10 @@
 -- planets and orbits from the Planets attribute (StarController).
 --
 --   Star_<id>     Model, PrimaryPart = Core, streams persistently
---                 attributes: StarId, OwnerUserId, TypeId, Level, Income,
---                 Planets ("Barren,,Ocean," by orbit slot), PlanetLevels ("3,,1,")
+--                 attributes: StarId, OwnerUserId, TypeId, Level, Income
+--                 (star plus planets in orbit), Orbits (open slots),
+--                 Planets ("Basalt,,Aurora," planet type by orbit slot),
+--                 PlanetLevels ("3,,1,")
 --     Core        Neon ball in the type's colour, with a PointLight
 --       Manage    ProximityPrompt tagged "TycoonPrompt", TycoonAction = "Manage"
 --     Disk        Black holes only: a glowing accretion disk
@@ -54,7 +56,12 @@ local function makeExtra(
 end
 
 -- Updates looks and attributes after any change (type, level, planets).
-function StarBuilder.apply(model: Model, star: Types.StarRecord)
+-- `equipped` is the star's planets by orbit slot.
+function StarBuilder.apply(
+	model: Model,
+	star: Types.StarRecord,
+	equipped: { [number]: Types.PlanetRecord }
+)
 	local def = S.BY_ID[star.typeId] or S.BY_ID[S.DEFAULT_TYPE]
 	local radius = StarMath.radius(def.id, star.level)
 	local core = model.PrimaryPart
@@ -93,16 +100,18 @@ function StarBuilder.apply(model: Model, star: Types.StarRecord)
 	end
 	model:SetAttribute("TypeId", def.id)
 	model:SetAttribute("Level", star.level)
-	model:SetAttribute("Income", StarMath.income(star))
-	model:SetAttribute("Planets", StarMath.encodePlanets(star.planets))
-	model:SetAttribute("PlanetLevels", StarMath.encodePlanetLevels(star))
+	model:SetAttribute("Income", StarMath.income(star, equipped))
+	model:SetAttribute("Orbits", StarMath.slots(def.id))
+	model:SetAttribute("Planets", StarMath.encodePlanets(equipped))
+	model:SetAttribute("PlanetLevels", StarMath.encodePlanetLevels(equipped))
 end
 
 function StarBuilder.build(
 	id: string,
 	star: Types.StarRecord,
 	cframe: CFrame,
-	ownerUserId: number
+	ownerUserId: number,
+	equipped: { [number]: Types.PlanetRecord }
 ): Model
 	local model = Build.model(`Star_{id}`)
 	model.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
@@ -129,7 +138,7 @@ function StarBuilder.build(
 	prompt.MaxActivationDistance = S.MANAGE_DISTANCE
 	prompt:SetAttribute("StarId", id)
 
-	StarBuilder.apply(model, star)
+	StarBuilder.apply(model, star, equipped)
 	return model
 end
 

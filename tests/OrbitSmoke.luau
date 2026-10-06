@@ -178,12 +178,20 @@ local regions = roblox.Instance.new("Folder")
 regions.Name = "Regions"
 regions.Parent = workspace
 local StarBuilder = requireModule(server.World.StarBuilder)
-local star = StarBuilder.build("s1", {
-	typeId = "BrownDwarf",
-	level = 2,
-	pos = { x = 0, y = 0, z = 0 },
-	planets = { ["1"] = "Barren", ["3"] = "Molten" },
-}, roblox.CFrame.new(100, 0, 0), 1)
+local star = StarBuilder.build(
+	"s1",
+	{
+		typeId = "BrownDwarf",
+		level = 2,
+		pos = { x = 0, y = 0, z = 0 },
+	},
+	roblox.CFrame.new(100, 0, 0),
+	1,
+	{
+		[1] = { typeId = "Basalt", level = 1 },
+		[3] = { typeId = "ObsidianLava", level = 2 },
+	}
+)
 star.Parent = regions
 local StarController = requireModule(client.Controllers.StarController)
 -- init builds the panel, which needs a real GUI layout; orbits don't use it.
@@ -227,6 +235,32 @@ if render and #planetParts() == 2 then
 		check(fromStar > 30, `{part.Name} stays out on its orbit ({math.floor(fromStar)} studs)`)
 	end
 end
+-- Every planet type in the catalog builds, with only known look features.
+local Planets = requireModule(shared.Config.Planets)
+local PlanetLook = requireModule(client.Fx.PlanetLook)
+local built, unknown = 0, {}
+for _, id in Planets.ORDER do
+	local def = Planets.BY_ID[id]
+	for _, feature in def.features do
+		if not PlanetLook.knows(feature) then
+			table.insert(unknown, `{id}.{feature}`)
+		end
+	end
+	local ok, body = pcall(PlanetLook.build, def, def.radius, false)
+	if ok and body then
+		built += 1
+		body:Destroy()
+	else
+		print(`  {id}: {body}`)
+	end
+end
+check(built == #Planets.ORDER, `all {#Planets.ORDER} planet types build ({built} did)`)
+check(
+	#unknown == 0,
+	`every look feature is drawn{if #unknown > 0
+		then ` (unknown: {table.concat(unknown, ", ")})`
+		else ""}`
+)
 print(`{failures} failed`)
 if failures > 0 then
 	process.exit(1)

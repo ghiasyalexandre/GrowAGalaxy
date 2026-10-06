@@ -33,8 +33,9 @@ return function(T, Loader)
 				shipsLaunched = true,
 				collections = true,
 				starUpgrades = true,
-				planetsBought = true,
-				planetUpgrades = true,
+				planetsEquipped = true, -- StarSystem equipPlanet
+				planetLevels = true, -- StarSystem levelPlanet
+				planetsHatched = true, -- HatchSystem
 				starEvolutions = true,
 				blackHoles = true,
 			}

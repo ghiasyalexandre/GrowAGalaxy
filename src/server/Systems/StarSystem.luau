@@ -10,13 +10,18 @@
 --   "upgrade", starId: string                   next level: more production
 --   "evolve", starId: string                    at max level: become the next star
 --                                               type, back to level 1, keeping
---                                               planets, with one more orbit
---   "buyPlanet", starId: string, planetId       buy a planet into the first free slot
---   "upgradePlanet", starId: string, slot: string  planet in that slot -> next tier
---   "levelPlanet", starId: string, slot: string    planet in that slot -> next level
+--                                               its planets; may open more orbits
+--                                               (never grants planets)
+--   "equipPlanet", planetId, starId, slot?      put an owned planet in that orbit
+--                                               (first free one if no slot),
+--                                               moving it there if it orbits
+--                                               elsewhere
+--   "unequipPlanet", planetId                   back to the planet inventory
+--   "levelPlanet", planetId                     next level (in orbit or not)
 -- Every request is validated here: ownership, Config.Stars, the region's
--- bounds and star spacing (Logic/PlacementRules), capacity and cost. The
--- client's ghost preview runs the same rules but is never trusted.
+-- bounds and star spacing (Logic/PlacementRules), capacity, orbits and
+-- cost. The client's ghost preview and panels run the same rules but are
+-- never trusted. Income is settled before anything changes it.
 
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
@@ -28,10 +33,10 @@ local Workspace = game:GetService("Workspace")
 local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
-local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local PlacementRules = require(ReplicatedStorage.Shared.Logic.PlacementRules)
+local PlanetInventory = require(ReplicatedStorage.Shared.Logic.PlanetInventory)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local RegionSystem = require(script.Parent.RegionSystem)
 local Reward = require(script.Parent.Parent.Util.Reward)
@@ -79,6 +84,12 @@ local function starsFolder(region: RegionSystem.Region): Instance
 	return folder
 end
 
+-- The planets in orbit around one of the player's stars.
+local function equipped(player: Player, starId: string): { [number]: Types.PlanetRecord }
+	local profile = DataSystem.getProfile(player)
+	return if profile then PlanetInventory.equippedOn(profile.planets, starId) else {}
+end
+
 local function spawnStar(
 	player: Player,
 	region: RegionSystem.Region,
@@ -86,7 +97,7 @@ local function spawnStar(
 	star: Types.StarRecord
 )
 	local cframe = CFrame.new(RegionSystem.toWorld(region, star.pos))
-	local model = StarBuilder.build(id, star, cframe, player.UserId)
+	local model = StarBuilder.build(id, star, cframe, player.UserId, equipped(player, id))
 	model.Parent = starsFolder(region)
 	models[player] = models[player] or {}
 	models[player][id] = model
@@ -144,7 +155,7 @@ local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean
 	if not DataSystem.spendStardust(player, cost) then
 		return false, `You need {cost} {CURRENCY} for this star.`
 	end
-	local star: Types.StarRecord = { typeId = def.id, level = 1, pos = pos, planets = {} }
+	local star: Types.StarRecord = { typeId = def.id, level = 1, pos = pos }
 	local id = DataSystem.addStar(player, star)
 	if id == nil then
 		DataSystem.addStardust(player, cost)
@@ -202,6 +213,19 @@ local function ownStar(player: Player, starId: unknown): (Types.StarRecord?, Mod
 	return star, model
 end
 
+-- Rebuilds a star's looks and attributes after it or its planets changed.
+local function refresh(player: Player, starId: string?)
+	local profile = DataSystem.getProfile(player)
+	local owned = models[player]
+	if profile == nil or owned == nil or starId == nil then
+		return
+	end
+	local star, model = profile.galaxy.stars[starId], owned[starId]
+	if star and model then
+		StarBuilder.apply(model, star, equipped(player, starId))
+	end
+end
+
 local function upgrade(player: Player, starId: unknown): (boolean, string)
 	local star, model = ownStar(player, starId)
 	if star == nil or model == nil then
@@ -220,11 +244,12 @@ local function upgrade(player: Player, starId: unknown): (boolean, string)
 	local level = star.level + 1
 	DataSystem.updateStar(player, starId :: string, { level = level })
 	DataSystem.addStat(player, "starUpgrades", 1)
-	StarBuilder.apply(model, star)
+	refresh(player, starId :: string)
+	local income = StarMath.income(star, equipped(player, starId :: string))
 	return true,
 		if level >= StarMath.maxLevel(star.typeId) and StarMath.evolveTarget(star.typeId)
-			then `Level {level}: max level! Now {StarMath.income(star)} {CURRENCY}/s. It can evolve.`
-			else `Level {level}! Now {StarMath.income(star)} {CURRENCY}/s.`
+			then `Level {level}: max level! Now {income} {CURRENCY}/s. It can evolve.`
+			else `Level {level}! Now {income} {CURRENCY}/s.`
 end
 
 local function evolve(player: Player, starId: unknown): (boolean, string)
@@ -244,93 +269,108 @@ local function evolve(player: Player, starId: unknown): (boolean, string)
 	if not DataSystem.spendStardust(player, def.cost) then
 		return false, `You need {def.cost} {CURRENCY} to evolve into a {def.displayName}.`
 	end
-	-- A new type starts again at level 1, keeping its planets.
+	-- A new type starts again at level 1, keeping its planets in their slots
+	-- (orbits never decrease up the ladder). It grants no planets.
+	local before = StarMath.slots(star.typeId)
 	DataSystem.updateStar(player, starId :: string, { typeId = target, level = 1 })
 	DataSystem.addStat(player, "starEvolutions", 1)
 	if target == BLACK_HOLE then
 		DataSystem.addStat(player, "blackHoles", 1)
 	end
-	StarBuilder.apply(model, star)
+	refresh(player, starId :: string)
+	local after = StarMath.slots(target)
 	return true,
-		`Your star became a {def.displayName}! {StarMath.slots(target)} orbits, levels up to {StarMath.maxLevel(
-			target
-		)}.`
+		`Your star became a {def.displayName}! {if after > before
+			then `{after} orbits ({after - before} new)`
+			else `{after} orbits`}, levels up to {StarMath.maxLevel(target)}.`
 end
 
-local function buyPlanet(player: Player, starId: unknown, planetId: unknown): (boolean, string)
-	local star, model = ownStar(player, starId)
-	local def = if type(planetId) == "string" then P.BY_ID[planetId] else nil
-	if star == nil or model == nil or def == nil then
+local function equipPlanet(
+	player: Player,
+	planetId: unknown,
+	starId: unknown,
+	rawSlot: unknown
+): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local star = ownStar(player, starId)
+	local planet = if profile and type(planetId) == "string" then profile.planets[planetId] else nil
+	if profile == nil or star == nil or planet == nil then
 		return false, REJECTIONS.Invalid
 	end
-	if not StarMath.planetAllowed(star.typeId, def.id) then
-		return false, "This star isn't big enough for that planet. Evolve it first."
-	end
-	local slot = StarMath.freeSlot(star)
-	if slot == nil then
-		return false, "No free orbit. Evolve the star to open another."
-	end
-	if not DataSystem.spendStardust(player, def.cost) then
-		return false, `You need {def.cost} {CURRENCY} for a {def.displayName}.`
-	end
-	DataSystem.updateStar(player, starId :: string, { slot = slot, planet = def.id })
-	DataSystem.addStat(player, "planetsBought", 1)
-	StarBuilder.apply(model, star)
-	return true, `A {def.displayName} joins your star's orbit! +{def.income} {CURRENCY}/s.`
-end
-
-local function upgradePlanet(player: Player, starId: unknown, slot: unknown): (boolean, string)
-	local star, model = ownStar(player, starId)
-	local current = if star and type(slot) == "string" then star.planets[slot] else nil
-	if star == nil or model == nil or current == nil then
+	local pid, sid = planetId :: string, starId :: string
+	local slot: number? = nil
+	if rawSlot == nil then
+		slot = PlanetInventory.freeSlot(profile.planets, sid, star)
+		if slot == nil then
+			return false, "Every orbit of this star is taken. Evolve it or unequip a planet."
+		end
+	elseif type(rawSlot) == "number" and rawSlot == rawSlot then
+		slot = rawSlot
+	else
 		return false, REJECTIONS.Invalid
 	end
-	local target, cost = StarMath.planetUpgrade(current)
-	if target == nil or cost == nil then
-		return false, "That planet is already the finest there is."
+	local from = planet.star
+	local ok, problem = DataSystem.equipPlanet(player, pid, sid, slot :: number)
+	if not ok then
+		return false,
+			PlanetInventory.MESSAGES[(problem or "UnknownPlanet") :: PlanetInventory.Problem]
 	end
-	if not StarMath.planetAllowed(star.typeId, target) then
-		return false, "Evolve the star to hold a better planet."
+	DataSystem.addStat(player, "planetsEquipped", 1)
+	refresh(player, from)
+	if from ~= sid then
+		refresh(player, sid)
 	end
-	if not DataSystem.spendStardust(player, cost) then
-		return false, `You need {cost} {CURRENCY} for this upgrade.`
-	end
-	DataSystem.updateStar(player, starId :: string, { slot = slot :: string, planet = target })
-	DataSystem.addStat(player, "planetUpgrades", 1)
-	StarBuilder.apply(model, star)
+	local def = P.BY_ID[planet.typeId]
 	return true,
-		`Your planet became a {P.BY_ID[target].displayName}! Now {StarMath.income(star)} {CURRENCY}/s.`
+		`{def.displayName} now orbits your star: +{StarMath.planetIncome(def.id, planet.level)} {CURRENCY}/s.`
 end
 
-local function levelPlanet(player: Player, starId: unknown, slot: unknown): (boolean, string)
-	local star, model = ownStar(player, starId)
-	local planetId = if star and type(slot) == "string" then star.planets[slot] else nil
-	if star == nil or model == nil or planetId == nil then
+local function unequipPlanet(player: Player, planetId: unknown): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local planet = if profile and type(planetId) == "string" then profile.planets[planetId] else nil
+	if planet == nil then
 		return false, REJECTIONS.Invalid
 	end
-	local level = StarMath.planetLevel(star, slot :: string)
-	local cost = StarMath.planetLevelCost(planetId, level)
+	local from = planet.star
+	if from == nil then
+		return false, "That planet is already in your inventory."
+	end
+	DataSystem.unequipPlanet(player, planetId :: string)
+	refresh(player, from)
+	return true, `{P.BY_ID[planet.typeId].displayName} is back in your planet inventory.`
+end
+
+local function levelPlanet(player: Player, planetId: unknown): (boolean, string)
+	local profile = DataSystem.getProfile(player)
+	local planet = if profile and type(planetId) == "string" then profile.planets[planetId] else nil
+	local def = if planet then P.BY_ID[planet.typeId] else nil
+	if planet == nil or def == nil then
+		return false, REJECTIONS.Invalid
+	end
+	local cost = StarMath.planetLevelCost(def.id, planet.level)
 	if cost == nil then
-		return false, "That planet is at its top level. Upgrade it to the next tier."
+		return false, "That planet is at its top level."
 	end
 	if not DataSystem.spendStardust(player, cost) then
 		return false, `You need {cost} {CURRENCY} to level this planet.`
 	end
-	DataSystem.updateStar(
-		player,
-		starId :: string,
-		{ slot = slot :: string, planetLevel = level + 1 }
-	)
+	local level = planet.level + 1
+	DataSystem.setPlanetLevel(player, planetId :: string, level)
 	DataSystem.addStat(player, "planetLevels", 1)
-	StarBuilder.apply(model, star)
+	refresh(player, planet.star)
 	return true,
-		`{P.BY_ID[planetId].displayName} reached level {level + 1}! +{StarMath.planetIncome(
-			planetId,
-			level + 1
-		)} {CURRENCY}/s.`
+		`{def.displayName} reached level {level}! It makes {StarMath.planetIncome(def.id, level)} {CURRENCY}/s{if planet.star
+			then ""
+			else " once it orbits a star"}.`
 end
 
-local function onRequest(player: Player, action: unknown, a: unknown, b: unknown): (boolean, string)
+local function onRequest(
+	player: Player,
+	action: unknown,
+	a: unknown,
+	b: unknown,
+	c: unknown
+): (boolean, string)
 	if not requestLimit.allow(player) then
 		return false, "Slow down a little."
 	end
@@ -342,12 +382,12 @@ local function onRequest(player: Player, action: unknown, a: unknown, b: unknown
 		return upgrade(player, a)
 	elseif action == "evolve" then
 		return evolve(player, a)
-	elseif action == "buyPlanet" then
-		return buyPlanet(player, a, b)
-	elseif action == "upgradePlanet" then
-		return upgradePlanet(player, a, b)
+	elseif action == "equipPlanet" then
+		return equipPlanet(player, a, b, c)
+	elseif action == "unequipPlanet" then
+		return unequipPlanet(player, a)
 	elseif action == "levelPlanet" then
-		return levelPlanet(player, a, b)
+		return levelPlanet(player, a)
 	end
 	return false, REJECTIONS.Invalid
 end
@@ -410,7 +450,7 @@ function StarSystem.start()
 			return
 		end
 		for _, player in Players:GetPlayers() do
-			DataSystem.accrueIncome(player, elapsed, Entitlements.passes(player))
+			DataSystem.settleIncome(player)
 		end
 		elapsed = 0
 	end)

@@ -47,7 +47,12 @@ local ProfileSchema = {}
 -- 14: offline earnings: the last time the player was online (unix
 --    seconds). Older profiles start at 0, so the first visit after this
 --    update pays nothing extra.
-ProfileSchema.VERSION = 14
+-- 15: planets became individually owned: every planet that sat in a star's
+--    orbit became a PlanetRecord (type mapped by Config.Planets.LEGACY,
+--    same level) in the same slot, or in inventory when that slot is past
+--    its star's new capacity (at most 9). Stars no longer save planets.
+--    Also new: eggs, hangar hatches and the daily wheel (start empty).
+ProfileSchema.VERSION = 15
 
 local function defaultSettings(): Types.Settings
 	return {
@@ -89,6 +94,13 @@ function ProfileSchema.default(): Profile
 		ownedTrails = {},
 		redeemedCodes = {},
 		lastOnline = 0,
+		planets = {},
+		nextPlanetId = 1,
+		eggs = {},
+		nextEggId = 1,
+		eggsBought = 0,
+		hatches = {},
+		wheel = { nextSpin = 0, lastPrize = 0 },
 		trail = nil,
 		boosts = { mining = 0, star = 0 },
 		verifiedPasses = {},
@@ -200,44 +212,15 @@ local function galaxy(raw: any): Types.GalaxyRecord
 			-- Unknown types are kept (a config mistake must not wipe a save);
 			-- gameplay code checks config before using them.
 			if pos and level and level >= 1 and type(star.typeId) == "string" and appearanceOk then
-				-- Planets: slot keys "1".."N" with planet ids; anything else is dropped.
-				local planets: { [string]: string } = {}
-				if type(star.planets) == "table" then
-					for slot, planetId in star.planets do
-						local n = tonumber(slot)
-						if
-							type(slot) == "string"
-							and n
-							and n >= 1
-							and n <= #Config.Stars.SLOTS
-							and n == math.floor(n)
-							and type(planetId) == "string"
-						then
-							planets[tostring(n)] = planetId
-						end
-					end
-				end
 				-- A level above the type's max (e.g. from before version 5) is
 				-- lowered to the max, so the star can evolve.
 				if Config.Stars.BY_ID[star.typeId] then
 					level = math.min(level, StarMath.maxLevel(star.typeId))
 				end
-				-- Planet levels: only for slots holding a planet, 2..MAX_LEVEL.
-				local planetLevels: { [string]: number } = {}
-				if type(star.planetLevels) == "table" then
-					for slot, value in star.planetLevels do
-						local n = count(value)
-						if type(slot) == "string" and planets[slot] and n and n >= 2 then
-							planetLevels[slot] = math.min(n, Config.Planets.MAX_LEVEL)
-						end
-					end
-				end
 				stars[id] = {
 					typeId = star.typeId,
 					level = level,
 					pos = pos,
-					planets = planets,
-					planetLevels = planetLevels,
 					appearance = star.appearance,
 				}
 			end
@@ -273,6 +256,76 @@ local function migrateGalaxyV2(raw: any)
 	raw.stars = stars
 	raw.systems = nil
 	raw.bodies = nil
+end
+
+-- Version 14 and older kept planets on the stars themselves: { slot ->
+-- planet type } and { slot -> level }. Each becomes an owned planet record
+-- of the mapped catalog type with the same level, in the same slot if the
+-- star's new capacity still has it, otherwise in inventory. Nothing is lost.
+-- It only acts on stars that still have those fields, so it is safe to run
+-- on any profile; `fromOld` (a version 14 or older save) also carries the
+-- old planet stats over, once.
+local function migratePlanetsV14(data: { [string]: any }, fromOld: boolean)
+	local raw = if type(data.galaxy) == "table" then data.galaxy.stars else nil
+	local planets = if type(data.planets) == "table" then data.planets else {}
+	local nextId = math.max(count(data.nextPlanetId) or 1, highestId(planets) + 1)
+	if type(raw) == "table" then
+		-- Stars in a fixed order, so ids come out the same every time.
+		local starIds: { string } = {}
+		for id in raw do
+			if type(id) == "string" then
+				table.insert(starIds, id)
+			end
+		end
+		table.sort(starIds)
+		for _, starId in starIds do
+			local star = raw[starId]
+			if type(star) ~= "table" or type(star.planets) ~= "table" then
+				continue
+			end
+			local capacity = if type(star.typeId) == "string"
+					and Config.Stars.BY_ID[star.typeId]
+				then StarMath.slots(star.typeId)
+				else 0
+			local levels = if type(star.planetLevels) == "table" then star.planetLevels else {}
+			for slot = 1, 64 do
+				local oldType = star.planets[tostring(slot)]
+				if type(oldType) ~= "string" then
+					continue
+				end
+				local typeId = Config.Planets.LEGACY[oldType]
+					or (
+						if Config.Planets.BY_ID[oldType]
+							then oldType
+							else Config.Planets.LEGACY_FALLBACK
+					)
+				local level =
+					math.clamp(count(levels[tostring(slot)]) or 1, 1, Config.Planets.MAX_LEVEL)
+				local inOrbit = slot <= capacity
+				planets[`p{nextId}`] = {
+					typeId = typeId,
+					level = level,
+					star = if inOrbit then starId else nil,
+					slot = if inOrbit then slot else nil,
+				}
+				nextId += 1
+			end
+			star.planets = nil
+			star.planetLevels = nil
+		end
+	end
+	data.planets = planets
+	data.nextPlanetId = nextId
+	-- Achievements and the tutorial now count equipped and hatched planets
+	-- and planet level-ups; planets bought or upgraded before count too.
+	local stats = data.stats
+	if fromOld and type(stats) == "table" then
+		local bought = count(stats.planetsBought) or 0
+		local upgraded = count(stats.planetUpgrades) or 0
+		stats.planetsEquipped = math.max(count(stats.planetsEquipped) or 0, bought)
+		stats.planetsHatched = math.max(count(stats.planetsHatched) or 0, bought)
+		stats.planetLevels = (count(stats.planetLevels) or 0) + upgraded
+	end
 end
 
 -- Version 5 ship ids become their stage 14 replacements. A renamed ship
@@ -347,6 +400,7 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	if version ~= nil and version < 6 then
 		migrateShipsV5(data)
 	end
+	migratePlanetsV14(data, version ~= nil and version < 15)
 
 	local defaults = ProfileSchema.default()
 	local starter = Config.Ships.STARTER_SHIP
@@ -448,6 +502,94 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 
 	data.galaxy = galaxy(data.galaxy)
 
+	-- Planets: known shape only; an equipped planet must name one of the
+	-- player's stars and an open, unshared slot, or it goes to inventory.
+	local planets: { [string]: Types.PlanetRecord } = {}
+	local rawPlanets = if type(data.planets) == "table" then data.planets else {}
+	local ids: { string } = {}
+	for id in rawPlanets do
+		if type(id) == "string" then
+			table.insert(ids, id)
+		end
+	end
+	table.sort(ids)
+	local used: { [string]: boolean } = {}
+	for _, id in ids do
+		local raw = rawPlanets[id]
+		if type(raw) ~= "table" or type(raw.typeId) ~= "string" then
+			continue
+		end
+		local record: Types.PlanetRecord = {
+			typeId = raw.typeId,
+			level = math.clamp(count(raw.level) or 1, 1, Config.Planets.MAX_LEVEL),
+			custom = if type(raw.custom) == "table" then raw.custom else nil,
+		}
+		local star = if type(raw.star) == "string" then data.galaxy.stars[raw.star] else nil
+		local slot = count(raw.slot)
+		if star and slot and slot >= 1 and slot <= StarMath.slots(star.typeId) then
+			local key = `{raw.star}#{slot}`
+			if not used[key] then
+				used[key] = true
+				record.star = raw.star
+				record.slot = slot
+			end
+		end
+		planets[id] = record
+	end
+	data.planets = planets
+	data.nextPlanetId = math.max(count(data.nextPlanetId) or 1, highestId(rawPlanets) + 1)
+
+	-- Eggs and hatches: their planets were chosen when bought; never rerolled.
+	local eggs: { [string]: Types.EggRecord } = {}
+	if type(data.eggs) == "table" then
+		for id, egg in data.eggs do
+			if type(id) == "string" and type(egg) == "table" and type(egg.outcome) == "string" then
+				eggs[id] = {
+					outcome = egg.outcome,
+					guaranteed = egg.guaranteed == true,
+					boughtAt = count(egg.boughtAt) or 0,
+				}
+			end
+		end
+	end
+	data.eggs = eggs
+	local hatches: { [string]: Types.HatchRecord } = {}
+	if type(data.hatches) == "table" then
+		for slot = 1, Config.Eggs.HATCH_SLOTS do
+			local hatch = data.hatches[tostring(slot)]
+			if
+				type(hatch) == "table"
+				and type(hatch.outcome) == "string"
+				and type(hatch.eggId) == "string"
+				and count(hatch.startedAt)
+				and count(hatch.endsAt)
+			then
+				hatches[tostring(slot)] = {
+					eggId = hatch.eggId,
+					outcome = hatch.outcome,
+					startedAt = count(hatch.startedAt) :: number,
+					endsAt = count(hatch.endsAt) :: number,
+				}
+			end
+		end
+	end
+	data.hatches = hatches
+	-- The next egg id passes every egg waiting or hatching.
+	local eggIds: { [string]: boolean } = {}
+	for id in eggs do
+		eggIds[id] = true
+	end
+	for _, hatch in hatches do
+		eggIds[hatch.eggId] = true
+	end
+	data.nextEggId = math.max(count(data.nextEggId) or 1, highestId(eggIds) + 1)
+	data.eggsBought = count(data.eggsBought) or 0
+	local wheel = if type(data.wheel) == "table" then data.wheel else {}
+	data.wheel = {
+		nextSpin = count(wheel.nextSpin) or 0,
+		lastPrize = math.clamp(count(wheel.lastPrize) or 0, 0, #Config.Wheel.PRIZES),
+	}
+
 	local zones = flags(data.unlockedZones)
 	zones[Config.Zones.STARTER_ZONE] = true
 	data.unlockedZones = zones
@@ -514,7 +656,7 @@ end
 -- Stardust per second from the player's stars, with hangar upgrades, as a
 -- whole number.
 function ProfileSchema.incomeRate(profile: Profile): number
-	local rate = StarMath.totalIncome(profile.galaxy.stars)
+	local rate = StarMath.totalIncome(profile.galaxy.stars, profile.planets)
 	return math.floor(rate * HangarMath.incomeMultiplier(profile.hangar) + 0.5)
 end
 
@@ -540,7 +682,51 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		showcase = table.clone(profile.showcase),
 		ownedTrails = table.clone(profile.ownedTrails),
 		trail = profile.trail,
+		planets = ProfileSchema.planetsView(profile),
+		eggs = ProfileSchema.eggsView(profile),
+		eggsBought = profile.eggsBought,
+		hatches = ProfileSchema.hatchesView(profile),
+		wheel = table.clone(profile.wheel),
 	}
+end
+
+-- Owned planets for the client (a copy).
+function ProfileSchema.planetsView(profile: Profile): { [string]: Types.PlanetRecord }
+	local result: { [string]: Types.PlanetRecord } = {}
+	for id, planet in profile.planets do
+		result[id] = table.clone(planet)
+	end
+	return result
+end
+
+-- Unhatched eggs for the client: a mystery egg's planet stays hidden.
+function ProfileSchema.eggsView(
+	profile: Profile
+): { [string]: { guaranteed: boolean, outcome: string? } }
+	local result = {}
+	for id, egg in profile.eggs do
+		result[id] =
+			{ guaranteed = egg.guaranteed, outcome = if egg.guaranteed then egg.outcome else nil }
+	end
+	return result
+end
+
+-- Hatches for the client: the rarity (it sets the hatch time) and times,
+-- never the planet itself.
+function ProfileSchema.hatchesView(profile: Profile): {
+	[string]: { rarity: string, startedAt: number, endsAt: number },
+}
+	local result: { [string]: { rarity: string, startedAt: number, endsAt: number } } = {}
+	for slot, hatch in profile.hatches do
+		local def = Config.Planets.BY_ID[hatch.outcome]
+		local rarity: string = if def then def.rarity else "Common"
+		result[slot] = {
+			rarity = rarity,
+			startedAt = hatch.startedAt,
+			endsAt = hatch.endsAt,
+		}
+	end
+	return result
 end
 
 return ProfileSchema

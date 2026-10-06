@@ -17,9 +17,14 @@ export type ExpansionDef = {
 
 local Galaxy = {
 	STAR_MAX_RADIUS = 30,
-	PLANET_MAX_RADIUS = 7,
-	MOON_MAX_RADIUS = 2,
+	PLANET_MAX_RADIUS = 6, -- Config.Planets body radius at level 1
 
+	-- Legacy geometry of the unused Config.Celestials (planets with moon
+	-- slots on fixed orbits); only ConfigCheck still reads it. Today's stars
+	-- and planets use Config.Stars.SLOTS inside SYSTEM_RADIUS instead.
+	CELESTIAL_PLANET_MAX_RADIUS = 7,
+	CELESTIAL_SYSTEM_RADIUS = 222,
+	MOON_MAX_RADIUS = 2,
 	PLANET_ORBIT_RADII = { 52, 96, 140, 184 } :: { number },
 	MOON_ORBIT_RADII = { 11, 16 } :: { number },
 
@@ -27,11 +32,11 @@ local Galaxy = {
 	-- largest layout never leaves. Nothing reaches further than SYSTEM_RADIUS
 	-- sideways or SYSTEM_HALF_HEIGHT up or down (orbits tilt only a little).
 	-- Two systems may not overlap footprints; they may stack vertically.
-	SYSTEM_RADIUS = 222,
+	SYSTEM_RADIUS = 165, -- 9 orbits up to 156 studs, plus the biggest planet
 	SYSTEM_HALF_HEIGHT = 48,
 	-- Star centres stay this far inside the side/front/back walls, and the
 	-- floor and ceiling, so footprints stay inside the region.
-	WALL_MARGIN = 222,
+	WALL_MARGIN = 165,
 	WALL_MARGIN_Y = 48,
 
 	GRID_SNAP = 10, -- optional placement snapping, studs

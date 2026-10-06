@@ -21,8 +21,8 @@ local STEPS: { StepDef } = {
 	},
 	{ stat = "collections", text = "Your star makes Stardust. Pick it up at the Collect console." },
 	{
-		stat = "planetsBought",
-		text = "Fly to your star, choose Manage star and buy a planet to orbit it.",
+		stat = "planetsEquipped",
+		text = "Buy a planet egg at the ISS, hatch it in your hangar, then equip it: Planets (P).",
 	},
 }
 

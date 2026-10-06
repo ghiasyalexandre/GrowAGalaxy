@@ -5,12 +5,11 @@ return function(T, Loader)
 	local S, P = Config.Stars, Config.Planets
 	local first = S.DEFAULT_TYPE
 
-	local function star(typeId, level, planets)
+	local function star(typeId, level)
 		return {
 			typeId = typeId,
 			level = level,
 			pos = { x = 0, y = 0, z = 0 },
-			planets = planets or {},
 		}
 	end
 
@@ -71,11 +70,26 @@ return function(T, Loader)
 			T.falsy(StarMath.canEvolve(star("BlackHole", StarMath.maxLevel("BlackHole"))))
 		end)
 
-		T.test("orbits: 4 at tier 1, one more per evolution", function()
-			T.equal(StarMath.slots(first), 4)
-			T.equal(StarMath.slots("RedDwarf"), 5)
-			T.equal(StarMath.slots("BlackHole"), 4 + #S.ORDER - 1)
-			T.truthy(#S.SLOTS >= StarMath.slots("BlackHole"))
+		T.test("orbits: whole, never fewer up the ladder, 9 at the top", function()
+			local last = 0
+			for _, id in S.ORDER do
+				local n = StarMath.slots(id)
+				T.truthy(n == math.floor(n) and n >= last, id)
+				last = n
+			end
+			T.equal(StarMath.slots(first), 3)
+			T.equal(StarMath.slots("BlackHole"), 9)
+			T.equal(S.MAX_ORBITS, 9)
+			T.truthy(#S.SLOTS >= S.MAX_ORBITS)
+		end)
+
+		T.test("evolving never takes orbits away", function()
+			for _, id in S.ORDER do
+				local target = StarMath.evolveTarget(id)
+				if target then
+					T.truthy(StarMath.slots(target) >= StarMath.slots(id), id)
+				end
+			end
 		end)
 
 		T.test("outer orbits are slower (Kepler)", function()
@@ -90,45 +104,51 @@ return function(T, Loader)
 			T.near(StarMath.radius(first, StarMath.maxLevel(first)), base * S.MAX_RADIUS_SCALE)
 		end)
 
-		T.test("a star holds planets up to its own tier", function()
-			T.truthy(StarMath.planetAllowed("BrownDwarf", "Barren"))
-			T.falsy(StarMath.planetAllowed("BrownDwarf", "Molten"))
-			T.truthy(StarMath.planetAllowed("BlackHole", "Crystal"))
-		end)
-
-		T.test("free slots skip taken orbits and stop at the type's orbits", function()
-			T.equal(StarMath.freeSlot(star(first, 1)), "1")
-			T.equal(StarMath.freeSlot(star(first, 1, { ["1"] = "Barren" })), "2")
-			local full = { ["1"] = "Barren", ["2"] = "Barren", ["3"] = "Barren", ["4"] = "Barren" }
-			T.equal(StarMath.freeSlot(star(first, 4, full)), nil)
-			T.equal(StarMath.freeSlot(star("RedDwarf", 1, full)), "5")
-		end)
-
-		T.test(
-			"planet upgrades go one tier up, credit half the old price, stop at the top",
-			function()
-				local nextId, cost = StarMath.planetUpgrade("Barren")
-				T.equal(nextId, "Molten")
-				T.equal(cost, P.BY_ID.Molten.cost - P.BY_ID.Barren.cost * P.UPGRADE_CREDIT)
-				T.equal((StarMath.planetUpgrade("Crystal")), nil)
-			end
-		)
-
-		T.test("income adds the star (by level) and its planets", function()
-			local s = star("RedDwarf", 2, { ["1"] = "Barren", ["2"] = "Molten" })
+		T.test("income adds the star (by level) and the planets in its orbits", function()
+			local s = star("RedDwarf", 2)
+			local equipped = {
+				[1] = { typeId = "Basalt", level = 1 },
+				[2] = { typeId = "Aurora", level = 3 },
+			}
 			local expected = math.floor(S.BY_ID.RedDwarf.income * StarMath.levelMultiplier(2) + 0.5)
-				+ P.BY_ID.Barren.income
-				+ P.BY_ID.Molten.income
-			T.near(StarMath.income(s), expected)
-			T.near(StarMath.totalIncome({ a = s, b = star("Nope", 1) }), expected)
+				+ P.BY_ID.Basalt.income
+				+ StarMath.planetIncome("Aurora", 3)
+			T.near(StarMath.income(s, equipped), expected)
+			T.near(StarMath.income(s), StarMath.starIncome("RedDwarf", 2))
 		end)
 
-		T.test("planets round-trip through the attribute string", function()
-			local text = StarMath.encodePlanets({ ["1"] = "Barren", ["3"] = "Ocean" })
-			local back = StarMath.decodePlanets(text)
-			T.equal(back[1], "Barren")
+		T.test("total income counts only planets on stars that exist, once each", function()
+			local stars = { s1 = star("RedDwarf", 2), s2 = star(first, 1) }
+			local planets = {
+				p1 = { typeId = "Basalt", level = 1, star = "s1", slot = 1 },
+				p2 = { typeId = "Aurora", level = 2, star = "s2", slot = 1 },
+				p3 = { typeId = "Singularity", level = 5 }, -- inventory: makes nothing
+				p4 = { typeId = "Geode", level = 1, star = "gone", slot = 1 },
+			}
+			local expected = StarMath.starIncome("RedDwarf", 2)
+				+ StarMath.starIncome(first, 1)
+				+ P.BY_ID.Basalt.income
+				+ StarMath.planetIncome("Aurora", 2)
+			T.near(StarMath.totalIncome(stars, planets), expected)
+			T.near(
+				StarMath.totalIncome(stars),
+				StarMath.starIncome("RedDwarf", 2) + StarMath.starIncome(first, 1)
+			)
+		end)
+
+		T.test("planets round-trip through the attribute strings", function()
+			local equipped = {
+				[1] = { typeId = "Basalt", level = 3 },
+				[3] = { typeId = "DimensionalRift", level = 1 },
+			}
+			local back = StarMath.decodePlanets(StarMath.encodePlanets(equipped))
+			T.equal(back[1], "Basalt")
 			T.equal(back[2], nil)
-			T.equal(back[3], "Ocean")
+			T.equal(back[3], "DimensionalRift")
+			local levels = StarMath.decodePlanetLevels(StarMath.encodePlanetLevels(equipped))
+			T.equal(levels[1], 3)
+			T.equal(levels[3], 1)
+			T.equal(StarMath.encodePlanetLevels(equipped), "3,,1,,,,,,")
 		end)
 
 		T.test("income accrues up to the cap and never lowers an amount above it", function()
@@ -148,30 +168,32 @@ return function(T, Loader)
 		end)
 
 		T.test("planets level up to MAX_LEVEL: more income, a bit bigger, pricier", function()
-			local lastIncome, lastCost, lastRadius = 0, 0, 0
-			for level = 1, P.MAX_LEVEL do
-				local income = StarMath.planetIncome("Molten", level)
-				T.truthy(income > lastIncome and income == math.floor(income), `L{level} income`)
-				local radius = StarMath.planetRadius("Molten", level)
-				T.truthy(radius > lastRadius, `L{level} radius`)
-				local cost = StarMath.planetLevelCost("Molten", level)
-				if level < P.MAX_LEVEL then
-					T.truthy(cost ~= nil and (cost :: number) > lastCost, `L{level} cost`)
-					lastCost = cost :: number
-				else
-					T.equal(cost, nil)
+			for _, typeId in P.ORDER do
+				local lastIncome, lastCost, lastRadius = 0, 0, 0
+				for level = 1, P.MAX_LEVEL do
+					local income = StarMath.planetIncome(typeId, level)
+					T.truthy(
+						income > lastIncome and income == math.floor(income),
+						`{typeId} L{level} income`
+					)
+					local radius = StarMath.planetRadius(typeId, level)
+					T.truthy(radius > lastRadius, `{typeId} L{level} radius`)
+					local cost = StarMath.planetLevelCost(typeId, level)
+					if level < P.MAX_LEVEL then
+						T.truthy(
+							cost ~= nil and (cost :: number) > lastCost,
+							`{typeId} L{level} cost`
+						)
+						lastCost = cost :: number
+					else
+						T.equal(cost, nil)
+					end
+					lastIncome, lastRadius = income, radius
 				end
-				lastIncome, lastRadius = income, radius
+				T.equal(StarMath.planetIncome(typeId, P.MAX_LEVEL), P.BY_ID[typeId].income * 3)
 			end
-			T.equal(StarMath.planetIncome("Molten", P.MAX_LEVEL), P.BY_ID.Molten.income * 3)
-			local s = star(first, 1, { ["1"] = "Barren" })
-			s.planetLevels = { ["1"] = 3 }
-			T.equal(
-				StarMath.income(s),
-				StarMath.starIncome(first, 1) + StarMath.planetIncome("Barren", 3)
-			)
-			T.equal(StarMath.encodePlanetLevels(s), "3,,,,,,,,,,")
-			T.equal(StarMath.decodePlanetLevels("3,,2,")[3], 2)
+			T.equal(StarMath.planetLevelCost("Basalt", 1), P.UPGRADE_COST.Common)
+			T.equal(StarMath.planetLevelCost("Unknown", 1), nil)
 		end)
 	end)
 end

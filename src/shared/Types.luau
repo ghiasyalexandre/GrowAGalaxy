@@ -8,16 +8,40 @@
 
 export type Vec3 = { x: number, y: number, z: number }
 
--- A placed star and the planets bought for it. Orbits and production come
--- from Config.Stars and Config.Planets, so only this is saved.
+-- A placed star. Its orbits come from Config.Stars; the planets in them are
+-- PlanetRecords that name it.
 export type StarRecord = {
 	typeId: string, -- Config.Stars id
 	level: number,
 	pos: Vec3, -- position relative to the region origin
-	planets: { [string]: string }, -- orbit slot ("1".."4") -> Config.Planets id
-	-- orbit slot -> planet level (2..Config.Planets.MAX_LEVEL); missing = 1
-	planetLevels: { [string]: number }?,
 	appearance: string?,
+}
+
+-- One owned planet (Config.Planets type). In inventory when `star` is nil,
+-- otherwise in orbit `slot` (1..its star's orbits) of that star.
+export type PlanetRecord = {
+	typeId: string,
+	level: number, -- 1..Config.Planets.MAX_LEVEL
+	star: string?,
+	slot: number?,
+	custom: { [string]: any }?, -- per-planet customisation (none on sale yet)
+}
+
+-- An unhatched egg (Config.Eggs). Its planet was chosen on the server when
+-- it was bought and never changes. `guaranteed` eggs (bought as a chosen
+-- planet) may show their outcome; mystery eggs never do before hatching.
+export type EggRecord = {
+	outcome: string, -- Config.Planets id
+	guaranteed: boolean,
+	boughtAt: number, -- unix seconds
+}
+
+-- An egg incubating in a hangar hatch slot.
+export type HatchRecord = {
+	eggId: string,
+	outcome: string,
+	startedAt: number, -- unix seconds
+	endsAt: number,
 }
 
 export type GalaxyRecord = {
@@ -77,6 +101,15 @@ export type Profile = {
 	redeemedCodes: { [string]: boolean }, -- Config.Codes codes already used
 	lastOnline: number, -- unix seconds the player was last seen in a server; 0 = never
 	trail: string?, -- the equipped trail, if any
+	planets: { [string]: PlanetRecord }, -- every owned planet, by id ("p<n>")
+	nextPlanetId: number,
+	eggs: { [string]: EggRecord }, -- unhatched eggs, by id ("e<n>")
+	nextEggId: number,
+	eggsBought: number, -- mystery eggs ever bought (their price grows with it)
+	hatches: { [string]: HatchRecord }, -- hangar hatch slot ("1".."5") -> incubation
+	-- Daily wheel (Config.Wheel): unix seconds of the next free spin and the
+	-- index of the last prize won (0 = never spun).
+	wheel: { nextSpin: number, lastPrize: number },
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.
 	boosts: { mining: number, star: number },
@@ -110,6 +143,13 @@ export type ProfileView = {
 	showcase: { string },
 	ownedTrails: { [string]: boolean },
 	trail: string?,
+	planets: { [string]: PlanetRecord },
+	-- Eggs as the owner may see them: a mystery egg hides its planet.
+	eggs: { [string]: { guaranteed: boolean, outcome: string? } },
+	eggsBought: number,
+	-- Hatches as the owner may see them: rarity and times, not the planet.
+	hatches: { [string]: { rarity: string, startedAt: number, endsAt: number } },
+	wheel: { nextSpin: number, lastPrize: number },
 }
 
 export type RegionInfo = {

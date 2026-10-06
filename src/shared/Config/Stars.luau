@@ -8,9 +8,10 @@
 -- multiplies the type's base production. At max level it can evolve into the
 -- next type in place: it keeps its planets and starts again at level 1.
 --
--- Orbits: a star has ORBITS_BASE planet orbits at tier 1 and one more per
--- tier (4 ... 11), all open from the start. A star's tier is also the
--- highest planet tier it can hold (Config.Planets).
+-- Orbits: each type has its own number of orbital slots (`orbits`, never
+-- more than 9, never fewer than the type before); evolving a star opens its
+-- next type's slots. Planets are owned separately (profile.planets) and
+-- equipped into those slots; evolving never grants planets.
 --
 -- Saved per star: id, position, type, level, planets by slot. Everything
 -- else is derived from this table. Logic/ConfigCheck validates it.
@@ -22,6 +23,7 @@ export type StarTypeDef = {
 	enabled: boolean,
 	cost: number, -- Stardust for a new star of this type (before PRICE_GROWTH); also the evolve price
 	income: number, -- Stardust per second at level 1
+	orbits: number, -- planet slots (1..9, nondecreasing up the ladder)
 	radius: number, -- studs at level 1; at most Config.Galaxy.STAR_MAX_RADIUS / 1.2
 	color: string,
 	light: string,
@@ -43,6 +45,10 @@ local ORDER: { string } = {
 	"BlackHole",
 }
 
+-- Planet slots per tier: the old 4..11 scaled so the top is 9 (rounded),
+-- whole and never decreasing.
+local ORBITS_BY_TIER = { 3, 4, 5, 6, 7, 7, 8, 9 }
+
 local function star(
 	id: string,
 	tier: number,
@@ -61,6 +67,7 @@ local function star(
 		enabled = true,
 		cost = cost,
 		income = income,
+		orbits = ORBITS_BY_TIER[tier],
 		radius = radius,
 		color = color,
 		light = light,
@@ -163,14 +170,14 @@ local BY_ID: { [string]: StarTypeDef } = {
 -- the biggest planets side by side), enough for the top tier. Periods follow
 -- Kepler's third law from the innermost orbit's ORBIT_FIRST_DAYS (Mercury's
 -- year), so outer planets really are slower.
-local ORBITS_BASE = 4
+local MAX_ORBITS = 9
 local ORBIT_FIRST = 44
-local ORBIT_GAP = 17
+local ORBIT_GAP = 14
 local ORBIT_FIRST_DAYS = 88
-local TILTS = { 4, -7, 10, -5, 7, -9, 3, -4, 8, -6, 5 }
+local TILTS = { 4, -7, 10, -5, 7, -9, 3, -4, 8 }
 
 local SLOTS: { SlotDef } = {}
-for index = 1, ORBITS_BASE + #ORDER - 1 do
+for index = 1, MAX_ORBITS do
 	local orbit = ORBIT_FIRST + ORBIT_GAP * (index - 1)
 	SLOTS[index] = {
 		orbit = orbit,
@@ -183,7 +190,7 @@ return {
 	ORDER = ORDER,
 	BY_ID = BY_ID,
 	SLOTS = SLOTS,
-	ORBITS_BASE = ORBITS_BASE, -- orbits at tier 1; one more per tier
+	MAX_ORBITS = MAX_ORBITS, -- no star holds more planets than this
 	MAX_LEVEL_BASE = 4, -- max level at tier 1 (even)
 	MAX_LEVEL_STEP = 2, -- added per tier (even, so max levels stay even)
 	-- Production at level L: income x (1 + LINEAR x n + CURVE x n^2), n = L - 1.
