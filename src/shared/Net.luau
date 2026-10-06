@@ -37,6 +37,10 @@
 --   CodeRequest      RemoteFunction  client -> server  (code: string) -> (ok: boolean, message: string)
 --   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
 --                                                       "bossDown" | "result", ...) raid effects
+--   EggRequest       RemoteFunction  client -> server  ("status" | "buyMystery", price? |
+--                                                       "buyChosen", typeId, price?) -> (ok, message, policy?)
+--   HatchRequest     RemoteFunction  client -> server  ("start", eggId, chamber?) -> (ok, message)
+--   WheelRequest     RemoteFunction  client -> server  ("spin") -> (ok, message, prizeIndex?)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -66,6 +70,9 @@ local Net = {
 	RocketRequest = folder:WaitForChild("RocketRequest") :: RemoteEvent,
 	RocketEvent = folder:WaitForChild("RocketEvent") :: RemoteEvent,
 	CodeRequest = folder:WaitForChild("CodeRequest") :: RemoteFunction,
+	EggRequest = folder:WaitForChild("EggRequest") :: RemoteFunction,
+	HatchRequest = folder:WaitForChild("HatchRequest") :: RemoteFunction,
+	WheelRequest = folder:WaitForChild("WheelRequest") :: RemoteFunction,
 }
 
 return Net

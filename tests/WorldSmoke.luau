@@ -245,7 +245,10 @@ end
 check(count(tagged.WarpPrompt) == 3, "stations have no warp prompts (ships replace them)")
 check(count(tagged.LaunchPrompt) == 0, "stations have no launch consoles (HUD button)")
 check(count(tagged.RoutePrompt) == 1, "stations have no navigation consoles")
-check(count(tagged.TycoonPrompt) == 8, "every station has exactly one console (Collect)")
+check(
+	count(tagged.TycoonPrompt) == 9,
+	"every station has exactly one console (Collect), plus the ISS Egg Lab console"
+)
 
 -- Hangar upgrades: every pad and building builds on the first station's deck.
 print("Hangar")

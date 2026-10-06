@@ -88,6 +88,15 @@
         },
         "CodeRequest": {
           "$className": "RemoteFunction"
+        },
+        "EggRequest": {
+          "$className": "RemoteFunction"
+        },
+        "HatchRequest": {
+          "$className": "RemoteFunction"
+        },
+        "WheelRequest": {
+          "$className": "RemoteFunction"
         }
       }
     },

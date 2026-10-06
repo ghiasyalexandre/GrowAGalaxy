@@ -13,6 +13,7 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local DailyMath = require(ReplicatedStorage.Shared.Logic.DailyMath)
+local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
 local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
@@ -280,6 +281,41 @@ function DataSystem.unequipPlanet(player: Player, planetId: string): boolean
 	PlanetInventory.unequip(profile.planets, planetId)
 	pushPlanets(player, profile)
 	return true
+end
+
+export type EggProblem = "NoProfile" | "Full" | "Poor"
+
+-- Buys one planet egg in a single step: checks room (Config.Eggs
+-- MAX_UNHATCHED) and the balance, takes `price`, counts the purchase (later
+-- mystery eggs cost more) and saves the egg with its planet already chosen.
+-- Nothing yields in between, so the Stardust and the egg are saved together
+-- or not at all. Returns the new egg id, or nil and why.
+function DataSystem.buyEgg(
+	player: Player,
+	outcome: string,
+	guaranteed: boolean,
+	price: number
+): (string?, EggProblem?)
+	local profile = DataSystem.getProfile(player)
+	local whole = wholePositive(price)
+	if profile == nil or whole == nil then
+		return nil, "NoProfile"
+	end
+	if EggMath.held(profile.eggs, profile.hatches) >= Config.Eggs.MAX_UNHATCHED then
+		return nil, "Full"
+	end
+	if profile.stardust < whole then
+		return nil, "Poor"
+	end
+	profile.stardust -= whole
+	profile.eggsBought += 1
+	local id = `e{profile.nextEggId}`
+	profile.nextEggId += 1
+	profile.eggs[id] = { outcome = outcome, guaranteed = guaranteed, boughtAt = os.time() }
+	push(player, "stardust", profile.stardust)
+	push(player, "eggsBought", profile.eggsBought)
+	push(player, "eggs", ProfileSchema.eggsView(profile))
+	return id, nil
 end
 
 -- Sets an owned planet's level (already validated and paid for by the
