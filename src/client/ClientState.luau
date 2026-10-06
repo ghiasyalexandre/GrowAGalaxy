@@ -65,6 +65,8 @@ ClientState.routeChanged = Signal.new() :: Signal.Signal<()>
 ClientState.notify = Signal.new() :: Signal.Signal<string>
 -- Ask the Star Shop panel to open (HUD button, B key).
 ClientState.openStarShop = Signal.new() :: Signal.Signal<()>
+-- Toggles the Planets panel (HUD's Planets button, P key).
+ClientState.openPlanets = Signal.new() :: Signal.Signal<()>
 -- Toggles the Settings panel (HUD's Settings button).
 ClientState.openSettings = Signal.new() :: Signal.Signal<()>
 -- Ask the Shipyard panel to open (HUD button).

@@ -13,8 +13,8 @@
 --                                                       aim: Vector3?) aim in ship space
 --   Notify           RemoteEvent     server -> client  (text: string)
 --   StarRequest      RemoteFunction  client -> server  (action: "place" | "move" | "upgrade" |
---                                                       "evolve" | "buyPlanet" | "upgradePlanet",
---                                                       ...) -> (ok: boolean, message: string)
+--                                                       "evolve" | "equipPlanet" | "unequipPlanet" |
+--                                                       "levelPlanet", ...) -> (ok: boolean, message: string)
 --   ShopRequest      RemoteFunction  client -> server  (action: "buyShip" | "selectShip" |
 --                                                       "buyEquipment" | "expand", id: string?)
 --                                                       -> (ok: boolean, message: string)

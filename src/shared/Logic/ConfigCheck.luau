@@ -8,6 +8,10 @@
 
 local ConfigCheck = {}
 
+local function isWhole(value: any): boolean
+	return type(value) == "number" and value == value and value == math.floor(value)
+end
+
 function ConfigCheck.run(config: any): { string }
 	local problems: { string } = {}
 	local function fail(message: string)
@@ -556,9 +560,10 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
-	-- Stars and planets: a clean tier ladder each, planets fit their orbit
-	-- slots inside SYSTEM_RADIUS and clear of the largest star, prices and
-	-- production rise with tier, levels only improve.
+	-- Stars: a clean tier ladder, prices and production rise with tier,
+	-- levels only improve; orbits are whole, never fewer up the ladder, and
+	-- end at MAX_ORBITS. Planets fit their orbit slots inside SYSTEM_RADIUS
+	-- and clear of the largest star.
 	local stars = config.Stars
 	local planets = config.Planets
 	checkOrder("Stars", stars.ORDER, stars.BY_ID)
@@ -592,7 +597,158 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 	checkLadder("Star", stars.ORDER, stars.BY_ID)
-	checkLadder("Planet", planets.ORDER, planets.BY_ID)
+	local previousOrbits = 0
+	for _, id in stars.ORDER do
+		local def = stars.BY_ID[id]
+		if def == nil then
+			continue
+		end
+		if not isWhole(def.orbits) or def.orbits < 1 or def.orbits > stars.MAX_ORBITS then
+			fail(`Star {id}: orbits must be a whole number from 1 to MAX_ORBITS`)
+		elseif def.orbits < previousOrbits then
+			fail(`Star {id}: has fewer orbits than the star before it`)
+		end
+		previousOrbits = def.orbits
+	end
+	local topStar = stars.BY_ID[stars.ORDER[#stars.ORDER]]
+	if topStar and topStar.orbits ~= stars.MAX_ORBITS then
+		fail("Stars: the top star must have MAX_ORBITS orbits")
+	end
+	if #stars.SLOTS < stars.MAX_ORBITS then
+		fail("Stars: SLOTS needs one entry per orbit up to MAX_ORBITS")
+	end
+
+	-- Planet catalog: exact integer odds that add up, rarities in order with
+	-- the hatch-time formula, production rising with rarity, valid legacy
+	-- mappings and level prices.
+	if not isWhole(planets.WEIGHT_TOTAL) or planets.WEIGHT_TOTAL <= 0 then
+		fail("Planets: WEIGHT_TOTAL must be a positive whole number")
+	end
+	local typeWeights = 0
+	local rarityWeights = 0
+	local byRarity: { [string]: number } = {}
+	for id, def in planets.BY_ID do
+		if planets.RARITIES[def.rarity] == nil then
+			fail(`Planet {id}: unknown rarity "{def.rarity}"`)
+			continue
+		end
+		if not isWhole(def.weight) or def.weight <= 0 then
+			fail(`Planet {id}: weight must be a positive whole number`)
+		end
+		if def.income <= 0 then
+			fail(`Planet {id}: income must be positive`)
+		end
+		if #def.features == 0 then
+			fail(`Planet {id}: needs at least one look feature`)
+		end
+		typeWeights += def.weight
+		byRarity[def.rarity] = (byRarity[def.rarity] or 0) + def.weight
+	end
+	if typeWeights ~= planets.WEIGHT_TOTAL then
+		fail(`Planets: type weights add up to {typeWeights}, not WEIGHT_TOTAL`)
+	end
+	local lowerTop = 0
+	for index, rarityId in planets.RARITY_ORDER do
+		local rarity = planets.RARITIES[rarityId]
+		if rarity == nil then
+			fail(`Planets: RARITY_ORDER names unknown rarity {rarityId}`)
+			continue
+		end
+		rarityWeights += rarity.weight
+		if rarity.index ~= index - 1 then
+			fail(`Planets: rarity {rarityId} index must be {index - 1}`)
+		end
+		if rarity.hatchSeconds ~= math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5) then
+			fail(`Planets: rarity {rarityId} hatch time must be round(10 x 180^({index - 1}/5))`)
+		end
+		if (byRarity[rarityId] or 0) ~= rarity.weight then
+			fail(`Planets: rarity {rarityId}'s types don't add up to its weight`)
+		end
+		local list = planets.BY_RARITY[rarityId] or {}
+		if #list == 0 then
+			fail(`Planets: rarity {rarityId} has no planet types`)
+		end
+		local low, high = math.huge, 0
+		for _, id in list do
+			local def = planets.BY_ID[id]
+			if def then
+				low = math.min(low, def.income)
+				high = math.max(high, def.income)
+			end
+		end
+		if index > 1 and low <= lowerTop then
+			fail(
+				`Planets: every {rarityId} planet must make more than every planet of the rarity below`
+			)
+		end
+		lowerTop = high
+		local cost = planets.UPGRADE_COST[rarityId]
+		if type(cost) ~= "number" or cost <= 0 then
+			fail(`Planets: UPGRADE_COST.{rarityId} must be positive`)
+		end
+	end
+	if rarityWeights ~= planets.WEIGHT_TOTAL then
+		fail("Planets: rarity weights must add up to WEIGHT_TOTAL")
+	end
+	if
+		planets.UPGRADE_GROWTH < 1
+		or planets.LEVEL_INCOME_STEP <= 0
+		or planets.LEVEL_SIZE_STEP < 0
+	then
+		fail("Planets: UPGRADE_GROWTH must be at least 1, LEVEL_INCOME_STEP positive")
+	end
+	if not isWhole(planets.MAX_LEVEL) or planets.MAX_LEVEL < 1 then
+		fail("Planets: MAX_LEVEL must be a whole number of at least 1")
+	end
+	for old, target in planets.LEGACY do
+		if planets.BY_ID[target] == nil then
+			fail(`Planets: LEGACY maps {old} to unknown type {target}`)
+		end
+	end
+	if planets.BY_ID[planets.LEGACY_FALLBACK] == nil then
+		fail("Planets: LEGACY_FALLBACK must be a planet type")
+	end
+
+	-- Eggs: prices that only grow, a multiplier for every rarity, sensible
+	-- incubator limits.
+	local eggs = config.Eggs
+	if not isWhole(eggs.PRICE_BASE) or eggs.PRICE_BASE <= 0 or eggs.PRICE_GROWTH < 1 then
+		fail("Eggs: PRICE_BASE must be a positive whole number and PRICE_GROWTH at least 1")
+	end
+	for _, rarityId in planets.RARITY_ORDER do
+		local multiplier = eggs.GUARANTEED_MULTIPLIER[rarityId]
+		if type(multiplier) ~= "number" or multiplier < 1 then
+			fail(`Eggs: GUARANTEED_MULTIPLIER.{rarityId} must be at least 1`)
+		end
+	end
+	if not isWhole(eggs.HATCH_SLOTS) or eggs.HATCH_SLOTS < 1 then
+		fail("Eggs: HATCH_SLOTS must be a whole number of at least 1")
+	end
+	if not isWhole(eggs.MAX_UNHATCHED) or eggs.MAX_UNHATCHED < eggs.HATCH_SLOTS then
+		fail("Eggs: MAX_UNHATCHED must be whole and at least HATCH_SLOTS")
+	end
+	if eggs.POLICY_RETRY <= 0 then
+		fail("Eggs: POLICY_RETRY must be positive")
+	end
+
+	-- Daily wheel: fixed whole prizes whose weights are percentages.
+	local wheel = config.Wheel
+	if wheel.COOLDOWN <= 0 or wheel.SPIN_SECONDS <= 0 then
+		fail("Wheel: COOLDOWN and SPIN_SECONDS must be positive")
+	end
+	local wheelTotal = 0
+	for index, prize in wheel.PRIZES do
+		if not isWhole(prize.stardust) or prize.stardust <= 0 then
+			fail(`Wheel prize {index}: stardust must be a positive whole number`)
+		end
+		if not isWhole(prize.weight) or prize.weight <= 0 then
+			fail(`Wheel prize {index}: weight must be a positive whole number`)
+		end
+		wheelTotal += prize.weight
+	end
+	if #wheel.PRIZES == 0 or wheelTotal ~= 100 then
+		fail("Wheel: PRIZES weights must add up to 100 (they are the percentages shown)")
+	end
 	-- Levels: max levels stay even; production and upgrade prices only rise.
 	if stars.MAX_LEVEL_BASE < 2 or stars.MAX_LEVEL_BASE % 2 ~= 0 then
 		fail("Stars: MAX_LEVEL_BASE must be an even number of at least 2")
@@ -612,10 +768,6 @@ function ConfigCheck.run(config: any): { string }
 	end
 	if stars.MAX_RADIUS_SCALE < 1 then
 		fail("Stars: MAX_RADIUS_SCALE must be at least 1")
-	end
-	-- Orbits: one per tier above ORBITS_BASE, so the top tier needs them all.
-	if #stars.SLOTS < stars.ORBITS_BASE + #stars.ORDER - 1 then
-		fail("Stars: not enough SLOTS for the top tier's orbits")
 	end
 	local maxScale = stars.MAX_RADIUS_SCALE
 	local largestStar = 0
@@ -657,9 +809,6 @@ function ConfigCheck.run(config: any): { string }
 		if nextSlot and nextSlot.orbit - slot.orbit <= 2 * largestPlanet then
 			fail(`{where}: too close to the next orbit`)
 		end
-	end
-	if planets.UPGRADE_CREDIT < 0 or planets.UPGRADE_CREDIT >= 1 then
-		fail("Planets: UPGRADE_CREDIT must be from 0 up to 1")
 	end
 
 	-- The flight area must hold every region at its largest and stay clear of
@@ -739,11 +888,12 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
-	-- Galaxy geometry: fixed orbits must keep every body apart and inside SYSTEM_RADIUS.
+	-- Legacy galaxy geometry (Config.Celestials): fixed orbits must keep every
+	-- body apart and inside CELESTIAL_SYSTEM_RADIUS.
 	local moonOrbits: { number } = galaxy.MOON_ORBIT_RADII
 	local planetOrbits: { number } = galaxy.PLANET_ORBIT_RADII
 	local planetExtent = moonOrbits[#moonOrbits] + galaxy.MOON_MAX_RADIUS
-	if moonOrbits[1] - galaxy.MOON_MAX_RADIUS <= galaxy.PLANET_MAX_RADIUS then
+	if moonOrbits[1] - galaxy.MOON_MAX_RADIUS <= galaxy.CELESTIAL_PLANET_MAX_RADIUS then
 		fail("Galaxy: the innermost moon orbit would touch its planet")
 	end
 	for i = 2, #moonOrbits do
@@ -759,8 +909,8 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Galaxy: planet orbits {i - 1} and {i} are too close for planets with moons`)
 		end
 	end
-	if planetOrbits[#planetOrbits] + planetExtent > galaxy.SYSTEM_RADIUS then
-		fail("Galaxy: the outermost orbit reaches beyond SYSTEM_RADIUS")
+	if planetOrbits[#planetOrbits] + planetExtent > galaxy.CELESTIAL_SYSTEM_RADIUS then
+		fail("Galaxy: the outermost legacy orbit reaches beyond CELESTIAL_SYSTEM_RADIUS")
 	end
 	if
 		galaxy.WALL_MARGIN < galaxy.SYSTEM_RADIUS
@@ -815,7 +965,7 @@ function ConfigCheck.run(config: any): { string }
 	-- Celestials: sizes inside the geometry caps, slots inside the orbit tables.
 	local maxRadius = {
 		star = galaxy.STAR_MAX_RADIUS,
-		planet = galaxy.PLANET_MAX_RADIUS,
+		planet = galaxy.CELESTIAL_PLANET_MAX_RADIUS,
 		moon = galaxy.MOON_MAX_RADIUS,
 	}
 	local maxLevels = { star = 0, planet = 0, moon = 0 }

@@ -62,6 +62,7 @@ local stationButton: TextButton
 local effectsButton: TextButton
 local shipyardButton: TextButton
 local storeButton: TextButton
+local planetsButton: TextButton
 local boostBar: Frame
 local boostsAt = 0 -- os.clock() when the boost times last arrived
 local launchButton: TextButton
@@ -499,10 +500,32 @@ local function build()
 	dressButton(storeButton, "ButtonBlue", "Gift")
 	Theme.hover(storeButton)
 
+	-- Opens the Planets panel (owned planets, equip and level; also P).
+	planetsButton = Instance.new("TextButton")
+	planetsButton.Name = "Planets"
+	planetsButton.Position = UDim2.new(0, 16, 0, 290)
+	planetsButton.Size = UDim2.new(0, 180, 0, 40)
+	planetsButton.BackgroundColor3 = Color3.new(1, 1, 1)
+	planetsButton.AutoButtonColor = false
+	planetsButton.Font = Enum.Font.GothamBlack
+	planetsButton.TextSize = 15
+	planetsButton.TextColor3 = Color3.new(1, 1, 1)
+	planetsButton.TextStrokeTransparency = 0.6
+	planetsButton.Text = "Planets  [P]"
+	planetsButton.Parent = gui
+	corner(planetsButton, 8)
+	local planetsGradient = Instance.new("UIGradient")
+	planetsGradient.Color =
+		ColorSequence.new(Color3.fromRGB(110, 235, 160), Color3.fromRGB(40, 160, 140))
+	planetsGradient.Rotation = 90
+	planetsGradient.Parent = planetsButton
+	dressButton(planetsButton, "ButtonBlue", "RingedPlanet")
+	Theme.hover(planetsButton)
+
 	-- Active boosts with their time left, under the goal panel.
 	boostBar = Instance.new("Frame")
 	boostBar.Name = "Boosts"
-	boostBar.Position = UDim2.new(0, 16, 0, 350)
+	boostBar.Position = UDim2.new(0, 16, 0, 396)
 	boostBar.Size = UDim2.new(0, 300, 0, 26)
 	boostBar.BackgroundTransparency = 1
 	boostBar.Parent = gui
@@ -563,7 +586,7 @@ local function build()
 	goalButton.Name = "NextGoal"
 	goalButton.Text = ""
 	goalButton.AutoButtonColor = false
-	goalButton.Position = UDim2.new(0, 16, 0, 292)
+	goalButton.Position = UDim2.new(0, 16, 0, 338)
 	goalButton.Size = UDim2.new(0, 220, 0, 52)
 	goalButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	goalButton.BackgroundTransparency = 0.2
@@ -922,6 +945,9 @@ function HudController.init()
 	end)
 	storeButton.Activated:Connect(function()
 		ClientState.openStore:Fire(nil)
+	end)
+	planetsButton.Activated:Connect(function()
+		ClientState.openPlanets:Fire()
 	end)
 	launchButton.Activated:Connect(function()
 		Net.ShipRequest:FireServer("launch")

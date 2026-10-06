@@ -2,12 +2,15 @@
 -- Every placed star, on this client: its planets orbiting in their slots on
 -- tilted orbits (drawn as faint rings), a production label, and for your own
 -- stars the Manage panel: level up, evolve to the next star type, move, and
--- buy or upgrade the planet in each orbit slot. Planets are local, drawn from
--- the star's Planets attribute; the server (StarSystem) checks every action.
+-- for each open orbit equip one of your planets, level it or unequip it
+-- (back to the planet inventory). Planets are local, drawn from the star's
+-- Planets and PlanetLevels attributes with Fx/PlanetLook; the server
+-- (StarSystem) checks every action.
 --
 -- Watching the attributes also drives the spectacle (Fx/StarFx) for every
--- star: birth (BornAt), level up, evolution (supernova) and new or upgraded
--- planets. Your own stars' milestones also get a banner (ClientState.celebrate).
+-- star: birth (BornAt), level up, evolution (supernova) and planets joining
+-- or levelling up. Your own stars' milestones also get a banner
+-- (ClientState.celebrate).
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -20,6 +23,7 @@ local Workspace = game:GetService("Workspace")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local PlacementController = require(script.Parent.PlacementController)
+local PlanetLook = require(script.Parent.Parent.Fx.PlanetLook)
 local StarFx = require(script.Parent.Parent.Fx.StarFx)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
@@ -30,6 +34,7 @@ local StarsConfig = require(Shared:WaitForChild("Config"):WaitForChild("Stars"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local OrbitTime = require(Shared:WaitForChild("Logic"):WaitForChild("OrbitTime"))
+local PlanetInventory = require(Shared:WaitForChild("Logic"):WaitForChild("PlanetInventory"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 local Types = require(Shared:WaitForChild("Types"))
 
@@ -38,8 +43,6 @@ local P = Config.Planets
 local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local RING_COLOR = Color3.fromRGB(150, 180, 255)
--- Bezier handle length for a quarter circle of radius 1.
-local QUARTER = 0.5523
 -- Seconds after placement during which a newly seen star plays its birth.
 local BIRTH_WINDOW = 4
 
@@ -76,7 +79,7 @@ local subtitle: TextLabel
 local actions: Frame
 local list: ScrollingFrame
 local panelStar: Model? = nil
-local picking = false -- the planet picker is showing instead of the slots
+local pickingSlot: number? = nil -- the planet picker is showing for this orbit
 
 local function isMine(model: Model): boolean
 	return model:GetAttribute("OwnerUserId") == Players.LocalPlayer.UserId
@@ -86,54 +89,12 @@ local function fmt(n: number): string
 	return Format.abbreviate(n)
 end
 
-local function planetRing(def: { ring: string? }): Color3?
-	local ringColor = def.ring
-	return if ringColor then Color3.fromHex(ringColor) else nil
+-- The ring colour a planet's icon shows, if its type has rings.
+local function planetRing(def: PlanetsConfig.PlanetTypeDef): Color3?
+	return if table.find(def.features, "ring") then Color3.fromHex(def.accent) else nil
 end
 
--- A faint circle of `radius` around `core`, tilted `tilt` degrees, drawn
--- with four curved beams between attachments on the core.
-local function ring(
-	core: BasePart,
-	radius: number,
-	tilt: number,
-	color: Color3,
-	width: number
-): { Instance }
-	local made: { Instance } = {}
-	local plane = CFrame.Angles(math.rad(tilt), 0, 0)
-	local points: { Attachment } = {}
-	for index = 0, 3 do
-		local angle = index * math.pi / 2
-		local attachment = Instance.new("Attachment")
-		attachment.Name = "GaG_Orbit"
-		-- Each attachment's +X axis is the tangent the beam curves along.
-		attachment.CFrame = plane
-			* CFrame.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
-			* CFrame.Angles(0, -angle - math.pi / 2, 0)
-		attachment.Parent = core
-		table.insert(points, attachment)
-		table.insert(made, attachment)
-	end
-	for index = 1, 4 do
-		local beam = Instance.new("Beam")
-		beam.Name = "GaG_OrbitRing"
-		beam.Attachment0 = points[index]
-		beam.Attachment1 = points[index % 4 + 1]
-		beam.CurveSize0 = radius * QUARTER
-		beam.CurveSize1 = radius * QUARTER
-		beam.Segments = 16
-		beam.Width0 = width
-		beam.Width1 = width
-		beam.FaceCamera = true
-		beam.LightEmission = 1
-		beam.Color = ColorSequence.new(color)
-		beam.Transparency = NumberSequence.new(0.6)
-		beam.Parent = core
-		table.insert(made, beam)
-	end
-	return made
-end
+local ring = PlanetLook.ring
 
 local function clearPlanets(v: Visual)
 	for _, planet in v.planets do
@@ -147,54 +108,6 @@ local function clearPlanets(v: Visual)
 	end
 	v.planets = {}
 	v.rings = {}
-end
-
--- Makes a planet look its part: a shimmering atmosphere in a lighter shade,
--- embers off molten worlds, glints off crystal ones, swirling storms on gas
--- giants.
-local function dress(part: Part, def: PlanetsConfig.PlanetTypeDef, radius: number)
-	local color = Color3.fromHex(def.color)
-	local air = Instance.new("Part")
-	air.Name = "Atmosphere"
-	air.Shape = Enum.PartType.Ball
-	air.Size = Vector3.one * radius * 2.36
-	air.Color = color:Lerp(Color3.new(1, 1, 1), 0.45)
-	air.Material = Enum.Material.ForceField
-	air.Anchored = true
-	air.CanCollide = false
-	air.CanQuery = false
-	air.CanTouch = false
-	air.CastShadow = false
-	air.Parent = part
-	if ClientState.reducedEffects then
-		return
-	end
-	if def.id == "Molten" then
-		local embers = Instance.new("ParticleEmitter")
-		embers.Rate = 6
-		embers.Speed = NumberRange.new(radius * 0.4, radius * 0.9)
-		embers.SpreadAngle = Vector2.new(180, 180)
-		embers.Lifetime = NumberRange.new(0.8, 1.4)
-		embers.Size = NumberSequence.new(radius * 0.18, 0)
-		embers.Color = ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(255, 70, 30))
-		embers.LightEmission = 1
-		embers.Parent = part
-	elseif def.id == "Crystal" then
-		local glints = Instance.new("Sparkles")
-		glints.SparkleColor = color:Lerp(Color3.new(1, 1, 1), 0.5)
-		glints.Parent = part
-	elseif def.id == "GasGiant" or def.id == "IceGiant" then
-		local storm = Instance.new("ParticleEmitter")
-		storm.Rate = 3
-		storm.Speed = NumberRange.new(0)
-		storm.Lifetime = NumberRange.new(2, 3)
-		storm.Size = NumberSequence.new(radius * 0.7, radius * 1.1)
-		storm.Transparency = NumberSequence.new(0.6, 1)
-		storm.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.3))
-		storm.RotSpeed = NumberRange.new(40, 80)
-		storm.LockedToPart = true
-		storm.Parent = part
-	end
 end
 
 local function buildPlanets(v: Visual)
@@ -222,37 +135,28 @@ local function buildPlanets(v: Visual)
 			end
 			local planetLevel = levels[slot] or 1
 			local radius = StarMath.planetRadius(def.id, planetLevel)
-			local part = Instance.new("Part")
+			local part = PlanetLook.build(def, radius, ClientState.reducedEffects == true)
 			part.Name = `GaG_Planet_{def.id}`
-			part.Shape = Enum.PartType.Ball
-			part.Size = Vector3.one * radius * 2
-			part.Color = Color3.fromHex(def.color)
-			part.Material = (Enum.Material :: any)[def.material] or Enum.Material.SmoothPlastic
-			part.Anchored = true
-			part.CanCollide = false
-			part.CanQuery = false
-			part.CanTouch = false
-			part.CastShadow = false
 			part.Parent = v.model
 			-- Far from the star its light doesn't reach, so each planet carries
 			-- its own: a light just sunward of it (the planet faces its star,
 			-- see animate) lights the day side in the star's colour.
 			local sunward = Instance.new("Attachment")
 			sunward.Name = "GaG_Sunward"
-			sunward.Position = Vector3.new(0, 0, -def.radius * 2.2)
+			sunward.Position = Vector3.new(0, 0, -radius * 2.2)
 			sunward.Parent = part
 			local light = Instance.new("PointLight")
 			light.Color = sunlight
-			light.Range = def.radius * 4.5
+			light.Range = radius * 4.5
 			light.Brightness = 3
 			light.Shadows = false
 			light.Parent = sunward
 			-- A glowing trail along its orbit, so planets read from afar.
 			local top = Instance.new("Attachment")
-			top.Position = Vector3.new(0, def.radius * 0.7, 0)
+			top.Position = Vector3.new(0, radius * 0.7, 0)
 			top.Parent = part
 			local bottom = Instance.new("Attachment")
-			bottom.Position = Vector3.new(0, -def.radius * 0.7, 0)
+			bottom.Position = Vector3.new(0, -radius * 0.7, 0)
 			bottom.Parent = part
 			local trail = Instance.new("Trail")
 			trail.Attachment0 = top
@@ -265,16 +169,6 @@ local function buildPlanets(v: Visual)
 			trail.Transparency = NumberSequence.new(0.45, 1)
 			trail.WidthScale = NumberSequence.new(1, 0.2)
 			trail.Parent = part
-			local ringHex = def.ring
-			if ringHex then
-				for _, item in
-					ring(part, def.radius * 1.6, 20, Color3.fromHex(ringHex), def.radius * 0.45)
-				do
-					table.insert(v.rings, item)
-				end
-			end
-			-- Start planets spread around their orbits, same on every client.
-			dress(part, def, radius)
 			-- A little moon for every level past the first.
 			local moons: { Part } = {}
 			for _ = 2, planetLevel do
@@ -410,41 +304,83 @@ local function tagIcon(button: TextButton, icon: string): TextButton
 	return button
 end
 
-local function showPicker(model: Model, typeId: string)
+-- My planets, from the profile.
+local function myPlanets(): { [string]: Types.PlanetRecord }
+	local profile = ClientState.profile
+	return if profile and profile.planets then profile.planets else {}
+end
+
+local function rarityText(def: PlanetsConfig.PlanetTypeDef): string
+	return P.RARITIES[def.rarity].displayName
+end
+
+-- Choosing a planet for one orbit: inventory planets first, then planets on
+-- other stars (moved here in one step), best producers first.
+local function showPicker(model: Model, slot: number)
 	Theme.clear(list)
+	local starId = model:GetAttribute("StarId")
+	local income = model:GetAttribute("Income")
+	local now = if type(income) == "number" then income else 0
 	local back = Theme.row(list, 36, 0)
 	back.BackgroundTransparency = 1
 	local backButton = Theme.button(back, "Back to orbits", "primary", function()
-		picking = false
+		pickingSlot = nil
 		refreshPanel()
 	end)
 	backButton.Size = UDim2.new(0, 160, 1, -4)
-	for order, planetId in P.ORDER do
-		local def = P.BY_ID[planetId]
+	local choices: { { id: string, planet: Types.PlanetRecord, income: number } } = {}
+	for id, planet in myPlanets() do
+		if planet.star ~= starId and P.BY_ID[planet.typeId] then
+			table.insert(choices, {
+				id = id,
+				planet = planet,
+				income = StarMath.planetIncome(planet.typeId, planet.level),
+			})
+		end
+	end
+	table.sort(choices, function(a, b)
+		local aFree, bFree = a.planet.star == nil, b.planet.star == nil
+		if aFree ~= bFree then
+			return aFree
+		end
+		if a.income ~= b.income then
+			return a.income > b.income
+		end
+		return a.id < b.id
+	end)
+	if #choices == 0 then
+		local row = Theme.row(list, 52, 1)
+		rowText(
+			row,
+			"No free planets yet",
+			"Hatch planet eggs at the ISS, or unequip a planet from another star.",
+			14,
+			14
+		)
+		return
+	end
+	for order, choice in choices do
+		local def = P.BY_ID[choice.planet.typeId]
 		local row = Theme.row(list, 52, order)
 		local dot = Theme.planetIcon(row, Color3.fromHex(def.color), 34, planetRing(def))
 		dot.Position = UDim2.fromOffset(8, 9)
 		rowText(
 			row,
-			`{def.displayName}  ·  tier {def.tier}`,
-			`+{fmt(def.income)} {CURRENCY}/s`,
+			`{def.displayName}  ·  Lv {choice.planet.level}  ·  {rarityText(def)}`,
+			`+{fmt(choice.income)}/s  ·  this star {fmt(now)} -> {fmt(now + choice.income)}/s{if choice.planet.star
+				then "  ·  on another star"
+				else ""}`,
 			48
 		)
-		local button
-		if StarMath.planetAllowed(typeId, planetId) then
-			button = priceButton(row, "Buy", def.cost, function()
-				picking = false
-				request("buyPlanet", model:GetAttribute("StarId"), planetId)
-			end)
-		else
-			local needed = S.BY_ID[S.ORDER[def.tier]]
-			button = Theme.button(
-				row,
-				`Needs {if needed then needed.displayName else "a bigger star"}`,
-				"disabled",
-				nil
-			)
-		end
+		local button = Theme.button(
+			row,
+			if choice.planet.star then "Move here" else "Equip",
+			"buy",
+			function()
+				pickingSlot = nil
+				request("equipPlanet", choice.id, starId, slot)
+			end
+		)
 		placeRight(button, 170)
 	end
 end
@@ -458,23 +394,28 @@ refreshPanel = function()
 	end
 	local typeId = model:GetAttribute("TypeId") :: string
 	local level = model:GetAttribute("Level") :: number
-	local encoded = model:GetAttribute("Planets")
-	local planets = StarMath.decodePlanets(if type(encoded) == "string" then encoded else "")
-	local levelsAttr = model:GetAttribute("PlanetLevels")
-	local planetLevels =
-		StarMath.decodePlanetLevels(if type(levelsAttr) == "string" then levelsAttr else "")
 	local def = S.BY_ID[typeId]
 	local income = model:GetAttribute("Income")
 	local starId = model:GetAttribute("StarId")
 
 	local top = StarMath.maxLevel(typeId)
 	local open = StarMath.slots(typeId)
+	local target = StarMath.evolveTarget(typeId)
+	local nextOpen = if target then StarMath.slots(target) else nil
+	local planets = myPlanets()
+	local ids: { [number]: string } = if type(starId) == "string"
+		then PlanetInventory.idsOn(planets, starId)
+		else {}
+	local used = 0
+	for _ in ids do
+		used += 1
+	end
 	title.Text = `{if def then def.displayName else typeId}  ·  level {level}/{top}`
 	title.TextColor3 = if def then Color3.fromHex(def.light) else C.gold
 	subtitle.Text =
-		`+{fmt(if type(income) == "number" then income else 0)} {CURRENCY}/s  ·  {open} orbits  ·  planets up to tier {if def
-			then def.tier
-			else 1}`
+		`+{fmt(if type(income) == "number" then income else 0)} {CURRENCY}/s  ·  orbits {used}/{open}  ·  {if nextOpen
+			then `next evolution: {nextOpen}`
+			else "max orbits"}`
 
 	-- Actions: level up, evolve, move.
 	Theme.clear(actions)
@@ -491,7 +432,6 @@ refreshPanel = function()
 			)
 		)
 	end
-	local target = StarMath.evolveTarget(typeId)
 	if target then
 		local targetDef = S.BY_ID[target]
 		-- Evolving needs max level; until then the button says when.
@@ -535,72 +475,61 @@ refreshPanel = function()
 		end
 	end
 
-	if picking then
-		showPicker(model, typeId)
+	if pickingSlot then
+		showPicker(model, pickingSlot)
 		return
 	end
 
-	-- Orbits: the star's own, plus a preview of the one its evolution opens.
+	-- Orbits: the open ones, plus a preview of those the evolution opens.
 	Theme.clear(list)
-	local shown = if target then math.min(open + 1, #S.SLOTS) else open
-	for slot = 1, shown do
+	for slot = 1, math.max(open, nextOpen or 0) do
 		local row = Theme.row(list, 52, slot)
-		local planetId = planets[slot]
-		local planetDef = if planetId then P.BY_ID[planetId] else nil
+		local planetId = ids[slot]
+		local planet = if planetId then planets[planetId] else nil
+		local planetDef = if planet then P.BY_ID[planet.typeId] else nil
 		local button: TextButton
-		if planetDef and planetId then
+		if planet and planetDef and planetId then
 			local dot =
 				Theme.planetIcon(row, Color3.fromHex(planetDef.color), 34, planetRing(planetDef))
 			dot.Position = UDim2.fromOffset(8, 9)
-			local record: Types.StarRecord = {
-				typeId = typeId,
-				level = level,
-				pos = { x = 0, y = 0, z = 0 },
-				planets = { [tostring(slot)] = planetId },
-				planetLevels = { [tostring(slot)] = planetLevels[slot] or 1 },
-			}
-			local planetLevel = StarMath.planetLevel(record, tostring(slot))
 			rowText(
 				row,
-				`{planetDef.displayName}  ·  Lv {planetLevel}/{P.MAX_LEVEL}`,
-				`Orbit {slot}  ·  +{fmt(StarMath.planetIncome(planetId, planetLevel))}/s`,
+				`{planetDef.displayName}  ·  Lv {planet.level}/{P.MAX_LEVEL}`,
+				`Orbit {slot}  ·  {rarityText(planetDef)}  ·  +{fmt(
+					StarMath.planetIncome(planetDef.id, planet.level)
+				)}/s`,
 				48,
 				300
 			)
-			local levelCost = StarMath.planetLevelCost(planetId, planetLevel)
+			local levelCost = StarMath.planetLevelCost(planetDef.id, planet.level)
 			if levelCost then
 				local levelButton = priceButton(row, "Level", levelCost, function()
-					request("levelPlanet", starId, tostring(slot))
+					request("levelPlanet", planetId)
 				end)
 				levelButton.AnchorPoint = Vector2.new(1, 0.5)
-				levelButton.Position = UDim2.new(1, -184, 0.5, 0)
-				levelButton.Size = UDim2.fromOffset(110, 34)
+				levelButton.Position = UDim2.new(1, -144, 0.5, 0)
+				levelButton.Size = UDim2.fromOffset(130, 34)
 			end
-			local nextId, cost = StarMath.planetUpgrade(planetId)
-			if nextId and cost and StarMath.planetAllowed(typeId, nextId) then
-				button = priceButton(row, `To {P.BY_ID[nextId].displayName}`, cost, function()
-					request("upgradePlanet", starId, tostring(slot))
-				end)
-			elseif nextId then
-				button = Theme.button(row, "Evolve star to upgrade", "disabled", nil)
-			else
-				button = Theme.button(row, "Finest planet", "disabled", nil)
-			end
+			button = Theme.button(row, "Unequip", "primary", function()
+				request("unequipPlanet", planetId)
+			end)
+			placeRight(button, 130)
 		elseif slot <= open then
 			local icon = Theme.icon(row, "PlanetUp", 40)
 			if icon then
 				icon.Position = UDim2.fromOffset(6, 6)
 			end
 			rowText(row, `Orbit {slot}: empty`, nil, if icon then 52 else 14)
-			button = Theme.button(row, "Buy a planet", "buy", function()
-				picking = true
+			button = Theme.button(row, "Equip a planet", "buy", function()
+				pickingSlot = slot
 				refreshPanel()
 			end)
+			placeRight(button, 170)
 		else
 			rowText(row, `Orbit {slot}: opens when this star evolves`, nil, 14)
 			button = Theme.button(row, "Evolve to open", "disabled", nil)
+			placeRight(button, 170)
 		end
-		placeRight(button, 170)
 	end
 	if ClientState.mode == "ship" and Input.device() == "keyboard" then
 		local hint = Theme.row(list, 22, 99)
@@ -625,7 +554,7 @@ end
 
 local function openPanel(model: Model)
 	panelStar = model
-	picking = false
+	pickingSlot = nil
 	panel.Visible = true
 	refreshPanel()
 	Theme.popIn(panel)
@@ -722,7 +651,7 @@ local function onTypeChanged(v: Visual)
 			v,
 			"STAR EVOLVED",
 			def.displayName,
-			`{StarMath.slots(def.id)} orbits  ·  levels up to {StarMath.maxLevel(def.id)}  ·  planets up to tier {def.tier}`,
+			`{StarMath.slots(def.id)} orbits  ·  levels up to {StarMath.maxLevel(def.id)}`,
 			true
 		)
 	end
@@ -799,9 +728,11 @@ local function onPlanetsChanged(v: Visual)
 			StarFx.materialize(planet.part, Color3.fromHex(def.color))
 			celebrate(
 				v,
-				if before[planet.slot] then "WORLD UPGRADED" else "NEW WORLD",
+				"NEW WORLD",
 				def.displayName,
-				`Orbit {planet.slot}  ·  +{fmt(def.income)} {CURRENCY}/s`,
+				`Orbit {planet.slot}  ·  {rarityText(def)}  ·  +{fmt(
+					StarMath.planetIncome(def.id, planet.level)
+				)} {CURRENCY}/s`,
 				false
 			)
 		end
@@ -945,10 +876,6 @@ animate = function(dt: number?)
 				-- Facing the star, so the sunward light sits on the day side.
 				local at = center + offset
 				planet.part.CFrame = CFrame.lookAt(at, center)
-				local air = planet.part:FindFirstChild("Atmosphere")
-				if air and air:IsA("BasePart") then
-					air.CFrame = planet.part.CFrame
-				end
 				-- Moons circle the planet, faster the closer they are.
 				local size = planet.part.Size.X / 2
 				for index, moon in planet.moons do
@@ -1006,7 +933,6 @@ function StarController.myRecords(): { [string]: Types.StarRecord }
 			typeId = if type(typeId) == "string" then typeId else S.DEFAULT_TYPE,
 			level = 1,
 			pos = { x = 0, y = 0, z = 0 },
-			planets = {},
 		}
 	end
 	return records
@@ -1027,7 +953,7 @@ function StarController.start()
 	end)
 	RunService.RenderStepped:Connect(animate)
 	ClientState.profileChanged:Connect(function(field)
-		if panelStar and (field == "stardust" or field == "*") then
+		if panelStar and (field == "stardust" or field == "planets" or field == "*") then
 			refreshPanel()
 		end
 	end)

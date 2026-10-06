@@ -1,6 +1,7 @@
 return function(T, Loader)
 	local Config = Loader.require("src/shared/Config")
 	local ProfileSchema = Loader.require("src/shared/Logic/ProfileSchema")
+	local StarMath = Loader.require("src/shared/Logic/StarMath")
 
 	local starter = Config.Ships.STARTER_SHIP
 
@@ -134,7 +135,6 @@ return function(T, Loader)
 							typeId = "YellowDwarf",
 							level = 2,
 							pos = { x = 0, y = 10, z = 500 },
-							planets = { ["1"] = "Barren", ["99"] = "Ocean", [2] = "Desert" },
 						},
 						s4 = { typeId = "RetiredStar", level = 1, pos = { x = 1, y = 2, z = 3 } },
 						s9 = {
@@ -150,11 +150,8 @@ return function(T, Loader)
 			local galaxy = data.galaxy
 			T.equal(galaxy.expansion, #Config.Galaxy.EXPANSIONS, "expansion clamped")
 			T.truthy(galaxy.stars.s1)
-			T.equal(galaxy.stars.s1.planets["1"], "Barren")
-			T.equal(galaxy.stars.s1.planets["99"], nil, "slot out of range")
-			T.equal(galaxy.stars.s1.planets["2"], nil, "number key dropped")
+			T.equal((galaxy.stars.s1 :: any).planets, nil, "stars no longer hold planets")
 			T.truthy(galaxy.stars.s4, "unknown type kept")
-			T.equal(type(galaxy.stars.s4.planets), "table", "planets filled in")
 			T.equal(galaxy.stars.s9, nil, "bad position")
 			T.equal(galaxy.stars.s7, nil, "bad level")
 			T.equal(galaxy.nextId, 10, "nextId moves past every existing id")
@@ -277,22 +274,159 @@ return function(T, Loader)
 			end
 		)
 
-		T.test("v12: planet levels are kept for planets that exist, within 2..MAX_LEVEL", function()
-			local data = ProfileSchema.default()
-			data.schemaVersion = 11
-			data.galaxy.stars.s1 = {
-				typeId = Config.Stars.DEFAULT_TYPE,
-				level = 1,
-				pos = { x = 0, y = 0, z = 0 },
-				planets = { ["1"] = "Barren", ["2"] = "Barren" },
-				planetLevels = { ["1"] = 3, ["2"] = 99, ["3"] = 4, ["4"] = "x" },
-			} :: any
+		T.test("v15: old orbit planets become owned planets, same level, nothing lost", function()
+			local data = ProfileSchema.default() :: any
+			data.schemaVersion = 14
+			data.stats = { planetsBought = 7, planetUpgrades = 2, planetLevels = 3 }
+			data.planets = nil
+			data.nextPlanetId = nil
+			data.galaxy.nextId = 3
+			data.galaxy.stars = {
+				-- Brown dwarf: 3 orbits now (4 before), so slot 4 goes to inventory.
+				s1 = {
+					typeId = "BrownDwarf",
+					level = 2,
+					pos = { x = 0, y = 0, z = 0 },
+					planets = { ["1"] = "Barren", ["3"] = "Molten", ["4"] = "Barren" },
+					planetLevels = { ["1"] = 3, ["4"] = 2 },
+				},
+				-- Black hole: 9 orbits now (11 before); 10 and 11 go to inventory.
+				s2 = {
+					typeId = "BlackHole",
+					level = 1,
+					pos = { x = 0, y = 200, z = 0 },
+					planets = {
+						["2"] = "Crystal",
+						["9"] = "GasGiant",
+						["10"] = "Ocean",
+						["11"] = "Retired",
+					},
+					planetLevels = { ["2"] = 5, ["10"] = 99 },
+				},
+			}
+			local incomeBefore = 0
+			local oldIncome = {
+				Barren = 2,
+				Molten = 5,
+				Ocean = 35,
+				GasGiant = 480,
+				Crystal = 1100,
+			}
+			for _, star in data.galaxy.stars do
+				for slot, id in star.planets do
+					local base = oldIncome[id] or 0
+					local level = math.clamp(star.planetLevels[slot] or 1, 1, 5)
+					incomeBefore += math.floor(base * (1 + 0.5 * (level - 1)) + 0.5)
+				end
+			end
+
 			T.truthy(ProfileSchema.normalize(data))
-			local levels = data.galaxy.stars.s1.planetLevels :: { [string]: number }
-			T.equal(levels["1"], 3)
-			T.equal(levels["2"], Config.Planets.MAX_LEVEL)
-			T.equal(levels["3"], nil, "no planet in slot 3")
-			T.equal(levels["4"], nil)
+			local count, inOrbit, levels = 0, 0, {}
+			for id, planet in data.planets do
+				count += 1
+				T.truthy(Config.Planets.BY_ID[planet.typeId], `{id} has a catalog type`)
+				if planet.star then
+					inOrbit += 1
+					T.truthy(planet.slot <= StarMath.slots(data.galaxy.stars[planet.star].typeId))
+				end
+				levels[`{planet.star or "inv"}:{planet.slot or 0}:{planet.typeId}`] = planet.level
+			end
+			T.equal(count, 7, "every old planet became an owned planet")
+			T.equal(inOrbit, 4, "slots past the new capacity went to inventory")
+			T.equal(levels["s1:1:Basalt"], 3, "levels are kept")
+			T.equal(levels["s1:3:Rust"], 1)
+			T.equal(levels["inv:0:Basalt"], 2, "overflow keeps its level too")
+			T.equal(levels["s2:2:DiamondCrystal"], 5)
+			T.equal(levels["s2:9:NebulaShell"], 1)
+			T.equal(levels["inv:0:Bioluminescent"], Config.Planets.MAX_LEVEL)
+			T.equal(
+				levels[`inv:0:{Config.Planets.LEGACY_FALLBACK}`] ~= nil,
+				true,
+				"unknown ids still become a planet"
+			)
+			T.equal(data.nextPlanetId, 8)
+			for _, star in data.galaxy.stars do
+				T.equal(star.planets, nil)
+				T.equal(star.planetLevels, nil)
+			end
+			-- Every equipped planet earns at least what it did in that slot.
+			local equippedNow = 0
+			for _, planet in data.planets do
+				if planet.star then
+					equippedNow += StarMath.planetIncome(planet.typeId, planet.level)
+				end
+			end
+			local equippedBefore = math.floor(2 * 2 + 0.5) + 5 + math.floor(1100 * 3 + 0.5) + 480
+			T.truthy(equippedNow >= equippedBefore, `{equippedNow} >= {equippedBefore}`)
+			T.truthy(incomeBefore > 0)
+			-- Old progress still counts towards the new achievements.
+			T.equal(data.stats.planetsEquipped, 7)
+			T.equal(data.stats.planetsHatched, 7)
+			T.equal(data.stats.planetLevels, 5)
+
+			-- Running it again changes nothing.
+			local again = table.clone(data.planets)
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.stats.planetLevels, 5, "stats carried over once")
+			for id, planet in again do
+				T.equal(data.planets[id].typeId, planet.typeId)
+				T.equal(data.planets[id].star, planet.star)
+			end
+		end)
+
+		T.test("v15: planets equipped on missing stars or shared slots go to inventory", function()
+			local data = ProfileSchema.default() :: any
+			data.galaxy.stars.s1 =
+				{ typeId = "BrownDwarf", level = 1, pos = { x = 0, y = 0, z = 0 } }
+			data.planets = {
+				p1 = { typeId = "Basalt", level = 9, star = "s1", slot = 1 },
+				p2 = { typeId = "Moss", level = 1, star = "s1", slot = 1 },
+				p3 = { typeId = "Geode", level = 2, star = "gone", slot = 2 },
+				p4 = { typeId = "Coral", level = 1, star = "s1", slot = 7 },
+				p5 = "junk",
+				p6 = { typeId = "FutureType", level = 1 },
+			}
+			data.nextPlanetId = 2
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.planets.p1.star, "s1")
+			T.equal(data.planets.p1.level, Config.Planets.MAX_LEVEL)
+			T.equal(data.planets.p2.star, nil, "slot already taken")
+			T.equal(data.planets.p3.star, nil, "star is gone")
+			T.equal(data.planets.p3.level, 2)
+			T.equal(data.planets.p4.star, nil, "slot past capacity")
+			T.equal(data.planets.p5, nil)
+			T.truthy(data.planets.p6, "a type this server doesn't know is kept")
+			T.equal(data.nextPlanetId, 7, "next id passes every existing id")
+		end)
+
+		T.test("v15: eggs, hatches and the wheel are cleaned up, never rerolled", function()
+			local data = ProfileSchema.default() :: any
+			data.eggs = {
+				e1 = { outcome = "Aurora", guaranteed = false, boughtAt = 100 },
+				e2 = { outcome = 5 },
+			}
+			data.hatches = {
+				["1"] = { eggId = "e3", outcome = "Singularity", startedAt = 10, endsAt = 1810 },
+				["6"] = { eggId = "e4", outcome = "Basalt", startedAt = 10, endsAt = 20 },
+				["2"] = { eggId = "e5", outcome = "Basalt", startedAt = "x", endsAt = 20 },
+			}
+			data.nextEggId = 1
+			data.wheel = { nextSpin = 123, lastPrize = 99 }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.eggs.e1.outcome, "Aurora")
+			T.equal(data.eggs.e2, nil)
+			T.equal(data.hatches["1"].outcome, "Singularity")
+			T.equal(data.hatches["1"].endsAt, 1810)
+			T.equal(data.hatches["6"], nil, "only HATCH_SLOTS chambers")
+			T.equal(data.hatches["2"], nil)
+			T.equal(data.nextEggId, 4)
+			T.equal(data.wheel.nextSpin, 123)
+			T.equal(data.wheel.lastPrize, #Config.Wheel.PRIZES)
+			-- The client sees a mystery egg's rarity only once hatching, never its planet.
+			local view = ProfileSchema.view(data)
+			T.equal(view.eggs.e1.outcome, nil)
+			T.equal(view.hatches["1"].rarity, "Interstellar")
+			T.equal((view.hatches["1"] :: any).outcome, nil)
 		end)
 
 		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()

@@ -2,7 +2,7 @@
 -- The Star Shop panel, opened from a Star Shop console (if any), the
 -- HUD's Star Shop button or the B key (ClientState.openStarShop). Lists
 -- every star tier with its price (rising with each star you own), production
--- and best planet tier. Unlocked, affordable stars start ghost placement
+-- and planet orbits. Unlocked, affordable stars start ghost placement
 -- (PlacementController); the server re-checks everything when you confirm.
 
 local GuiService = game:GetService("GuiService")
@@ -24,7 +24,6 @@ local RegionMath = require(Shared:WaitForChild("Logic"):WaitForChild("RegionMath
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 
 local S = Config.Stars
-local P = Config.Planets
 local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local TOP_STAR = S.ORDER[#S.ORDER] -- drawn as a black hole
@@ -84,7 +83,6 @@ local function refresh()
 			Theme.starIcon(row, Color3.fromHex(def.color), Color3.fromHex(def.light), 46, style)
 		icon.Position = UDim2.fromOffset(12, 14)
 
-		local bestPlanet = P.BY_ID[P.ORDER[math.min(def.tier, #P.ORDER)]]
 		local name = Theme.label(row, {
 			Position = UDim2.fromOffset(72, 7),
 			Size = UDim2.new(1, -262, 0, 20),
@@ -100,7 +98,7 @@ local function refresh()
 			Size = UDim2.new(1, -262, 0, 16),
 			Text = `+{Format.abbreviate(def.income)} {CURRENCY}/s  ·  {StarMath.slots(typeId)} orbits  ·  levels 1-{StarMath.maxLevel(
 				typeId
-			)}  ·  planets up to {bestPlanet.displayName}`,
+			)}`,
 			Font = Enum.Font.Gotham,
 			TextSize = 13,
 			TextColor3 = C.subtle,

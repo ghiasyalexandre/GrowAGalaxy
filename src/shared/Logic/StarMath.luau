@@ -3,8 +3,9 @@
 -- production, prices, tier rules and income accrual. Pure, so the Lune tests
 -- and the client's panels use exactly what the server uses.
 --
--- Planets are saved per star as { ["1"] = planetTypeId, ... }, keyed by orbit
--- slot number as a string (plain data for the save).
+-- Planets are individually owned (profile.planets, Logic/PlanetInventory);
+-- the ones equipped on a star are passed in as `equipped`: orbit slot number
+-- -> planet record. Only equipped planets produce.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -24,9 +25,10 @@ function StarMath.maxLevel(typeId: string): number
 	return S.MAX_LEVEL_BASE + S.MAX_LEVEL_STEP * (tierOf(typeId) - 1)
 end
 
--- Planet orbits of a star of this type (4 at tier 1, one more per tier).
+-- Planet slots of a star of this type (Config.Stars `orbits`, at most 9).
 function StarMath.slots(typeId: string): number
-	return math.min(S.ORBITS_BASE + tierOf(typeId) - 1, #S.SLOTS)
+	local def = S.BY_ID[typeId]
+	return math.min(if def then def.orbits else 1, #S.SLOTS)
 end
 
 -- Production multiplier at a level: grows a little faster every level.
@@ -63,19 +65,14 @@ function StarMath.planetIncome(planetId: string, level: number?): number
 	return math.floor(def.income * (1 + P.LEVEL_INCOME_STEP * (lv - 1)) + 0.5)
 end
 
--- The level of the planet in a star's slot ("1".."N").
-function StarMath.planetLevel(star: Types.StarRecord, slot: string): number
-	local levels = star.planetLevels
-	return if levels and levels[slot] then levels[slot] else 1
-end
-
 -- Price to raise a planet from `level` to the next, or nil at MAX_LEVEL.
 function StarMath.planetLevelCost(planetId: string, level: number): number?
 	local def = P.BY_ID[planetId]
 	if def == nil or level < 1 or level >= P.MAX_LEVEL then
 		return nil
 	end
-	return math.floor(def.cost * P.LEVEL_COST_SHARE * P.LEVEL_COST_GROWTH ^ (level - 1) + 0.5)
+	local base = P.UPGRADE_COST[def.rarity] or 0
+	return math.floor(base * P.UPGRADE_GROWTH ^ (level - 1) + 0.5)
 end
 
 -- A planet's radius at a level: a little bigger every level.
@@ -85,19 +82,37 @@ function StarMath.planetRadius(planetId: string, level: number): number
 	return (if def then def.radius else 4) * (1 + P.LEVEL_SIZE_STEP * (lv - 1))
 end
 
--- Stardust per second from a star and its planets.
-function StarMath.income(star: Types.StarRecord): number
+-- Stardust per second from a star and the planets equipped on it
+-- (slot -> planet record; nil = none).
+function StarMath.income(
+	star: Types.StarRecord,
+	equipped: { [number]: Types.PlanetRecord }?
+): number
 	local total = StarMath.starIncome(star.typeId, star.level)
-	for slot, planetId in star.planets do
-		total += StarMath.planetIncome(planetId, StarMath.planetLevel(star, slot))
+	if equipped then
+		for _, planet in equipped do
+			total += StarMath.planetIncome(planet.typeId, planet.level)
+		end
 	end
 	return total
 end
 
-function StarMath.totalIncome(stars: { [string]: Types.StarRecord }): number
+-- Stardust per second from every star and every planet equipped on one.
+function StarMath.totalIncome(
+	stars: { [string]: Types.StarRecord },
+	planets: { [string]: Types.PlanetRecord }?
+): number
 	local total = 0
 	for _, star in stars do
-		total += StarMath.income(star)
+		total += StarMath.starIncome(star.typeId, star.level)
+	end
+	if planets then
+		for _, planet in planets do
+			local starId = planet.star
+			if starId and stars[starId] then
+				total += StarMath.planetIncome(planet.typeId, planet.level)
+			end
+		end
 	end
 	return total
 end
@@ -173,40 +188,6 @@ function StarMath.evolveTarget(typeId: string): string?
 	return nil
 end
 
--- Can a star of this type hold a planet of that type?
-function StarMath.planetAllowed(starTypeId: string, planetId: string): boolean
-	local star = S.BY_ID[starTypeId]
-	local planet = P.BY_ID[planetId]
-	return star ~= nil and planet ~= nil and planet.enabled and planet.tier <= star.tier
-end
-
--- The first open, empty slot of a star, as its save key ("1".."4"), or nil.
-function StarMath.freeSlot(star: Types.StarRecord): string?
-	for slot = 1, StarMath.slots(star.typeId) do
-		local key = tostring(slot)
-		if star.planets[key] == nil then
-			return key
-		end
-	end
-	return nil
-end
-
--- The next planet tier after `planetId`, and the upgrade price (the next
--- tier's price minus UPGRADE_CREDIT of the current one's), or nil at the top.
-function StarMath.planetUpgrade(planetId: string): (string?, number?)
-	local def = P.BY_ID[planetId]
-	if def == nil then
-		return nil, nil
-	end
-	for _, id in P.ORDER do
-		local other = P.BY_ID[id]
-		if other.tier == def.tier + 1 and other.enabled then
-			return id, math.max(1, math.floor(other.cost - def.cost * P.UPGRADE_CREDIT + 0.5))
-		end
-	end
-	return nil, nil
-end
-
 -- Uncollected Stardust after `dt` seconds at `rate`, capped at `cap`.
 -- Never lowers an amount that is already above the cap.
 function StarMath.accrue(uncollected: number, rate: number, dt: number, cap: number): number
@@ -216,23 +197,23 @@ function StarMath.accrue(uncollected: number, rate: number, dt: number, cap: num
 	return math.min(cap, uncollected + math.max(rate, 0) * math.max(dt, 0))
 end
 
--- Planets as an attribute string, slot by slot: "Barren,,Ocean,". Clients
--- read it to draw the planets.
-function StarMath.encodePlanets(planets: { [string]: string }): string
+-- The planets equipped on a star as attribute strings, slot by slot: types
+-- ("Basalt,,Aurora,...") and levels ("3,,1,..."); empty slots are blank.
+-- Clients read them to draw the planets.
+function StarMath.encodePlanets(equipped: { [number]: Types.PlanetRecord }): string
 	local parts: { string } = {}
 	for slot = 1, #S.SLOTS do
-		parts[slot] = planets[tostring(slot)] or ""
+		local planet = equipped[slot]
+		parts[slot] = if planet then planet.typeId else ""
 	end
 	return table.concat(parts, ",")
 end
 
--- Planet levels as an attribute string, slot by slot: "2,,1,". Empty
--- slots are blank.
-function StarMath.encodePlanetLevels(star: Types.StarRecord): string
+function StarMath.encodePlanetLevels(equipped: { [number]: Types.PlanetRecord }): string
 	local parts: { string } = {}
 	for slot = 1, #S.SLOTS do
-		local key = tostring(slot)
-		parts[slot] = if star.planets[key] then tostring(StarMath.planetLevel(star, key)) else ""
+		local planet = equipped[slot]
+		parts[slot] = if planet then tostring(planet.level) else ""
 	end
 	return table.concat(parts, ",")
 end

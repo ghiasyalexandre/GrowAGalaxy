@@ -13,12 +13,14 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local DailyMath = require(ReplicatedStorage.Shared.Logic.DailyMath)
+local Entitlements = require(script.Parent.Parent.Util.Entitlements)
 local ReceiptFlow = require(ReplicatedStorage.Shared.Logic.ReceiptFlow)
 local RewardMath = require(ReplicatedStorage.Shared.Logic.RewardMath)
 local HangarMath = require(ReplicatedStorage.Shared.Logic.HangarMath)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Notify = require(script.Parent.Parent.Util.Notify)
 local OfflineMath = require(ReplicatedStorage.Shared.Logic.OfflineMath)
+local PlanetInventory = require(ReplicatedStorage.Shared.Logic.PlanetInventory)
 local ProfileSchema = require(ReplicatedStorage.Shared.Logic.ProfileSchema)
 local ProfileStore = require(ServerScriptService.Vendor.ProfileStore) :: any
 local Signal = require(ReplicatedStorage.Shared.Util.Signal)
@@ -40,6 +42,8 @@ DataSystem.statChanged = Signal.new() :: Signal.Signal<Player, string>
 
 local store: any = nil
 local sessions: { [Player]: any } = {}
+-- os.clock() when each online player's income was last added up (settleIncome).
+local settledAt: { [Player]: number } = {}
 
 local function keyFor(player: Player): string
 	return `Player_{player.UserId}`
@@ -89,6 +93,7 @@ local function load(player: Player)
 		return
 	end
 	sessions[player] = session
+	settledAt[player] = os.clock()
 	payOffline(player, session.Data)
 	DataSystem.profileLoaded:Fire(player, session.Data)
 end
@@ -195,18 +200,17 @@ export type StarChanges = {
 	typeId: string?,
 	level: number?,
 	pos: Types.Vec3?,
-	slot: string?, -- with planet: put this planet in this orbit slot
-	planet: string?,
-	planetLevel: number?, -- with slot: that planet's new level
 }
 
--- Changes a star (already validated and paid for by the caller).
+-- Changes a star (already validated and paid for by the caller). Income up
+-- to now is settled at the old rate first.
 function DataSystem.updateStar(player: Player, id: string, changes: StarChanges)
 	local profile = DataSystem.getProfile(player)
 	local star = profile and profile.galaxy.stars[id]
 	if profile == nil or star == nil then
 		return
 	end
+	DataSystem.settleIncome(player)
 	if changes.typeId then
 		star.typeId = changes.typeId
 	end
@@ -216,19 +220,79 @@ function DataSystem.updateStar(player: Player, id: string, changes: StarChanges)
 	if changes.pos then
 		star.pos = changes.pos
 	end
-	if changes.slot and changes.planet then
-		-- A new or upgraded planet starts at level 1.
-		star.planets[changes.slot] = changes.planet
-		if star.planetLevels then
-			star.planetLevels[changes.slot] = nil
-		end
-	end
-	if changes.slot and changes.planetLevel then
-		star.planetLevels = star.planetLevels or {}
-		local levels = star.planetLevels :: { [string]: number }
-		levels[changes.slot] = changes.planetLevel
-	end
 	pushIncome(player, profile)
+end
+
+local function pushPlanets(player: Player, profile: Profile)
+	push(player, "planets", ProfileSchema.planetsView(profile))
+	pushIncome(player, profile)
+end
+
+-- Adds a new planet to the player's inventory (from a hatch or a grant) and
+-- returns its id. The caller has already validated and paid for it.
+function DataSystem.addPlanet(player: Player, typeId: string, level: number?): string?
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or Config.Planets.BY_ID[typeId] == nil then
+		return nil
+	end
+	local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
+	profile.nextPlanetId = nextId
+	profile.planets[id] = {
+		typeId = typeId,
+		level = math.clamp(level or 1, 1, Config.Planets.MAX_LEVEL),
+	}
+	pushPlanets(player, profile)
+	return id
+end
+
+-- Puts an owned planet into an orbit of one of the player's stars, moving it
+-- there in one step if it orbits elsewhere. Income up to now is settled
+-- first. Returns (ok, problem) as PlanetInventory.equip; the caller rebuilds
+-- the stars involved.
+function DataSystem.equipPlanet(
+	player: Player,
+	planetId: string,
+	starId: string,
+	slot: number
+): (boolean, PlanetInventory.Problem?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return false, "UnknownPlanet"
+	end
+	local ok, problem =
+		PlanetInventory.check(profile.planets, profile.galaxy.stars, planetId, starId, slot)
+	if not ok then
+		return false, problem :: PlanetInventory.Problem?
+	end
+	DataSystem.settleIncome(player)
+	PlanetInventory.equip(profile.planets, profile.galaxy.stars, planetId, starId, slot)
+	pushPlanets(player, profile)
+	return true, nil
+end
+
+-- Takes a planet out of orbit into the inventory (income settled first).
+function DataSystem.unequipPlanet(player: Player, planetId: string): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or profile.planets[planetId] == nil then
+		return false
+	end
+	DataSystem.settleIncome(player)
+	PlanetInventory.unequip(profile.planets, planetId)
+	pushPlanets(player, profile)
+	return true
+end
+
+-- Sets an owned planet's level (already validated and paid for by the
+-- caller), settling income first.
+function DataSystem.setPlanetLevel(player: Player, planetId: string, level: number)
+	local profile = DataSystem.getProfile(player)
+	local planet = profile and profile.planets[planetId]
+	if profile == nil or planet == nil then
+		return
+	end
+	DataSystem.settleIncome(player)
+	planet.level = math.clamp(level, 1, Config.Planets.MAX_LEVEL)
+	pushPlanets(player, profile)
 end
 
 -- Advances `dt` seconds of play for an online player:
@@ -238,11 +302,7 @@ end
 --   * with the Automatic Collection pass it moves straight to the wallet;
 --   * boost timers count down (they only run while the player is online).
 -- `passes` are the server-verified passes (MonetizationSystem).
-function DataSystem.accrueIncome(player: Player, dt: number, passes: { [string]: boolean })
-	local profile = DataSystem.getProfile(player)
-	if profile == nil or dt <= 0 then
-		return
-	end
+local function accrue(player: Player, profile: Profile, dt: number, passes: { [string]: boolean })
 	-- Seen online now: offline earnings count from the last of these.
 	profile.lastOnline = os.time()
 	local boosts = profile.boosts
@@ -281,6 +341,24 @@ function DataSystem.accrueIncome(player: Player, dt: number, passes: { [string]:
 		if ended or mining // 10 ~= boosts.mining // 10 or star // 10 ~= boosts.star // 10 then
 			push(player, "boosts", table.clone(boosts))
 		end
+	end
+end
+
+-- Adds up an online player's income since the last settlement at the
+-- current rate. StarSystem calls it every INCOME_TICK; anything that changes
+-- the rate (star, planet or arrangement changes) calls it first, so the old
+-- rate is paid exactly up to the change and the new one from then on.
+function DataSystem.settleIncome(player: Player)
+	local profile = DataSystem.getProfile(player)
+	local last = settledAt[player]
+	if profile == nil or last == nil then
+		return
+	end
+	local now = os.clock()
+	settledAt[player] = now
+	local dt = now - last
+	if dt > 0 then
+		accrue(player, profile, dt, Entitlements.passes(player))
 	end
 end
 
@@ -651,8 +729,10 @@ function DataSystem.start()
 	Players.PlayerRemoving:Connect(function(player)
 		local session = sessions[player]
 		if session then
+			DataSystem.settleIncome(player)
 			session:EndSession()
 		end
+		settledAt[player] = nil
 	end)
 end
 
