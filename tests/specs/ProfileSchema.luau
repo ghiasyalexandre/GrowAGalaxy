@@ -440,7 +440,7 @@ return function(T, Loader)
 			}
 			data.discovered = { Geode = true, Junk = 5 }
 			T.truthy(ProfileSchema.normalize(data))
-			T.equal(data.schemaVersion, 16)
+			T.equal(data.schemaVersion, ProfileSchema.VERSION)
 			T.equal(data.settings.floating, true, "floating stays the default")
 			T.equal(data.settings.autoIncubate, true)
 			T.equal(data.settings.keepNewTypes, true)
@@ -451,6 +451,19 @@ return function(T, Loader)
 			T.equal(data.planets.p2.locked, nil)
 			T.truthy(data.discovered.Geode and data.discovered.Aurora and data.discovered.Basalt)
 			T.equal(data.discovered.Junk, nil)
+		end)
+
+		T.test("v17: the hangar colour keeps only colours on offer", function()
+			local data = ProfileSchema.default() :: any
+			data.schemaVersion = 16
+			T.equal(data.hangarColor, nil, "default: the region's colour")
+			data.hangarColor = "Pink"
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.hangarColor, "Pink")
+			T.equal(ProfileSchema.view(data).hangarColor, "Pink")
+			data.hangarColor = "Rainbow"
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.hangarColor, nil)
 		end)
 
 		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()

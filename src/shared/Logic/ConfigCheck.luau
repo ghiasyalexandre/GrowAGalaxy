@@ -816,6 +816,22 @@ function ConfigCheck.run(config: any): { string }
 			fail(`{where}: the final step must be the last`)
 		end
 	end
+	local colorIds: { [string]: boolean } = {}
+	for _, choice in config.Hangar.HIGHLIGHT_COLORS do
+		if colorIds[choice.id] then
+			fail(`Hangar: highlight colour {choice.id} is listed twice`)
+		end
+		colorIds[choice.id] = true
+		if not string.match(choice.hex, "^#%x%x%x%x%x%x$") then
+			fail(`Hangar: highlight colour {choice.id} needs a #RRGGBB hex`)
+		end
+	end
+	local arena = config.Dodgeball
+	if arena.POWERUP_INTERVAL <= 0 or arena.POWERUP_SCALE < 1 or arena.POWERUP_REACH <= 0 then
+		fail(
+			"Dodgeball: POWERUP_INTERVAL and POWERUP_REACH must be positive, POWERUP_SCALE at least 1"
+		)
+	end
 	if config.World.EMISSIVE_DIM < 0 or config.World.EMISSIVE_DIM > 1 then
 		fail("World: EMISSIVE_DIM must be from 0 to 1")
 	end

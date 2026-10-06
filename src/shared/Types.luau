@@ -116,6 +116,7 @@ export type Profile = {
 	-- index of the last prize won (0 = never spun).
 	wheel: { nextSpin: number, lastPrize: number },
 	discovered: { [string]: boolean }, -- planet types ever owned (the Planet Index)
+	hangarColor: string?, -- Config.Hangar.HIGHLIGHT_COLORS id, nil = the region's colour
 	-- Seconds of temporary 2x boost left per source; counts down only while
 	-- the player is in a server.
 	boosts: { mining: number, star: number },
@@ -157,6 +158,7 @@ export type ProfileView = {
 	hatches: { [string]: { rarity: string, startedAt: number, endsAt: number } },
 	wheel: { nextSpin: number, lastPrize: number },
 	discovered: { [string]: boolean },
+	hangarColor: string?,
 }
 
 export type RegionInfo = {

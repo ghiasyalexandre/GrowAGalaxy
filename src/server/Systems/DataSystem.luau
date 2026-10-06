@@ -526,6 +526,29 @@ function DataSystem.equipBest(player: Player): { string }
 	return list
 end
 
+-- Sets the hangar highlight colour (a Config.Hangar.HIGHLIGHT_COLORS id, or
+-- "" for the region's own). False for anything else.
+function DataSystem.setHangarColor(player: Player, id: unknown): boolean
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or type(id) ~= "string" then
+		return false
+	end
+	if id == "" then
+		profile.hangarColor = nil
+	else
+		local known = false
+		for _, choice in Config.Hangar.HIGHLIGHT_COLORS do
+			known = known or choice.id == id
+		end
+		if not known then
+			return false
+		end
+		profile.hangarColor = id
+	end
+	push(player, "hangarColor", profile.hangarColor)
+	return true
+end
+
 -- Turns automatic selling of newly hatched planets of `rarity` on or off
 -- (only Config.Planets.AUTO_SELL_RARITIES).
 function DataSystem.setAutoSell(player: Player, rarity: unknown, on: unknown): boolean

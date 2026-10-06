@@ -10,6 +10,8 @@
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
+--   Hangar color    the highlight colour of your station (swatches; the
+--                   server repaints it, StationSystem)
 --   How to play     opens the tutorial guide (TutorialController)
 --   Codes           a box to redeem codes for rewards (CodeSystem)
 --
@@ -25,6 +27,7 @@ local Theme = require(script.Parent.Parent.UI.Theme)
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
+local Config = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Config"))
 
 local SettingsController = {}
 
@@ -225,6 +228,68 @@ codeRow = function(order: number)
 	end)
 end
 
+-- The hangar highlight colour: Default (the region's colour) and every
+-- colour in Config.Hangar.HIGHLIGHT_COLORS as round swatches.
+local function colorRow(order: number)
+	local row = Theme.row(list, 96, order)
+	Theme.label(row, {
+		Position = UDim2.fromOffset(12, 7),
+		Size = UDim2.new(1, -24, 0, 22),
+		Text = "Hangar color",
+	})
+	local profile = ClientState.profile
+	local current = if profile then profile.hangarColor else nil
+	local holder = Instance.new("Frame")
+	holder.BackgroundTransparency = 1
+	holder.Position = UDim2.fromOffset(12, 40)
+	holder.Size = UDim2.new(1, -24, 0, 44)
+	holder.Parent = row
+	local layout = Instance.new("UIListLayout")
+	layout.FillDirection = Enum.FillDirection.Horizontal
+	layout.VerticalAlignment = Enum.VerticalAlignment.Center
+	layout.Padding = UDim.new(0, 6)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = holder
+	local choices: { { id: string, hex: string?, name: string } } = {
+		{ id = "", hex = nil, name = "Default" },
+	}
+	for _, choice in Config.Hangar.HIGHLIGHT_COLORS do
+		table.insert(choices, { id = choice.id, hex = choice.hex, name = choice.name })
+	end
+	for index, choice in choices do
+		local picked = (current or "") == choice.id
+		local swatch = Instance.new("TextButton")
+		swatch.Name = choice.name
+		swatch.LayoutOrder = index
+		swatch.Size = UDim2.fromOffset(if picked then 38 else 32, if picked then 38 else 32)
+		swatch.AutoButtonColor = false
+		swatch.BackgroundColor3 = if choice.hex
+			then Color3.fromHex(choice.hex)
+			else Color3.fromRGB(40, 44, 70)
+		swatch.Text = if choice.hex then "" else "Auto"
+		swatch.TextScaled = true
+		swatch.Font = Enum.Font.GothamBold
+		swatch.TextColor3 = Color3.new(1, 1, 1)
+		swatch.Parent = holder
+		local round = Instance.new("UICorner")
+		round.CornerRadius = UDim.new(1, 0)
+		round.Parent = swatch
+		local edge = Instance.new("UIStroke")
+		edge.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		edge.Color = if picked then Color3.new(1, 1, 1) else Color3.fromRGB(20, 22, 40)
+		edge.Thickness = if picked then 3 else 1
+		edge.Parent = swatch
+		Theme.hover(swatch, function()
+			Net.SettingChanged:FireServer("hangarColor", choice.id)
+			if profile then
+				profile.hangarColor = if choice.id == "" then nil else choice.id
+			end
+			ClientState.notify:Fire(`Hangar color: {choice.name}`)
+			refresh()
+		end)
+	end
+end
+
 refresh = function()
 	if not gui.Enabled then
 		return
@@ -293,14 +358,15 @@ refresh = function()
 			save("autoIncubate", current.autoIncubate == false)
 		end
 	)
-	local guideRow = rowFrame(8, "How to play", "Every tutorial step and tips")
+	colorRow(8)
+	local guideRow = rowFrame(9, "How to play", "Every tutorial step and tips")
 	local guideButton = Theme.button(guideRow, "Open guide", "primary", function()
 		ClientState.openGuide:Fire()
 	end)
 	guideButton.AnchorPoint = Vector2.new(1, 0.5)
 	guideButton.Position = UDim2.new(1, -10, 0.5, 0)
 	guideButton.Size = UDim2.fromOffset(150, 36)
-	codeRow(9)
+	codeRow(10)
 end
 
 local function build()

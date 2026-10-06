@@ -1,13 +1,15 @@
 --!strict
 -- Saves the settings a player changes on their client (SettingChanged):
 -- the suit stabilizer, reduced effects, floating and the planet settings
--- (DataSystem validates them; "autoSell" carries a rarity and on/off), and
+-- (DataSystem validates them; "autoSell" carries a rarity and on/off), the
+-- hangar highlight colour ("hangarColor", an id or "": StationSystem repaints), and
 -- PvP, which CombatSystem decides.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatSystem = require(script.Parent.CombatSystem)
 local DataSystem = require(script.Parent.DataSystem)
+local StationSystem = require(script.Parent.StationSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 
@@ -24,6 +26,10 @@ function SettingsSystem.start()
 			CombatSystem.requestPvp(player, value)
 		elseif name == "autoSell" then
 			DataSystem.setAutoSell(player, value, extra)
+		elseif name == "hangarColor" then
+			if DataSystem.setHangarColor(player, value) then
+				StationSystem.recolor(player)
+			end
 		else
 			DataSystem.setSetting(player, name, value)
 		end

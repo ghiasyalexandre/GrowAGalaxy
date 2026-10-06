@@ -11,6 +11,7 @@
 -- and a new one is ready after THROW_COOLDOWN. A ball that hits another
 -- player knocks them out: they're flung back and reappear at a random spawn
 -- point after OUT_TIME. The thrower scores a hit (stat "dodgeballHits").
+-- A giant ball powerup appears every POWERUP_INTERVAL seconds.
 -- Logic/ConfigCheck validates this table.
 
 return {
@@ -36,6 +37,14 @@ return {
 	BALL_LIFETIME = 2.5, -- seconds before an unlucky ball fizzles
 	OUT_TIME = 2, -- seconds a hit player is out before they reappear
 	KNOCKBACK = 70, -- studs per second the hit flings you
+
+	-- Giant ball powerup: a glowing orb appears at a random spawn point every
+	-- POWERUP_INTERVAL seconds (one at a time). Floating into it makes your
+	-- next throw POWERUP_SCALE x bigger (its hit area too), once.
+	POWERUP_INTERVAL = 12,
+	POWERUP_SCALE = 3,
+	POWERUP_REACH = 7, -- studs from the orb's centre to pick it up
+	POWERUP_COLOR = "#7CFF8A",
 
 	-- How often the server checks who is inside.
 	MEMBERSHIP_TICK = 0.25,
