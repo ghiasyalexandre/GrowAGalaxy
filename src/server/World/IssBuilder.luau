@@ -9,7 +9,8 @@
 -- No ships dock at the ISS: ships launch from each player's own station.
 --
 -- Interior, one module per area: Observation Cupola, Arrival (spawn),
--- Star Lounge (galaxy hologram, couches), Navigation (route to your
+-- Star Lounge (galaxy hologram, couches), Planet Egg Lab (a giant egg on a
+-- pedestal; its console opens the egg panel, EggSystem), Navigation (route to your
 -- station), the Zero G Dodgeball portal (to the arena, DodgeballSystem; floating
 -- hoops), Ship Showroom (ship models turning on pads) and the Raid Airlock.
 -- Gravity is off, so players float; floors give them something to push on.
@@ -53,6 +54,7 @@ local MODULES: { ModuleDef } = {
 	{ id = "Cupola", label = "Observation Cupola", length = 30, glass = true, trim = "#9FD8FF" },
 	{ id = "Arrival", label = "Arrival", length = 44, trim = "#4FC3F7" },
 	{ id = "Lounge", label = "Star Lounge", length = 40, trim = "#B06BFF" },
+	{ id = "EggLab", label = "Planet Egg Lab", length = 36, trim = "#FF6EC8" },
 	{ id = "Navigation", label = "Navigation", length = 32, trim = "#4FC3F7" },
 	{ id = "Playground", label = "Zero G Dodgeball", length = 52, trim = "#FFB020" },
 	{ id = "Showroom", label = "Ship Showroom", length = 48, trim = "#FFD36B" },
@@ -281,6 +283,120 @@ local function lounge(parent: Instance, span: Span)
 	end
 end
 
+-- The Planet Egg Lab: a giant pearly egg turning on a pedestal inside
+-- rarity-coloured rings, small eggs on shelves, and the console that opens
+-- the egg panel (TycoonAction "Eggs", EggShopController).
+local RARITY_GLOWS = { "#B8C2CC", "#5CFF8A", "#3FA9F5", "#B06BFF", "#FFB020", "#FF4FD8" }
+
+local function egg(
+	name: string,
+	size: number,
+	cframe: CFrame,
+	color: string,
+	parent: Instance
+): Part
+	local part = Build.part({
+		name = name,
+		shape = Enum.PartType.Ball,
+		size = Vector3.one * size,
+		cframe = cframe,
+		color = color,
+		material = Enum.Material.Glass,
+		collide = false,
+		parent = parent,
+	})
+	local mesh = Instance.new("SpecialMesh")
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = Vector3.new(1, 1.35, 1)
+	mesh.Parent = part
+	return part
+end
+
+local function eggLab(parent: Instance, span: Span)
+	Build.part({
+		name = "EggPedestal",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(2, 10, 10),
+		cframe = CFrame.new(span.center, FLOOR_Y + 1, 0) * CFrame.Angles(0, 0, math.pi / 2),
+		color = COLORS.hullAlt,
+		material = Enum.Material.Metal,
+		parent = parent,
+	})
+	local display = Build.model("EggDisplay", parent)
+	local big = egg("GiantEgg", 6, CFrame.new(span.center, FLOOR_Y + 7, 0), "#FFF4FB", display)
+	big.Material = Enum.Material.SmoothPlastic
+	big.Reflectance = 0.3
+	lamp(big, "#FF6EC8", 24, 2)
+	-- Rarity-coloured rings around it: curved beams, so they cost no parts.
+	for index, color in RARITY_GLOWS do
+		local radius = 5 + index * 0.35
+		local tilt = CFrame.Angles(math.rad(index * 30), math.rad(index * 17), 0)
+		local points: { Attachment } = {}
+		for corner = 0, 3 do
+			local angle = corner * math.pi / 2
+			local attachment = Instance.new("Attachment")
+			attachment.CFrame = tilt
+				* CFrame.new(math.cos(angle) * radius, 0, math.sin(angle) * radius)
+				* CFrame.Angles(0, -angle - math.pi / 2, 0)
+			attachment.Parent = big
+			table.insert(points, attachment)
+		end
+		for corner = 1, 4 do
+			local beam = Instance.new("Beam")
+			beam.Attachment0 = points[corner]
+			beam.Attachment1 = points[corner % 4 + 1]
+			beam.CurveSize0 = radius * 0.5523
+			beam.CurveSize1 = radius * 0.5523
+			beam.Segments = 16
+			beam.Width0 = 0.3
+			beam.Width1 = 0.3
+			beam.FaceCamera = true
+			beam.LightEmission = 1
+			beam.Color = ColorSequence.new(Color3.fromHex(color))
+			beam.Transparency = NumberSequence.new(0.2)
+			beam.Parent = big
+		end
+	end
+	display.PrimaryPart = big
+	spin(display, 0.35)
+	-- Shelves of small eggs along both walls, one per rarity.
+	for side, z in { -11, 11 } do
+		Build.part({
+			name = "EggShelf",
+			size = Vector3.new(19, 1, 3),
+			cframe = CFrame.new(span.center - 4, FLOOR_Y + 4, z),
+			color = COLORS.hullAlt,
+			material = Enum.Material.Metal,
+			parent = parent,
+		})
+		for index, color in RARITY_GLOWS do
+			local x = span.center - 12 + (index - 1) * 3.2
+			local small = egg("ShelfEgg", 1.6, CFrame.new(x, FLOOR_Y + 5.6, z), color, parent)
+			small.Material = if side == 1 then Enum.Material.Neon else Enum.Material.Glass
+		end
+	end
+	local console = Build.console(
+		"EggConsole",
+		"Planet Egg Lab\nMystery eggs, chosen planets, odds",
+		wallSpot(span.center + 9),
+		parent
+	)
+	local prompt = Build.prompt(
+		console,
+		{ action = "Open Planet Egg Lab", object = "Planet Eggs", tycoon = "Eggs" }
+	)
+	prompt.MaxActivationDistance = 14
+	Build.sign({
+		name = "EggLabSign",
+		text = "Planet Egg Lab\nEvery planet comes from an egg. Odds and hatch times at the console.",
+		size = Vector3.new(22, 6, 0.4),
+		cframe = CFrame.new(span.center, 2, 13.5),
+		faces = { Enum.NormalId.Front },
+		parent = parent,
+		textColor = "#FF6EC8",
+	})
+end
+
 local function playground(parent: Instance, span: Span)
 	-- The Zero G Dodgeball portal: a big glowing ring across the module with
 	-- a shimmering sun-coloured field inside; its prompt sends you to the
@@ -395,6 +511,8 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 		})
 	elseif def.id == "Lounge" then
 		lounge(parent, span)
+	elseif def.id == "EggLab" then
+		eggLab(parent, span)
 	elseif def.id == "Navigation" then
 		local console = Build.console(
 			"NavigationConsole",

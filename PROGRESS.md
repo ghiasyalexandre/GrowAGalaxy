@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (overhaul stage 2 merged into `main`).
+Last updated: 2026-10-05 (overhaul stage 3 merged into `main`).
 
 ## Status by stage
 
@@ -37,7 +37,8 @@ Last updated: 2026-10-05 (overhaul stage 2 merged into `main`).
 | 29. Offline star income (up to 3 days, into the wallet on return), Stardust in the player list (leaderstats) | Merged | Passing (183 tests) | **Not yet** |
 | 30. Overhaul stage 1: star placement fixed (footprint discs, separate height margin, ghost on an aim plane clamped into a drawn build box, starts at the nearest valid spot, on-screen controls, specific reasons) | Merged | Passing (185 tests) | **Not yet** |
 | 31. Overhaul stage 2: owned planets (28 types, 6 rarities, levels 1-5, distinct looks), planet inventory and Planets panel, equip/move/unequip with income settled first, 3-9 orbits per star, save v15 migration ([doc](docs/stage-31-planet-inventory.md)) | Merged | Passing (197 tests + orbit smoke) | **Not yet** |
-| 32+. Overhaul stages 3-5 (ISS eggs, hangar incubation, daily wheel) | In progress | | |
+| 32. Overhaul stage 3: ISS Planet Egg Lab (mystery eggs with exact odds rolled and saved on the server at purchase, chosen-planet eggs, PolicyService paid-random-item check with a safe "unknown" default, odds and details disclosure) ([doc](docs/stage-32-planet-eggs.md)) | Merged | Passing (205 tests) | **Not yet** |
+| 33+. Overhaul stages 4-5 (hangar incubation, daily wheel) | In progress | | |
 
 ## What works in code (unverified in Studio)
 

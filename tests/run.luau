@@ -18,6 +18,7 @@ local SPECS = {
 	"MiningMath",
 	"StarMath",
 	"PlanetInventory",
+	"EggMath",
 	"OrbitTime",
 	"Progression",
 	"CombatMath",
