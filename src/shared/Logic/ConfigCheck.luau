@@ -310,6 +310,7 @@ function ConfigCheck.run(config: any): { string }
 			and not def.allPlanets
 			and not def.allShips
 			and not def.cloak
+			and not def.reset
 		then
 			fail(`Code {code}: needs a reward`)
 		end

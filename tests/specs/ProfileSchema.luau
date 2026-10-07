@@ -480,6 +480,8 @@ return function(T, Loader)
 			T.equal(code and code.stardust, 5000000, "the code gives 5,000,000 Stardust")
 			T.truthy(Config.Codes.BY_CODE.PLANETZPLZ.allPlanets, "PlanetzPlz: one of every planet")
 			T.truthy(Config.Codes.BY_CODE.STARZSHIPZ.allShips, "StarzShipz: every ship")
+			T.truthy(Config.Codes.BY_CODE.RESETMYGALAXY.reset, "ResetMyGalaxy: erases progress")
+			T.truthy(Config.Codes.RESET_CONFIRM_SECONDS > 0, "and asks first")
 		end)
 	end)
 end
