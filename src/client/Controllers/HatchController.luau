@@ -109,9 +109,13 @@ local function makeLabel(part: BasePart): (BillboardGui, TextLabel, TextLabel, F
 	local billboard = Instance.new("BillboardGui")
 	billboard.Name = "GaG_ChamberLabel"
 	billboard.Size = UDim2.fromOffset(170, 58)
-	billboard.StudsOffsetWorldSpace = Vector3.new(0, 7.5, 0)
+	-- Above the dome, drawn over everything so the glass, walls and the other
+	-- chambers never hide it; only shown nearby so it doesn't show through
+	-- the station from far away.
+	billboard.StudsOffsetWorldSpace = Vector3.new(0, 8.5, 0)
+	billboard.AlwaysOnTop = true
 	billboard.LightInfluence = 0
-	billboard.MaxDistance = 140
+	billboard.MaxDistance = 70
 	billboard.Adornee = part
 	billboard.Parent = part
 	local back = Instance.new("Frame")

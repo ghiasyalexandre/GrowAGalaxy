@@ -189,7 +189,7 @@ local function interior(parent: Instance, def: ModuleDef, span: Span)
 			"#F2F8FF",
 			parent
 		)
-		lamp(panel, "#E8F2FF", 34, 1.3)
+		lamp(panel, "#E8F2FF", 34, 1.1)
 	end
 	-- Hanging area sign, readable from both directions along the walkway.
 	Build.sign({
@@ -323,7 +323,7 @@ local function lounge(parent: Instance, span: Span)
 		holo
 	)
 	core.Shape = Enum.PartType.Ball
-	lamp(core, "#B06BFF", 20, 2)
+	lamp(core, "#B06BFF", 20, 1.2)
 	for i = 1, 6 do
 		local angle = i / 6 * 2 * math.pi
 		local star = neon(
@@ -431,7 +431,7 @@ local function eggLab(parent: Instance, span: Span)
 	local big = egg("GiantEgg", 6, CFrame.new(span.center, FLOOR_Y + 7, 0), "#FFF4FB", display)
 	big.Material = Enum.Material.SmoothPlastic
 	big.Reflectance = 0.3
-	lamp(big, "#FF6EC8", 24, 2)
+	lamp(big, "#FF6EC8", 24, 1.2)
 	-- Rarity-coloured rings around it: curved beams, so they cost no parts.
 	for index, color in RARITY_GLOWS do
 		local radius = 5 + index * 0.35
@@ -536,7 +536,7 @@ local function playground(parent: Instance, span: Span)
 		parent = parent,
 	})
 	field.CastShadow = false
-	lamp(field, "#FFAA3C", 30, 3)
+	lamp(field, "#FFAA3C", 30, 1.2)
 	Build.prompt(field, { action = "Play Zero G Dodgeball", object = "Portal", warp = "Dodgeball" })
 	for i, x in { span.center - 18, span.center + 18 } do
 		hoop(parent, Vector3.new(x, 2 + i * 2, (i - 1.5) * 10), 3, BALL_COLORS[i])
@@ -563,7 +563,7 @@ local function showroom(parent: Instance, span: Span)
 			material = Enum.Material.Neon,
 			parent = parent,
 		})
-		lamp(pad, "#FFD36B", 18, 1.5)
+		lamp(pad, "#FFD36B", 18, 1.2)
 		-- A ship model turning above each pad, if the models are imported.
 		local shipId = if i == 1 then "RedFighter" else "UltravioletIntruder"
 		local def = Config.Ships.BY_ID[shipId]
@@ -692,7 +692,7 @@ local function areaContents(parent: Instance, def: ModuleDef, span: Span)
 			"#FF4A4A",
 			parent
 		)
-		lamp(glow, "#FF4A4A", 30, 2)
+		lamp(glow, "#FF4A4A", 30, 1.2)
 	end
 end
 

@@ -13,12 +13,12 @@ return {
 	COOLDOWN = 24 * 60 * 60,
 	SPIN_COST = 1000, -- Stardust per spin
 	PRIZES = {
-		{ stardust = 1000, weight = 40, color = "#5FE3FF" },
-		{ stardust = 2500, weight = 25, color = "#5CFF8A" },
-		{ stardust = 5000, weight = 15, color = "#FFE13D" },
-		{ stardust = 10000, weight = 12, color = "#FFB020" },
-		{ stardust = 15000, weight = 6, color = "#FF6EC8" },
-		{ stardust = 25000, weight = 2, color = "#B06BFF" },
+		{ stardust = 2500, weight = 40, color = "#5FE3FF" },
+		{ stardust = 5000, weight = 25, color = "#5CFF8A" },
+		{ stardust = 10000, weight = 15, color = "#FFE13D" },
+		{ stardust = 25000, weight = 12, color = "#FFB020" },
+		{ stardust = 50000, weight = 6, color = "#FF6EC8" },
+		{ stardust = 100000, weight = 2, color = "#B06BFF" },
 	} :: { Prize },
 	SPIN_SECONDS = 4, -- the wheel animation (1 s with reduced motion)
 }

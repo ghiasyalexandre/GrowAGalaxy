@@ -20,6 +20,10 @@ local BY_CODE: { [string]: CodeDef } = {
 		stardust = 5000000,
 		message = "+5,000,000 Stardust!",
 	},
+	BETATESTER = {
+		stardust = 100000,
+		message = "+100,000 Stardust!",
+	},
 	-- Codes are matched upper-cased: "PlanetzPlz" and "StarzShipz" work.
 	PLANETZPLZ = {
 		allPlanets = true,
