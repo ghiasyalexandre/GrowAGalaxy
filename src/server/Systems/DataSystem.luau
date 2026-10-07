@@ -990,6 +990,9 @@ function DataSystem.redeemCode(player: Player, code: string): (any, string?)
 			DataSystem.grantShip(player, shipId)
 		end
 	end
+	if def.cloak then
+		push(player, "cloakUnlocked", true)
+	end
 	if def.stardust then
 		DataSystem.addStardust(player, def.stardust)
 	end

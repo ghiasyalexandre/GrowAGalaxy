@@ -10,6 +10,7 @@
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
+--   Cloak           invisibility on/off, once its code is redeemed
 --   Hangar color    the highlight colour of your station (swatches; the
 --                   server repaints it, StationSystem)
 --   How to play     opens the tutorial guide (TutorialController)
@@ -359,14 +360,31 @@ refresh = function()
 		end
 	)
 	colorRow(8)
-	local guideRow = rowFrame(9, "How to play", "Every tutorial step and tips")
+	-- The cloak, once its code is redeemed (CloakSystem).
+	local profile = ClientState.profile
+	if profile and profile.cloakUnlocked then
+		local cloaked = Players.LocalPlayer:GetAttribute("Cloaked") == true
+		toggle(
+			9,
+			"Cloak",
+			"Invisible to everyone: sneak up on other players",
+			cloaked,
+			"Hidden",
+			"Visible",
+			function()
+				Net.SettingChanged:FireServer("cloak", not cloaked)
+				task.delay(0.3, refresh)
+			end
+		)
+	end
+	local guideRow = rowFrame(10, "How to play", "Every tutorial step and tips")
 	local guideButton = Theme.button(guideRow, "Open guide", "primary", function()
 		ClientState.openGuide:Fire()
 	end)
 	guideButton.AnchorPoint = Vector2.new(1, 0.5)
 	guideButton.Position = UDim2.new(1, -10, 0.5, 0)
 	guideButton.Size = UDim2.fromOffset(150, 36)
-	codeRow(10)
+	codeRow(11)
 end
 
 local function build()

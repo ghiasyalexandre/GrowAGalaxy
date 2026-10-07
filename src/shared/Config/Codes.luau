@@ -8,6 +8,7 @@ export type CodeDef = {
 	boost: { source: "mining" | "star", seconds: number }?,
 	allPlanets: boolean?, -- one level 1 planet of every type, into the inventory
 	allShips: boolean?, -- every ship in Config.Ships
+	cloak: boolean?, -- unlocks the Cloak switch in Settings (CloakSystem)
 	message: string, -- shown when redeemed
 }
 
@@ -20,6 +21,10 @@ local BY_CODE: { [string]: CodeDef } = {
 	PLANETZPLZ = {
 		allPlanets = true,
 		message = "One of every planet is in your Planets panel (P)!",
+	},
+	SNEAKYSPACE = {
+		cloak = true,
+		message = "Cloak unlocked! Turn it on in Settings to sneak around unseen.",
 	},
 	STARZSHIPZ = {
 		allShips = true,
