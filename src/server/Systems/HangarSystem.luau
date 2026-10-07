@@ -230,8 +230,10 @@ refresh = function(player: Player, justBuilt: string?)
 	end
 	for _, upgradeId in H.ORDER do
 		local def = H.BY_ID[upgradeId]
-		local wanted = if profile.hangar[upgradeId]
-			then "built"
+		-- A built upgrade the owner switched off (Settings) isn't shown.
+		local wanted = if profile.hangar[upgradeId] and profile.hangarOff[upgradeId]
+			then nil
+			elseif profile.hangar[upgradeId] then "built"
 			elseif HangarMath.available(upgradeId, profile.hangar) then "pad"
 			else nil
 		local existing = (folder :: Instance):FindFirstChild(upgradeId)
@@ -268,6 +270,11 @@ refresh = function(player: Player, justBuilt: string?)
 			HangarSystem.refreshShowcase(player)
 		end
 	end
+end
+
+-- Rebuilds the player's hangar upgrades (after one is switched on or off).
+function HangarSystem.refresh(player: Player)
+	refresh(player, nil)
 end
 
 function HangarSystem.start()

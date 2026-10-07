@@ -32,6 +32,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Config = require(ReplicatedStorage.Shared.Config)
 local ShipModel = require(ReplicatedStorage.Shared.Util.ShipModel)
 local Build = require(script.Parent.Build)
+local DeviceBuilder = require(script.Parent.DeviceBuilder)
 
 local COLORS = Config.World.COLORS
 
@@ -495,12 +496,8 @@ local function eggLab(parent: Instance, span: Span)
 			small.Material = if side == 1 then Enum.Material.Neon else Enum.Material.Glass
 		end
 	end
-	local console = Build.console(
-		"EggConsole",
-		"Planet Egg Lab\nMystery eggs, chosen planets, odds",
-		wallSpot(span.center + 9),
-		parent
-	)
+	-- The egg dispenser the panel opens from (DeviceBuilder).
+	local console = DeviceBuilder.eggDispenser(wallSpot(span.center + 9), parent)
 	local prompt = Build.prompt(
 		console,
 		{ action = "Open Planet Egg Lab", object = "Planet Eggs", tycoon = "Eggs" }

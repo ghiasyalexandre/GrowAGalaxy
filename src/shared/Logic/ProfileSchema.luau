@@ -58,7 +58,9 @@ local ProfileSchema = {}
 --    type the player owns. No existing data changes.
 -- 17: hangarColor (the hangar highlight colour pick), nil = the region's
 --    colour as before. No existing data changes.
-ProfileSchema.VERSION = 17
+-- 18: hangarOff (built hangar upgrades the owner switched off, e.g. the
+--    Neon Runway), empty: everything shows as before.
+ProfileSchema.VERSION = 18
 
 -- Auto-sell choices: only rarities players may auto-sell, set to true.
 local function autoSellSettings(raw: any): { [string]: boolean }
@@ -113,6 +115,7 @@ function ProfileSchema.default(): Profile
 		stats = {},
 		settings = defaultSettings(),
 		hangar = {},
+		hangarOff = {},
 		showcase = {},
 		ownedTrails = {},
 		redeemedCodes = {},
@@ -453,6 +456,15 @@ function ProfileSchema.normalize(data: { [string]: any }): (boolean, string?)
 	end
 	data.equipmentLevels = levels
 	data.hangar = flags(data.hangar)
+	-- Switched-off upgrades: only built ones that can be switched.
+	local off: { [string]: boolean } = {}
+	for id in flags(data.hangarOff) do
+		local def = Config.Hangar.BY_ID[id]
+		if def and def.toggle and data.hangar[id] then
+			off[id] = true
+		end
+	end
+	data.hangarOff = off
 	data.verifiedPasses = flags(data.verifiedPasses)
 	local daily = if type(data.daily) == "table" then data.daily else {}
 	data.daily = {
@@ -747,6 +759,8 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		wheel = table.clone(profile.wheel),
 		discovered = table.clone(profile.discovered),
 		hangarColor = profile.hangarColor,
+		hangar = table.clone(profile.hangar),
+		hangarOff = table.clone(profile.hangarOff),
 		cloakUnlocked = ProfileSchema.cloakUnlocked(profile),
 	}
 end

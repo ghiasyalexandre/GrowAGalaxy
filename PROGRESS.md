@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 45 merged into `main`).
+Last updated: 2026-10-05 (stage 46 merged into `main`).
 
 ## Status by stage
 
@@ -50,6 +50,7 @@ Last updated: 2026-10-05 (stage 45 merged into `main`).
 | 42-43. Planet names in rarity colours; code SneakySpace unlocks a Cloak (invisibility) switch in Settings ([doc](docs/stage-43-cloak-code.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 44. Code ResetMyGalaxy erases your own progress and code history (typed twice to confirm; purchase receipts kept) ([doc](docs/stage-44-reset-code.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 45. Galaxy Control console on the hangar deck: every solar system (level up, evolve, manage, inspect) and galaxy expansion in one panel ([doc](docs/stage-45-galaxy-control.md)) | Merged | Passing (227 tests) | **Not yet** |
+| 46. Stardust Collector, Galaxy Control and Planet Egg dispenser are real machines; Neon Runway on/off switch in Settings (save v18) ([doc](docs/stage-46-devices-runway.md)) | Merged | Passing (228 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

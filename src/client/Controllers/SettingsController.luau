@@ -11,6 +11,7 @@
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
 --   Cloak           invisibility on/off, once its code is redeemed
+--   Neon Runway     on/off, once built (Config.Hangar `toggle` upgrades)
 --   Hangar color    the highlight colour of your station (swatches; the
 --                   server repaints it, StationSystem)
 --   How to play     opens the tutorial guide (TutorialController)
@@ -360,6 +361,34 @@ refresh = function()
 		end
 	)
 	colorRow(8)
+	-- Built hangar upgrades that can be switched off (Config.Hangar `toggle`).
+	local owner = ClientState.profile
+	if owner then
+		for _, upgradeId in Config.Hangar.ORDER do
+			local def = Config.Hangar.BY_ID[upgradeId]
+			if def.toggle and owner.hangar and owner.hangar[upgradeId] then
+				local shown = not (owner.hangarOff and owner.hangarOff[upgradeId])
+				toggle(
+					8,
+					def.displayName,
+					"Show it at your hangar, or hide it",
+					shown,
+					"On",
+					"Off",
+					function()
+						Net.SettingChanged:FireServer("hangarToggle", upgradeId, not shown)
+						if owner.hangarOff then
+							if shown then
+								owner.hangarOff[upgradeId] = true
+							else
+								owner.hangarOff[upgradeId] = nil
+							end
+						end
+					end
+				)
+			end
+		end
+	end
 	-- The cloak, once its code is redeemed (CloakSystem).
 	local profile = ClientState.profile
 	if profile and profile.cloakUnlocked then

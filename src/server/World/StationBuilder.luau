@@ -5,7 +5,7 @@
 --
 -- A hangar deck under three lit truss arches, with half walls and windows,
 -- lane lights from the spawn to the gangway, crates, the hub tower and
--- beacon at the back, the Collect console and Galaxy Control beside it
+-- beacon at the back, the Stardust Collector and Galaxy Control beside it
 -- (launching, the Star Shop and the Shipyard are HUD buttons). The ship berth and its
 -- docking zone sit off the -Z edge. Hangar upgrades (HangarSystem) are built
 -- on the deck at Config.Hangar pads, inside the "Hangar" model.
@@ -27,6 +27,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Build = require(script.Parent.Build)
+local DeviceBuilder = require(script.Parent.DeviceBuilder)
 
 local COLORS = Config.World.COLORS
 local WIDTH = 64 -- deck, x
@@ -389,52 +390,14 @@ function StationBuilder.build(
 
 	-- Galaxy Control, beside Collect: manage every solar system and buy a
 	-- bigger galaxy (GalaxyController; prompt attribute OpenPanel = "Galaxy").
-	local control = Build.console(
-		"GalaxyConsole",
-		"Galaxy Control\nYour solar systems",
-		at(-9, FLOOR_Y, 10),
-		station
-	)
+	local control = DeviceBuilder.galaxyControl(at(-9, FLOOR_Y, 10), station)
 	local controlPrompt =
 		Build.prompt(control, { action = "Open Galaxy Control", object = "Galaxy Control" })
 	controlPrompt:SetAttribute("OpenPanel", "Galaxy")
-	local holo = Build.part({
-		name = "GalaxyHolo",
-		shape = Enum.PartType.Cylinder,
-		size = Vector3.new(0.2, 3.2, 3.2),
-		cframe = at(-9, FLOOR_Y + 5.2, 10) * CFrame.Angles(0, 0, math.pi / 2),
-		color = "#B06BFF",
-		material = Enum.Material.Neon,
-		transparency = 0.35,
-		collide = false,
-		parent = station,
-	})
-	holo:SetAttribute("SpinSpeed", 0.8)
-	CollectionService:AddTag(holo, "GaG_Spin")
 
-	-- The Collect console, facing the spawn, with a glowing Stardust orb.
-	local collect = Build.console(
-		"CollectConsole",
-		"Collect\nStardust from your stars",
-		at(0, FLOOR_Y, 10),
-		station
-	)
+	-- The Stardust Collector, facing the spawn (DeviceBuilder).
+	local collect = DeviceBuilder.collector(at(0, FLOOR_Y, 10), station)
 	Build.prompt(collect, { action = "Collect Stardust", object = "Collector", tycoon = "Collect" })
-	local orb = Build.part({
-		name = "StardustOrb",
-		shape = Enum.PartType.Ball,
-		size = Vector3.one * 2.2,
-		cframe = at(0, FLOOR_Y + 6, 10),
-		color = "#FFD36B",
-		material = Enum.Material.Neon,
-		collide = false,
-		parent = station,
-	})
-	local glow = Instance.new("PointLight")
-	glow.Color = Color3.fromHex("#FFD36B")
-	glow.Range = 14
-	glow.Brightness = 2
-	glow.Parent = orb
 
 	-- Berth pad off the -Z edge, joined by a gangway lined with landing
 	-- lights. The ship parks above it facing into the region. The docking

@@ -27,6 +27,7 @@ export type HangarDef = {
 	income: number?,
 	storage: number?,
 	vanity: boolean?, -- no gameplay effect
+	toggle: boolean?, -- once built, the owner can switch it off and on (Settings)
 	site: { x: number, y: number?, z: number }?,
 }
 
@@ -107,6 +108,7 @@ local BY_ID: { [string]: HangarDef } = {
 		pad = { x = 8, z = -30 },
 		site = { x = 0, z = -60 },
 		vanity = true,
+		toggle = true,
 	},
 	HoloGalaxy = {
 		id = "HoloGalaxy",
