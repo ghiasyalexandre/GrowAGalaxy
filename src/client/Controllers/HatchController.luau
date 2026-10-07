@@ -525,6 +525,7 @@ refresh = function()
 			Position = UDim2.fromOffset(52, 6),
 			Size = UDim2.new(1, -240, 0, 20),
 			Text = if def then `{def.displayName} egg` else "Mystery egg",
+			TextColor3 = if def then Color3.fromHex(P.RARITIES[def.rarity].color) else EGG_COLOR,
 		})
 		Theme.label(row, {
 			Position = UDim2.fromOffset(52, 27),

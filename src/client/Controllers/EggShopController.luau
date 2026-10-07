@@ -143,7 +143,10 @@ local function planetRow(
 			then `{def.displayName}  ✓`
 			else `{def.displayName}  ·  not in your Planet Index yet`,
 		TextSize = 15,
-		TextColor3 = if discovered(def.id) then C.text else C.subtle,
+		-- The rarity's colour; dimmer for types not found yet.
+		TextColor3 = if discovered(def.id)
+			then Color3.fromHex(P.RARITIES[def.rarity].color)
+			else Color3.fromHex(P.RARITIES[def.rarity].color):Lerp(C.subtle, 0.5),
 	})
 	Theme.label(row, {
 		Position = UDim2.fromOffset(52, 24),

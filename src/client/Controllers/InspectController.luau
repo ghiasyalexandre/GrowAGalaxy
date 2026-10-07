@@ -120,9 +120,8 @@ local function refreshLabels(model: Model)
 				TextScaled = true,
 				TextXAlignment = Enum.TextXAlignment.Center,
 				TextStrokeTransparency = 0.3,
-				TextColor3 = if def
-					then Color3.fromHex(def.color):Lerp(Color3.new(1, 1, 1), 0.4)
-					else C.text,
+				-- The name in its rarity's colour.
+				TextColor3 = if def then Color3.fromHex(P.RARITIES[def.rarity].color) else C.text,
 			})
 			Theme.label(billboard, {
 				Position = UDim2.fromScale(0, 0.55),

@@ -277,14 +277,15 @@ local function rowText(
 	titleText: string,
 	detail: string?,
 	indent: number,
-	right: number?
+	right: number?,
+	color: Color3?
 )
 	local margin = right or 186
 	Theme.label(row, {
 		Position = UDim2.fromOffset(indent, if detail then 6 else 0),
 		Size = UDim2.new(1, -indent - margin, 0, if detail then 20 else 52),
 		Text = titleText,
-		TextColor3 = if detail then C.text else C.subtle,
+		TextColor3 = color or (if detail then C.text else C.subtle),
 	})
 	if detail then
 		Theme.label(row, {
@@ -370,7 +371,9 @@ local function showPicker(model: Model, slot: number)
 			`+{fmt(choice.income)}/s  ·  this star {fmt(now)} -> {fmt(now + choice.income)}/s{if choice.planet.star
 				then "  ·  on another star"
 				else ""}`,
-			48
+			48,
+			nil,
+			Color3.fromHex(P.RARITIES[def.rarity].color)
 		)
 		local button = Theme.button(
 			row,
@@ -499,7 +502,8 @@ refreshPanel = function()
 					StarMath.planetIncome(planetDef.id, planet.level)
 				)}/s`,
 				48,
-				300
+				300,
+				Color3.fromHex(P.RARITIES[planetDef.rarity].color)
 			)
 			local levelCost = StarMath.planetLevelCost(planetDef.id, planet.level)
 			if levelCost then
