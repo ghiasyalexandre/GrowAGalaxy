@@ -1,6 +1,6 @@
 # Progress
 
-Last updated: 2026-10-05 (stage 40 merged into `main`).
+Last updated: 2026-10-05 (stage 41 merged into `main`).
 
 ## Status by stage
 
@@ -46,6 +46,7 @@ Last updated: 2026-10-05 (stage 40 merged into `main`).
 | 38. Softer indoor bloom, M frees the cursor in ships, inspect hides star prompts, prompt distance 135, codes PlanetzPlz and StarzShipz, Visit other hangars, flat 1,000 eggs, no direct planet purchases, chat announcements for Legendary+, hatch times rounded to 30 s, Berth renamed Dock, shorter tutorial with progress dots ([doc](docs/stage-38-feedback.md)) | Merged | Passing (226 tests) | **Not yet** |
 | 39. Hangar highlight colour (10 colours in Settings, saved, v17), Dodgeball giant ball powerup every 12 s (next throw 3x bigger) ([doc](docs/stage-39-hangar-color-powerup.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 40. Loading screen with the key art, progress bar and tips (art needs uploading; title card until then) ([doc](docs/stage-40-loading-screen.md)) | Merged | Passing (227 tests) | **Not yet** |
+| 41. Five imported ships face forward, trails half as wide at the start and coming out of the engine nozzles ([doc](docs/stage-41-ship-facing-trails.md)) | Merged | Passing (227 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

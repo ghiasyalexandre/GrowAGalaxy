@@ -19,7 +19,7 @@ local ReplicatedFirst = game:GetService("ReplicatedFirst")
 local TweenService = game:GetService("TweenService")
 
 -- "rbxassetid://<id>" of the uploaded key art, or "" for the title card.
-local IMAGE = ""
+local IMAGE = "rbxassetid://134268172125999"
 local MIN_SECONDS = 2.5
 local SKIP_AFTER = 10
 local MAX_SECONDS = 45
