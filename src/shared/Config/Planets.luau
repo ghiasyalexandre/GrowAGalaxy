@@ -47,7 +47,7 @@ export type PlanetTypeDef = {
 }
 
 local WEIGHT_TOTAL = 1200000
-local HATCH_ROUND = 30 -- hatch times are whole multiples of this
+local HATCH_ROUND = 10 -- hatch times are whole multiples of this
 
 local RARITY_ORDER: { Rarity } =
 	{ "Common", "Uncommon", "Rare", "Epic", "Legendary", "Interstellar" }

@@ -33,8 +33,8 @@ local SIZES: { [string]: SizeDef } = {
 		weight = 50,
 		radius = 7,
 		weakPointRadius = 1.8,
-		durability = 25,
-		reward = 12,
+		durability = 15,
+		reward = 15,
 	},
 	Medium = {
 		id = "Medium",
@@ -42,8 +42,8 @@ local SIZES: { [string]: SizeDef } = {
 		weight = 35,
 		radius = 12,
 		weakPointRadius = 2.4,
-		durability = 50,
-		reward = 30,
+		durability = 25,
+		reward = 40,
 	},
 	Large = {
 		id = "Large",
@@ -51,8 +51,8 @@ local SIZES: { [string]: SizeDef } = {
 		weight = 15,
 		radius = 18,
 		weakPointRadius = 3,
-		durability = 100,
-		reward = 70,
+		durability = 50,
+		reward = 80,
 	},
 }
 

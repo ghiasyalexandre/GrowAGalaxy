@@ -15,20 +15,20 @@ export type Prize = {
 
 local PRIZES: { Prize } = {
 	-- Each day's Stardust grows faster than the last (a curve, not a line).
-	{ stardust = 250 },
-	{ stardust = 400 },
-	{ boost = { source = "mining", seconds = 10 * 60 } },
-	{ stardust = 700 },
-	{ stardust = 1000 },
-	{ boost = { source = "star", seconds = 15 * 60 } },
-	{ stardust = 3500, big = true },
-	{ stardust = 1900 },
-	{ stardust = 2500 },
-	{ boost = { source = "mining", seconds = 20 * 60 } },
-	{ stardust = 3600 },
-	{ stardust = 4500 },
+	{ stardust = 5000 },
+	{ stardust = 25000 },
+	{ boost = { source = "mining", seconds = 15 * 60 } },
+	{ stardust = 50000 },
+	{ stardust = 100000 },
+	{ boost = { source = "star", seconds = 20 * 60 } },
+	{ stardust = 250000, big = true },
+	{ stardust = 100000 },
+	{ stardust = 100000 },
+	{ boost = { source = "mining", seconds = 30 * 60 } },
+	{ stardust = 250000 },
+	{ stardust = 1000000 },
 	{ boost = { source = "star", seconds = 30 * 60 } },
-	{ stardust = 15000, big = true },
+	{ stardust = 5000000, big = true },
 }
 
 return {
