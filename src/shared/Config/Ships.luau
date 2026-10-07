@@ -92,7 +92,6 @@ local SPECS: { [string]: Spec } = {
 		description = "Quicker turns and a stronger beam.",
 		paint = "#D9433B",
 		size = 16,
-		yaw = 180, -- nose at +Z in the export
 		cost = 2500,
 		stats = { 135, 70, 100, 2.4, 14, 130, 115, 28, 1.7, 3.5, 5.5 },
 	},
@@ -123,7 +122,6 @@ local SPECS: { [string]: Spec } = {
 		model = "CamoStellarJet",
 		productKey = "CamoStellarShip",
 		size = 17,
-		yaw = 180, -- nose at +Z in the export
 		cost = 60000,
 		stats = { 150, 80, 110, 2.5, 23, 155, 160, 38, 1.8, 4, 5 },
 	},
@@ -133,7 +131,6 @@ local SPECS: { [string]: Spec } = {
 		description = "Fast and sharp, runs cool under fire.",
 		paint = "#B8322C",
 		size = 18,
-		yaw = 180, -- nose at +Z in the export
 		cost = 130000,
 		stats = { 170, 95, 125, 2.7, 28, 165, 170, 42, 2.0, 4.5, 4.5 },
 	},
@@ -144,7 +141,6 @@ local SPECS: { [string]: Spec } = {
 		productKey = "InterstellarRunnerShip",
 		paint = "#E8B04A",
 		size = 18,
-		yaw = 180, -- nose at +Z in the export
 		cost = 260000,
 		stats = { 195, 110, 135, 2.6, 32, 170, 180, 45, 2.2, 5, 4.5 },
 	},
@@ -154,7 +150,6 @@ local SPECS: { [string]: Spec } = {
 		description = "Long reach and a deep heat sink.",
 		paint = "#7E8CE0",
 		size = 20,
-		yaw = 180, -- nose at +Z in the export
 		cost = 500000,
 		stats = { 185, 100, 135, 2.4, 44, 185, 200, 48, 2.0, 5, 4.5 },
 	},
