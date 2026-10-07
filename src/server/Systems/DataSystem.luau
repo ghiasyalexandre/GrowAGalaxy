@@ -526,6 +526,29 @@ function DataSystem.equipBest(player: Player): { string }
 	return list
 end
 
+-- Switches a built, toggleable hangar upgrade (Config.Hangar `toggle`)
+-- off or on. False for anything else.
+function DataSystem.setHangarOff(player: Player, id: unknown, off: unknown): boolean
+	local profile = DataSystem.getProfile(player)
+	local def = if type(id) == "string" then Config.Hangar.BY_ID[id] else nil
+	if
+		profile == nil
+		or def == nil
+		or not def.toggle
+		or not profile.hangar[def.id]
+		or type(off) ~= "boolean"
+	then
+		return false
+	end
+	if off then
+		profile.hangarOff[def.id] = true
+	else
+		profile.hangarOff[def.id] = nil
+	end
+	push(player, "hangarOff", table.clone(profile.hangarOff))
+	return true
+end
+
 -- Sets the hangar highlight colour (a Config.Hangar.HIGHLIGHT_COLORS id, or
 -- "" for the region's own). False for anything else.
 function DataSystem.setHangarColor(player: Player, id: unknown): boolean
@@ -725,6 +748,7 @@ function DataSystem.grantHangar(player: Player, upgradeId: string)
 		return
 	end
 	profile.hangar[upgradeId] = true
+	push(player, "hangar", table.clone(profile.hangar))
 	pushIncome(player, profile)
 end
 

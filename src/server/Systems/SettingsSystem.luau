@@ -10,6 +10,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CombatSystem = require(script.Parent.CombatSystem)
 local CloakSystem = require(script.Parent.CloakSystem)
 local DataSystem = require(script.Parent.DataSystem)
+local HangarSystem = require(script.Parent.HangarSystem)
 local StationSystem = require(script.Parent.StationSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
@@ -29,6 +30,11 @@ function SettingsSystem.start()
 			DataSystem.setAutoSell(player, value, extra)
 		elseif name == "cloak" then
 			CloakSystem.request(player, value)
+		elseif name == "hangarToggle" then
+			-- (id, on): a built upgrade like the Neon Runway shown or hidden.
+			if type(extra) == "boolean" and DataSystem.setHangarOff(player, value, not extra) then
+				HangarSystem.refresh(player)
+			end
 		elseif name == "hangarColor" then
 			if DataSystem.setHangarColor(player, value) then
 				StationSystem.recolor(player)

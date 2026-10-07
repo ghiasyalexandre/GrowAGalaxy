@@ -466,6 +466,18 @@ return function(T, Loader)
 			T.equal(data.hangarColor, nil)
 		end)
 
+		T.test("v18: only built, switchable hangar upgrades can be switched off", function()
+			local data = ProfileSchema.default() :: any
+			data.schemaVersion = 17
+			data.hangar = { NeonRunway = true, StardustSilo = true }
+			data.hangarOff = { NeonRunway = true, StardustSilo = true, HoloGalaxy = true }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.hangarOff.NeonRunway, true)
+			T.equal(data.hangarOff.StardustSilo, nil, "not switchable")
+			T.equal(data.hangarOff.HoloGalaxy, nil, "not built")
+			T.equal(ProfileSchema.view(data).hangarOff.NeonRunway, true)
+		end)
+
 		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()
 			local data = ProfileSchema.default()
 			data.schemaVersion = 12

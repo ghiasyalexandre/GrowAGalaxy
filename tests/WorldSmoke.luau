@@ -18,7 +18,7 @@ local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 
 local ISS_PART_BUDGET = 400
-local REGION_PART_BUDGET = 110 -- the station before any hangar upgrades
+local REGION_PART_BUDGET = 130 -- the station before any hangar upgrades (with its three machines)
 local HANGAR_PART_BUDGET = 30 -- per hangar building
 local VANITY_PART_BUDGET = 40 -- per vanity building (runway, hologram, spire, dock)
 local SHIP_PART_BUDGET = 20
