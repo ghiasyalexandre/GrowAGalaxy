@@ -5,8 +5,8 @@
 --
 -- A hangar deck under three lit truss arches, with half walls and windows,
 -- lane lights from the spawn to the gangway, crates, the hub tower and
--- beacon at the back, and the Collect console (the only console: launching,
--- the Star Shop and the Shipyard are HUD buttons). The ship berth and its
+-- beacon at the back, the Collect console and Galaxy Control beside it
+-- (launching, the Star Shop and the Shipyard are HUD buttons). The ship berth and its
 -- docking zone sit off the -Z edge. Hangar upgrades (HangarSystem) are built
 -- on the deck at Config.Hangar pads, inside the "Hangar" model.
 --
@@ -386,6 +386,31 @@ function StationBuilder.build(
 			item:SetAttribute(ACCENT, true)
 		end
 	end
+
+	-- Galaxy Control, beside Collect: manage every solar system and buy a
+	-- bigger galaxy (GalaxyController; prompt attribute OpenPanel = "Galaxy").
+	local control = Build.console(
+		"GalaxyConsole",
+		"Galaxy Control\nYour solar systems",
+		at(-9, FLOOR_Y, 10),
+		station
+	)
+	local controlPrompt =
+		Build.prompt(control, { action = "Open Galaxy Control", object = "Galaxy Control" })
+	controlPrompt:SetAttribute("OpenPanel", "Galaxy")
+	local holo = Build.part({
+		name = "GalaxyHolo",
+		shape = Enum.PartType.Cylinder,
+		size = Vector3.new(0.2, 3.2, 3.2),
+		cframe = at(-9, FLOOR_Y + 5.2, 10) * CFrame.Angles(0, 0, math.pi / 2),
+		color = "#B06BFF",
+		material = Enum.Material.Neon,
+		transparency = 0.35,
+		collide = false,
+		parent = station,
+	})
+	holo:SetAttribute("SpinSpeed", 0.8)
+	CollectionService:AddTag(holo, "GaG_Spin")
 
 	-- The Collect console, facing the spawn, with a glowing Stardust orb.
 	local collect = Build.console(

@@ -920,6 +920,11 @@ function StarController.setPromptsShown(shown: boolean)
 	end
 end
 
+-- Opens a star's Manage panel (Galaxy Control uses it).
+function StarController.openPanel(model: Model)
+	openPanel(model)
+end
+
 function StarController.planetsOf(model: Model): { { part: Part, slot: number, id: string } }
 	local v = visuals[model]
 	local result: { { part: Part, slot: number, id: string } } = {}
