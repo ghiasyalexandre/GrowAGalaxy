@@ -1005,6 +1005,29 @@ function DataSystem.redeemCode(player: Player, code: string): (any, string?)
 	return def, nil
 end
 
+-- Erases the player's progress: the save becomes a brand-new profile (all
+-- codes usable again), keeping only the purchase receipts so a Robux
+-- purchase can never be granted twice. The caller then has them rejoin,
+-- which saves it and rebuilds their world. False without a loaded save.
+function DataSystem.resetProfile(player: Player): boolean
+	local session = sessions[player]
+	if session == nil then
+		return false
+	end
+	local data = session.Data
+	local receipts = data.receipts
+	local fresh = ProfileSchema.default()
+	for key in data do
+		data[key] = nil
+	end
+	for key, value in fresh do
+		(data :: any)[key] = value
+	end
+	data.receipts = receipts
+	data.lastOnline = os.time()
+	return true
+end
+
 -- Gives the player a trail (the caller has paid).
 function DataSystem.grantTrail(player: Player, trailId: string)
 	local profile = DataSystem.getProfile(player)
