@@ -10,8 +10,8 @@
 -- are rounded only when shown.
 --
 -- Hatch time by rarity: round(10 x 180^(rarityIndex / 5)) seconds, index 0
--- (Common) to 5 (Interstellar), rounded up to the next HATCH_ROUND (30 s):
--- 30 s, 30 s, 90 s, 240 s, 660 s, 1,800 s.
+-- (Common) to 5 (Interstellar), rounded up to the next HATCH_ROUND (10 s):
+-- 10 s, 30 s, 80 s, 230 s, 640 s, 1,800 s.
 --
 -- Levels 1 to MAX_LEVEL: each level adds LEVEL_INCOME_STEP of the base
 -- income (x3 at level 5) and grows the planet by LEVEL_SIZE_STEP; level
@@ -499,6 +499,7 @@ return {
 	ORDER = ORDER,
 	BY_ID = BY_ID,
 	BY_RARITY = BY_RARITY,
+	HATCH_ROUND = HATCH_ROUND,
 	MAX_LEVEL = 5,
 	LEVEL_INCOME_STEP = 0.5, -- share of base income added per level
 	LEVEL_SIZE_STEP = 0.035, -- share of radius added per level (+14% at level 5)

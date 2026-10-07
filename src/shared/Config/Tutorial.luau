@@ -77,9 +77,9 @@ local STEPS: { StepDef } = {
 		stat = "asteroidsMined",
 		icon = "Mining",
 		title = "Zap a space rock",
-		text = "Shoot the blue diamond marked Asterioids. Click the glowing spot!",
-		gamepad = "Shoot the blue diamond marked Asterioids. Hold RT on the glowing spot!",
-		touch = "Shoot the blue diamond marked Asterioids. Hold Laser on the glowing spot!",
+		text = "Shoot the blue diamond marked Asteroids. Click the glowing spot!",
+		gamepad = "Shoot the blue diamond marked Asteroids. Hold RT on the glowing spot!",
+		touch = "Shoot the blue diamond marked Asteroids. Hold Laser on the glowing spot!",
 	},
 	{
 		id = "star",
@@ -164,7 +164,7 @@ local STEPS: { StepDef } = {
 return {
 	STEPS = STEPS,
 	FINISH_REWARD = 1000, -- Stardust, once, for finishing (not for skipping)
-	MAX_TEXT = 80, -- letters per step text (ConfigCheck)
+	MAX_TEXT = 110, -- letters per step text (ConfigCheck)
 	-- Client auto-acknowledgement: studs moved in the suit / flown in a ship.
 	MOVE_DISTANCE = 12,
 	FLY_DISTANCE = 120,

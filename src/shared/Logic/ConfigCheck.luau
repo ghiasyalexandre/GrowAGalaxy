@@ -666,9 +666,10 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Planets: rarity {rarityId} index must be {index - 1}`)
 		end
 		local raw = math.floor(10 * 180 ^ ((index - 1) / 5) + 0.5)
-		if rarity.hatchSeconds ~= math.ceil(raw / 30) * 30 then
+		local step = planets.HATCH_ROUND
+		if rarity.hatchSeconds ~= math.ceil(raw / step) * step then
 			fail(
-				`Planets: rarity {rarityId} hatch time must be round(10 x 180^({index - 1}/5)) rounded up to 30 s`
+				`Planets: rarity {rarityId} hatch time must be round(10 x 180^({index - 1}/5)) rounded up to HATCH_ROUND`
 			)
 		end
 		if (byRarity[rarityId] or 0) ~= rarity.weight then
