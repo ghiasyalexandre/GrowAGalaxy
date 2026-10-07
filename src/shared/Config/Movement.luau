@@ -4,7 +4,7 @@
 
 local Movement = {
 	-- Spacesuit (zero gravity). Slower than any ship.
-	SUIT_MAX_SPEED = 24, -- studs per second
+	SUIT_MAX_SPEED = 30, -- studs per second
 	SUIT_ACCELERATION = 30, -- studs per second squared while thrusting
 	SUIT_BRAKING = 70, -- when the brake is held
 	SUIT_STABILIZE_DRAG = 25, -- slowdown with no input while stabilization is on
@@ -83,7 +83,7 @@ local Movement = {
 	CAMERA_BOOST_SHAKE = 0.35, -- studs of camera shake while boosting
 
 	-- Assisted docking: inside a docking zone and slower than this.
-	DOCK_MAX_SPEED = 25,
+	DOCK_MAX_SPEED = 50,
 
 	-- Interactions
 	LAUNCH_COOLDOWN = 3, -- seconds between ship launches per player

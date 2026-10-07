@@ -92,7 +92,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Quicker turns and a stronger beam.",
 		paint = "#D9433B",
 		size = 16,
-		cost = 2500,
+		cost = 10000,
 		stats = { 135, 70, 100, 2.4, 14, 130, 115, 28, 1.7, 3.5, 5.5 },
 	},
 	GalactixRacer = {
@@ -101,7 +101,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Built to go fast, with a long boost.",
 		paint = "#3FA9F5",
 		size = 16,
-		cost = 9000,
+		cost = 50000,
 		productKey = "GalactixRacerShip",
 		stats = { 165, 95, 120, 2.6, 15, 130, 115, 30, 2.0, 4, 5 },
 	},
@@ -111,7 +111,7 @@ local SPECS: { [string]: Spec } = {
 		description = "A slow, armoured hull with a heavy beam.",
 		paint = "#5B6470",
 		size = 20,
-		cost = 25000,
+		cost = 200000,
 		stats = { 125, 55, 85, 1.8, 24, 150, 170, 32, 1.5, 3, 6.5 },
 	},
 	CamoStellar = {
@@ -122,7 +122,7 @@ local SPECS: { [string]: Spec } = {
 		model = "CamoStellarJet",
 		productKey = "CamoStellarShip",
 		size = 17,
-		cost = 60000,
+		cost = 600000,
 		stats = { 150, 80, 110, 2.5, 23, 155, 160, 38, 1.8, 4, 5 },
 	},
 	InfraredFurtive = {
@@ -131,7 +131,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Fast and sharp, runs cool under fire.",
 		paint = "#B8322C",
 		size = 18,
-		cost = 130000,
+		cost = 1500000,
 		stats = { 170, 95, 125, 2.7, 28, 165, 170, 42, 2.0, 4.5, 4.5 },
 	},
 	InterstellarRunner = {
@@ -141,7 +141,7 @@ local SPECS: { [string]: Spec } = {
 		productKey = "InterstellarRunnerShip",
 		paint = "#E8B04A",
 		size = 18,
-		cost = 260000,
+		cost = 2600000,
 		stats = { 195, 110, 135, 2.6, 32, 170, 180, 45, 2.2, 5, 4.5 },
 	},
 	Transtellar = {
@@ -150,7 +150,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Long reach and a deep heat sink.",
 		paint = "#7E8CE0",
 		size = 20,
-		cost = 500000,
+		cost = 5000000,
 		stats = { 185, 100, 135, 2.4, 44, 185, 200, 48, 2.0, 5, 4.5 },
 	},
 	DualStriker = {
@@ -159,7 +159,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Twin hulls carry a punishing beam.",
 		paint = "#F28C28",
 		size = 22,
-		cost = 900000,
+		cost = 12000000,
 		stats = { 180, 100, 130, 2.3, 54, 190, 230, 50, 1.9, 5, 4.5 },
 	},
 	UltravioletIntruder = {
@@ -168,7 +168,7 @@ local SPECS: { [string]: Spec } = {
 		description = "Blistering speed and a strong beam.",
 		paint = "#8C4DE0",
 		size = 20,
-		cost = 1600000,
+		cost = 20000000,
 		stats = { 210, 120, 145, 2.8, 57, 205, 240, 55, 2.3, 5.5, 4 },
 	},
 	MeteorSlicer = {
@@ -177,7 +177,7 @@ local SPECS: { [string]: Spec } = {
 		description = "The best ship in the galaxy at everything.",
 		paint = "#C9C2B8",
 		size = 20,
-		cost = 2800000,
+		cost = 50000000,
 		productKey = "MeteorSlicerShip",
 		stats = { 240, 135, 160, 3.0, 70, 220, 260, 60, 2.5, 6, 4 },
 	},
