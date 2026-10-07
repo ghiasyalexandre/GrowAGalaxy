@@ -8,6 +8,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local CombatSystem = require(script.Parent.CombatSystem)
+local CloakSystem = require(script.Parent.CloakSystem)
 local DataSystem = require(script.Parent.DataSystem)
 local StationSystem = require(script.Parent.StationSystem)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -26,6 +27,8 @@ function SettingsSystem.start()
 			CombatSystem.requestPvp(player, value)
 		elseif name == "autoSell" then
 			DataSystem.setAutoSell(player, value, extra)
+		elseif name == "cloak" then
+			CloakSystem.request(player, value)
 		elseif name == "hangarColor" then
 			if DataSystem.setHangarColor(player, value) then
 				StationSystem.recolor(player)

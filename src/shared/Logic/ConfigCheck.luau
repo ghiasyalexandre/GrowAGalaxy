@@ -309,6 +309,7 @@ function ConfigCheck.run(config: any): { string }
 			and def.boost == nil
 			and not def.allPlanets
 			and not def.allShips
+			and not def.cloak
 		then
 			fail(`Code {code}: needs a reward`)
 		end

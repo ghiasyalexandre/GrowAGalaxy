@@ -747,7 +747,18 @@ function ProfileSchema.view(profile: Profile): Types.ProfileView
 		wheel = table.clone(profile.wheel),
 		discovered = table.clone(profile.discovered),
 		hangarColor = profile.hangarColor,
+		cloakUnlocked = ProfileSchema.cloakUnlocked(profile),
 	}
+end
+
+-- Whether the player redeemed a code that unlocks the cloak (Config.Codes).
+function ProfileSchema.cloakUnlocked(profile: Profile): boolean
+	for code, def in Config.Codes.BY_CODE do
+		if def.cloak and profile.redeemedCodes[code] then
+			return true
+		end
+	end
+	return false
 end
 
 -- Owned planets for the client (a copy).

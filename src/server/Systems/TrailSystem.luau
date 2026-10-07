@@ -96,7 +96,8 @@ local function reconcile(player: Player)
 	if profile == nil then
 		return
 	end
-	local trailId = profile.trail
+	-- A cloaked player leaves no trail (CloakSystem).
+	local trailId = if player:GetAttribute("Cloaked") == true then nil else profile.trail
 	local ship = ShipSystem.getPiloted(player)
 	local hull = ship and ship.PrimaryPart
 	if hull then

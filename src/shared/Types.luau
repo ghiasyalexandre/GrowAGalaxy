@@ -159,6 +159,7 @@ export type ProfileView = {
 	wheel: { nextSpin: number, lastPrize: number },
 	discovered: { [string]: boolean },
 	hangarColor: string?,
+	cloakUnlocked: boolean, -- a cloak code was redeemed (Settings shows the Cloak switch)
 }
 
 export type RegionInfo = {
