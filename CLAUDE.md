@@ -92,7 +92,7 @@ The design revision of Oct 2026 overrides the original spec where they conflict:
 - PvP is opt-in only (a saved setting, off by default; both pilots must have it on; docking
   areas are safe). Ships explode at 0 hull; nothing is lost but a short relaunch wait.
 - Offline income: stars pay for time away (current rate, passes and trail, no boosts), capped
-  at 3 days, into the wallet on return (Config.Economy, Logic/OfflineMath).
+  at 1 day, into the wallet on return (Config.Economy, Logic/OfflineMath).
 - Excluded from the MVP: trading, stealing, gravitational simulation.
 - Monetization only after core gameplay and saving are reliable. Never invent product ids or
   enable purchases without configured products.

@@ -15,7 +15,7 @@ local Economy = {
 	STARTING_STARDUST = 100, -- enough for the first star (Logic/ConfigCheck makes sure)
 	INCOME_TICK_SECONDS = 1,
 	UNCOLLECTED_CAP_SECONDS = 10000000, -- uncollected Stardust stops growing after this much income
-	OFFLINE_CAP_SECONDS = 1 * 86400, -- offline earnings count at most 3 days
+	OFFLINE_CAP_SECONDS = 1 * 86400, -- offline earnings count at most 1 day
 	OFFLINE_MIN_SECONDS = 60, -- shorter breaks (rejoins) earn nothing extra
 }
 

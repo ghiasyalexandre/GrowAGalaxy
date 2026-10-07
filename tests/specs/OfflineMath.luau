@@ -11,10 +11,10 @@ return function(T, Loader)
 			T.equal(seconds, 3600)
 		end)
 
-		T.test("capped at 3 days of production", function()
-			T.equal(E.OFFLINE_CAP_SECONDS, 3 * 86400)
+		T.test("capped at 1 day of production", function()
+			T.equal(E.OFFLINE_CAP_SECONDS, 86400)
 			local amount = OfflineMath.earned(5, 1000, 1000 + 30 * 86400)
-			T.equal(amount, 5 * 3 * 86400)
+			T.equal(amount, 5 * 86400)
 		end)
 
 		T.test("nothing on a first visit, a short break or a clock going backwards", function()

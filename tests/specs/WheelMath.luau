@@ -7,12 +7,12 @@ return function(T, Loader)
 	T.describe("WheelMath", function()
 		T.test("the designed prizes and odds", function()
 			local expected = {
-				{ 1000, 40 },
-				{ 2500, 25 },
-				{ 5000, 15 },
-				{ 10000, 12 },
-				{ 15000, 6 },
-				{ 25000, 2 },
+				{ 2500, 40 },
+				{ 5000, 25 },
+				{ 10000, 15 },
+				{ 25000, 12 },
+				{ 50000, 6 },
+				{ 100000, 2 },
 			}
 			T.equal(#W.PRIZES, #expected)
 			for index, pair in expected do

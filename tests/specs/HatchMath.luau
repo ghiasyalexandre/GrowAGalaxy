@@ -55,9 +55,9 @@ return function(T, Loader)
 		T.test("offline: everything finished while away is due at once, in order", function()
 			local waiting, hatches = eggs(), {}
 			HatchMath.begin(waiting, hatches, "e2", 5, 0) -- ends 1800
-			HatchMath.begin(waiting, hatches, "e1", 2, 0) -- ends 30
-			T.equal(#HatchMath.due(hatches, 29), 0)
-			local due = HatchMath.due(hatches, 30)
+			HatchMath.begin(waiting, hatches, "e1", 2, 0) -- ends 10
+			T.equal(#HatchMath.due(hatches, 9), 0)
+			local due = HatchMath.due(hatches, 10)
 			T.equal(#due, 1)
 			T.equal(due[1], "2")
 			due = HatchMath.due(hatches, 86400)
@@ -68,26 +68,26 @@ return function(T, Loader)
 
 		T.test("advance finishes in end order; auto-start chains eggs offline", function()
 			local waiting = {
-				e1 = { outcome = "Basalt", guaranteed = false, boughtAt = 0 }, -- 30 s
-				e2 = { outcome = "Desert", guaranteed = false, boughtAt = 0 }, -- 30 s
-				e3 = { outcome = "Aurora", guaranteed = false, boughtAt = 0 }, -- 90 s
+				e1 = { outcome = "Basalt", guaranteed = false, boughtAt = 0 }, -- 10 s
+				e2 = { outcome = "Desert", guaranteed = false, boughtAt = 0 }, -- 10 s
+				e3 = { outcome = "Aurora", guaranteed = false, boughtAt = 0 }, -- 80 s
 			}
 			local hatches = {}
 			HatchMath.begin(waiting, hatches, "e1", 1, 0)
-			-- Away for 70 s: e1 ends at 30, e2 starts then and ends at 60,
-			-- e3 starts at 60 and is still hatching.
-			local done = HatchMath.advance(waiting, hatches, 70, true)
+			-- Away for 25 s: e1 ends at 10, e2 starts then and ends at 20,
+			-- e3 starts at 20 and is still hatching.
+			local done = HatchMath.advance(waiting, hatches, 25, true)
 			T.equal(#done, 2)
 			T.equal(done[1].typeId, "Basalt")
-			T.equal(done[1].at, 30)
+			T.equal(done[1].at, 10)
 			T.equal(done[2].typeId, "Desert")
-			T.equal(done[2].at, 60)
+			T.equal(done[2].at, 20)
 			T.equal(hatches["1"].outcome, "Aurora")
-			T.equal(hatches["1"].startedAt, 60)
+			T.equal(hatches["1"].startedAt, 20)
 			T.equal(next(waiting), nil)
 			-- Nothing again until it's due, and never twice.
-			T.equal(#HatchMath.advance(waiting, hatches, 149, true), 0)
-			T.equal(#HatchMath.advance(waiting, hatches, 150, true), 1)
+			T.equal(#HatchMath.advance(waiting, hatches, 99, true), 0)
+			T.equal(#HatchMath.advance(waiting, hatches, 100, true), 1)
 			T.equal(#HatchMath.advance(waiting, hatches, 1000, true), 0)
 		end)
 

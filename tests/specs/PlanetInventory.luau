@@ -198,8 +198,8 @@ return function(T, Loader)
 			T.equal(total, P.WEIGHT_TOTAL)
 		end)
 
-		T.test("hatch times follow round(10 x 180^(i/5)), rounded up to 30 s", function()
-			local expected = { 30, 30, 90, 240, 660, 1800 }
+		T.test("hatch times follow round(10 x 180^(i/5)), rounded up to 10 s", function()
+			local expected = { 10, 30, 80, 230, 640, 1800 }
 			for index, rarity in P.RARITY_ORDER do
 				T.equal(P.RARITIES[rarity].hatchSeconds, expected[index], rarity)
 			end
