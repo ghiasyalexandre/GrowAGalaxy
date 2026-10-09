@@ -8,6 +8,7 @@
 
 local Config = require(script.Parent.Parent.Config)
 local EconomyMath = require(script.Parent.EconomyMath)
+local PlacementRules = require(script.Parent.PlacementRules)
 local Progression = require(script.Parent.Progression)
 local StarMath = require(script.Parent.StarMath)
 local Types = require(script.Parent.Parent.Types)
@@ -369,8 +370,29 @@ local function galaxy(raw: any): Types.GalaxyRecord
 		stars[id].build = nextBuild
 		nextBuild += 1
 	end
+	local expansion = math.clamp(count(source.expansion) or 1, 1, #Config.Galaxy.EXPANSIONS)
+	-- Stars outside the build box (the galaxy got smaller) move to the
+	-- nearest free spot inside it, clear of the stars already inside; with
+	-- no room left, they are pulled just inside the walls.
+	local placed: { Types.Vec3 } = {}
+	local outside: { string } = {}
+	for id, star in stars do
+		local inside = PlacementRules.clamp(star.pos, expansion)
+		if inside.x ~= star.pos.x or inside.y ~= star.pos.y or inside.z ~= star.pos.z then
+			table.insert(outside, id)
+			continue
+		end
+		table.insert(placed, star.pos)
+	end
+	table.sort(outside)
+	for _, id in outside do
+		local star = stars[id]
+		star.pos = PlacementRules.nearestValid(star.pos, expansion, placed)
+			or PlacementRules.clamp(star.pos, expansion)
+		table.insert(placed, star.pos)
+	end
 	return {
-		expansion = math.clamp(count(source.expansion) or 1, 1, #Config.Galaxy.EXPANSIONS),
+		expansion = expansion,
 		nextId = math.max(count(source.nextId) or 1, highestId(source.stars) + 1),
 		nextBuild = nextBuild,
 		stars = stars,

@@ -72,6 +72,29 @@ return function(T, Loader)
 			T.equal(data.activeShip, starter)
 		end)
 
+		T.test("stars outside a smaller galaxy move inside, clear of the others", function()
+			local PlacementRules = Loader.require("src/shared/Logic/PlacementRules")
+			local data = ProfileSchema.default() :: any
+			local box = PlacementRules.buildBox(1)
+			local inside = { x = 0, y = 0, z = box.min.z }
+			data.galaxy.stars = {
+				s1 = { typeId = "BrownDwarf", level = 1, pos = inside, build = 0 },
+				s2 = {
+					typeId = "BrownDwarf",
+					level = 1,
+					pos = { x = 0, y = 0, z = 5000 },
+					build = 1,
+				},
+			}
+			T.truthy(ProfileSchema.normalize(data))
+			local stars = data.galaxy.stars
+			T.equal(stars.s1.pos.z, inside.z, "a star inside stays put")
+			T.truthy(
+				PlacementRules.checkStar(stars.s2.pos, 1, { stars.s1.pos }),
+				"moved to a free spot"
+			)
+		end)
+
 		T.test("drops loadout equipment not bought for that ship", function()
 			local data = {
 				loadouts = {

@@ -43,22 +43,22 @@ local Galaxy = {
 
 	EXPANSIONS = {
 		{
-			size = { x = 1024, y = 640, z = 1024 },
+			size = { x = 660, y = 416, z = 660 },
 			maxSystems = 6,
 			cost = nil,
 		},
 		{
-			size = { x = 1536, y = 896, z = 1536 },
+			size = { x = 990, y = 580, z = 990 },
 			maxSystems = 10,
 			cost = { stardust = 2000000, materials = {} },
 		},
 		{
-			size = { x = 1800, y = 1000, z = 1800 },
+			size = { x = 1170, y = 650, z = 1170 },
 			maxSystems = 14,
 			cost = { stardust = 300000000, materials = {} },
 		},
 		{
-			size = { x = 2048, y = 1152, z = 2048 },
+			size = { x = 1320, y = 744, z = 1320 },
 			maxSystems = 20,
 			cost = { stardust = 40000000000, materials = {} },
 		},

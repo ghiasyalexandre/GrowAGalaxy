@@ -34,7 +34,7 @@ return function(T, Loader)
 
 		T.test("the build box leaves real room to move up and down", function()
 			local box = PlacementRules.buildBox(1)
-			T.truthy(box.max.y - box.min.y >= 400, "at least 400 studs of height")
+			T.truthy(box.max.y - box.min.y >= 300, "at least 300 studs of height")
 			T.equal(box.max.y, size.y / 2 - G.WALL_MARGIN_Y)
 		end)
 

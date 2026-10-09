@@ -48,9 +48,8 @@ local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local PURPLE = Color3.fromRGB(176, 107, 255)
 local VIEW_SECONDS = 1.2 -- the camera's ease to and from the galaxy view
--- The camera stands on the galaxy's border: the near face, this share of
--- the box's height above its middle (0.5 = the top edge).
-local BORDER_HEIGHT = 0.45
+-- The camera stands on the galaxy's bounding box: the top edge of its back
+-- face (the far side from the station), facing in.
 local VIEW_FOV = 70
 -- The panel's share of the screen width (right column), wider on phones.
 local PANEL_WIDTH = 0.44
@@ -79,9 +78,9 @@ local function smooth(t: number): number
 	return t * t * (3 - 2 * t)
 end
 
--- Where the camera sees the galaxy: on the region's border, high up on its
--- near (station) face at the current expansion, looking into the middle of
--- the box.
+-- Where the camera sees the galaxy: the top edge of the region's back face
+-- (far from the station) at the current expansion, looking into the middle
+-- of the box.
 local function galaxyCFrame(): CFrame?
 	local slot = ClientState.mySlot()
 	if slot == nil then
@@ -93,8 +92,8 @@ local function galaxyCFrame(): CFrame?
 	local origin, yaw = RegionMath.slotOrigin(slot)
 	local region = CFrame.new(origin.x, origin.y, origin.z) * CFrame.Angles(0, yaw, 0)
 	local center = region:PointToWorldSpace(Vector3.new(0, 0, size.z / 2))
-	-- On the border: the near (station) face, near its top edge.
-	local eye = region:PointToWorldSpace(Vector3.new(0, size.y * BORDER_HEIGHT, 0))
+	-- The top edge of the back (far) face, looking in at the middle.
+	local eye = region:PointToWorldSpace(Vector3.new(0, size.y / 2, size.z))
 	-- Turn a little right, so the galaxy's middle sits left of centre, in the
 	-- part of the screen the panel (on the right) leaves uncovered.
 	return CFrame.lookAt(eye, center) * CFrame.Angles(0, -math.rad(VIEW_FOV * PANEL_WIDTH / 2), 0)
