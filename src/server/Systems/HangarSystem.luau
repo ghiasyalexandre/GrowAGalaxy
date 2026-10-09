@@ -48,7 +48,8 @@ local PAD_DIAMETER = 12 -- studs (the white glow ring is 12.8 across)
 local PAD_CLEARANCE = 1 -- studs between the pad and the ship's underside
 
 -- A ship for show: the real ship model in its colours, with everything
--- that makes it flyable or boardable removed, anchored, turning slowly.
+-- that makes it flyable or boardable removed (and its engine glow and laser
+-- emitter: a parked ship shows no boosters), anchored, turning slowly.
 local function display(shipId: string, look: Types.ShipLook, at: CFrame, accent: string): Model
 	local model = ShipBuilder.build(shipId, at, accent, look)
 	for _, item in model:GetDescendants() do
@@ -58,6 +59,8 @@ local function display(shipId: string, look: Types.ShipLook, at: CFrame, accent:
 			or item:IsA("Seat")
 			or item:IsA("ParticleEmitter")
 			or item:IsA("Trail")
+			or item:IsA("Beam")
+			or (item:IsA("BasePart") and (item.Name == "EngineGlow" or item.Name == "BeamEmitter"))
 		then
 			item:Destroy()
 		end
@@ -156,7 +159,12 @@ local function buy(player: Player, upgradeId: string, fromTouch: boolean)
 	if profile == nil or not limit.allow(player) then
 		return
 	end
-	local cost, reason = HangarMath.canBuy(upgradeId, profile.hangar, profile.stardust)
+	local cost, reason = HangarMath.canBuy(
+		upgradeId,
+		profile.hangar,
+		profile.stardust,
+		DataSystem.rewardRate(player)
+	)
 	if cost == nil then
 		-- Standing on a pad you can't afford shouldn't spam messages.
 		local now = os.clock()
@@ -166,7 +174,9 @@ local function buy(player: Player, upgradeId: string, fromTouch: boolean)
 		end
 		return
 	end
-	if not DataSystem.spendStardust(player, cost) then
+	-- Income up to now at the old rate (the Refinery changes it).
+	DataSystem.settleIncome(player)
+	if not DataSystem.spendStardust(player, cost, "hangar_buy") then
 		return
 	end
 	DataSystem.grantHangar(player, upgradeId)
@@ -228,6 +238,7 @@ refresh = function(player: Player, justBuilt: string?)
 		made.Parent = station.model
 		folder = made
 	end
+	local changed = false
 	for _, upgradeId in H.ORDER do
 		local def = H.BY_ID[upgradeId]
 		-- A built upgrade the owner switched off (Settings) isn't shown.
@@ -269,6 +280,11 @@ refresh = function(player: Player, justBuilt: string?)
 		elseif upgradeId == SHOWCASE_ID then
 			HangarSystem.refreshShowcase(player)
 		end
+		changed = true
+	end
+	-- New buildings take the station's highlight colour on their accents.
+	if changed then
+		StationSystem.recolor(player)
 	end
 end
 

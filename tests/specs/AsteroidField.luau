@@ -90,7 +90,7 @@ return function(T, Loader)
 				end)
 				local scale = size.radius / base.radius
 				T.truthy(scale >= 1 - A.SIZE_JITTER - 1e-9 and scale <= 1 + A.SIZE_JITTER + 1e-9)
-				T.near(size.reward, math.max(1, math.floor(base.reward * scale * scale + 0.5)))
+				T.near(size.work, base.work * scale * scale)
 				T.equal(base.radius, A.SIZES.Medium.radius, "the config is not changed")
 			end
 		end)

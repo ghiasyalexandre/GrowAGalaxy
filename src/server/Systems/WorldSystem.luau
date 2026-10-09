@@ -1,6 +1,6 @@
 --!strict
 -- Builds the shared world when the server starts: zero gravity, space
--- lighting, the ISS hub and the Earth backdrop. Also clears leftovers from
+-- lighting, the ISS hub and the Helix Nebula backdrop. Also clears leftovers from
 -- Studio's Baseplate template (the baseplate, its spawn and its atmosphere)
 -- that would break the space scene.
 --
@@ -15,7 +15,7 @@ local ServerStorage = game:GetService("ServerStorage")
 local Workspace = game:GetService("Workspace")
 
 local Config = require(ReplicatedStorage.Shared.Config)
-local EarthBuilder = require(script.Parent.Parent.World.EarthBuilder)
+local NebulaBuilder = require(script.Parent.Parent.World.NebulaBuilder)
 local IssBuilder = require(script.Parent.Parent.World.IssBuilder)
 
 local WorldSystem = {}
@@ -45,8 +45,8 @@ local function setupLighting()
 
 	Lighting.ClockTime = 0
 	Lighting.Brightness = 1
-	Lighting.Ambient = Color3.fromRGB(120, 122, 140)
-	Lighting.OutdoorAmbient = Color3.fromRGB(110, 112, 135)
+	Lighting.Ambient = Color3.fromHex(Config.World.AMBIENT)
+	Lighting.OutdoorAmbient = Color3.fromHex(Config.World.OUTDOOR_AMBIENT)
 	Lighting.GlobalShadows = false
 	Lighting.EnvironmentDiffuseScale = 0
 	Lighting.EnvironmentSpecularScale = 0.3
@@ -133,9 +133,9 @@ function WorldSystem.init()
 	hub.Parent = world
 	iss = hub
 
-	local earth = EarthBuilder.build()
-	earth.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
-	earth.Parent = world
+	local nebula = NebulaBuilder.build()
+	nebula.ModelStreamingMode = Enum.ModelStreamingMode.Persistent
+	nebula.Parent = world
 end
 
 return WorldSystem

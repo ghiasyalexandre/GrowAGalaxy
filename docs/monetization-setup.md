@@ -16,7 +16,8 @@ admission or starts sales.
 | Offer | Kind | Id | Grants |
 |---|---|---|---|
 | Meteor Slicer (ship) | Pass | 2005413560 | The Meteor Slicer, same as the Stardust version |
-| 2x Star Production | Pass | 2006121509 | Stars make 2x Stardust |
+| Quasar Board (ship) | Pass | 2005851533 | The Quasar Board, same as the Stardust version |
+| 2x Mining Stardust | Pass | 2006121509 | Asteroids pay 2x Stardust |
 | Automatic Collection | Pass | 2005767573 | Star income goes straight to the wallet |
 | Mining Boost (15 min) | Developer product | 3716697618 | 2x mining Stardust for 15 min of play, stacking time |
 | Small Stardust Pack | Developer product | 3716697789 | Exactly 25,000 Stardust, as often as you like |

@@ -4,14 +4,15 @@
 -- (SettingChanged) and only changes this player's view:
 --
 --   Effects         full or reduced (fewer particles, no ambient motion)
---   Floating        float everywhere, or walk on floors (SuitController)
+--   Floating        float everywhere, or walk on floors (SuitController;
+--                   double jump switches it too)
 --   Auto-incubate   a freed incubator chamber takes the next waiting egg
 --   Sound effects   SFX volume, 0 to 100% (AudioController)
 --   Music           music volume, 0 to 100%
 --   Galaxy boundary whether your own region's glowing boundary box shows
 --   Controls hint   whether the list of controls along the bottom shows
 --   Cloak           invisibility on/off, once its code is redeemed
---   Neon Runway     on/off, once built (Config.Hangar `toggle` upgrades)
+--   Hangar toggles  on/off for built Config.Hangar `toggle` upgrades (none now)
 --   Hangar color    the highlight colour of your station (swatches; the
 --                   server repaints it, StationSystem)
 --   How to play     opens the tutorial guide (TutorialController)
@@ -423,7 +424,8 @@ local function build()
 	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0.9, 0, 0, 480)
+	-- Up to 480 tall, but never taller than a short phone screen allows.
+	panel.Size = UDim2.new(0.9, 0, 0.92, 0)
 	local size = Instance.new("UISizeConstraint")
 	size.MaxSize = Vector2.new(520, 480)
 	size.Parent = panel

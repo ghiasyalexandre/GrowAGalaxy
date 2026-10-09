@@ -5,7 +5,11 @@
 --
 -- Planets are individually owned (profile.planets, Logic/PlanetInventory);
 -- the ones equipped on a star are passed in as `equipped`: orbit slot number
--- -> planet record. Only equipped planets produce.
+-- -> planet record. Only equipped planets produce, each a share of its host
+-- star's own rate (planetFactor). Rates are not rounded: the UI rounds.
+--
+-- Prices use the star's BuildIndex (StarRecord.build, Config.Stars): the
+-- k-th star built pays PRICE_GROWTH^k on its price, levels and evolutions.
 
 local Config = require(script.Parent.Parent.Config)
 local Types = require(script.Parent.Parent.Types)
@@ -20,9 +24,10 @@ local function tierOf(typeId: string): number
 	return if def then def.tier else 1
 end
 
--- The highest level a star of this type reaches (4, 6, 8 ... by tier).
+-- The highest level a star of this type reaches (4 at tiers 1-4, one more
+-- every MAX_LEVEL_EVERY tiers: 8 at tier 17).
 function StarMath.maxLevel(typeId: string): number
-	return S.MAX_LEVEL_BASE + S.MAX_LEVEL_STEP * (tierOf(typeId) - 1)
+	return S.MAX_LEVEL_BASE + (tierOf(typeId) - 1) // S.MAX_LEVEL_EVERY
 end
 
 -- Planet slots of a star of this type (Config.Stars `orbits`, at most 9).
@@ -45,34 +50,52 @@ function StarMath.radius(typeId: string, level: number): number
 	return (if def then def.radius else 12) * (1 + (S.MAX_RADIUS_SCALE - 1) * progress)
 end
 
--- Stardust per second from the star itself (planets not included), rounded
--- to a whole number.
+-- Stardust per second from the star itself (planets not included).
 function StarMath.starIncome(typeId: string, level: number): number
 	local def = S.BY_ID[typeId]
 	if def == nil then
 		return 0
 	end
-	return math.floor(def.income * StarMath.levelMultiplier(level) + 0.5)
+	return def.income * S.INCOME_BOOST * StarMath.levelMultiplier(level)
 end
 
--- A planet's Stardust per second at a level (1 when omitted), whole.
-function StarMath.planetIncome(planetId: string, level: number?): number
+-- A tier's income multiplier (x1 for tier 1 or an unknown tier).
+function StarMath.tierMultiplier(tier: number?): number
+	local def = P.TIERS[tier or 1]
+	return if def then def.multiplier else 1
+end
+
+-- A planet's share of its host star's rate at a level and tier (1 when
+-- omitted): b (its catalog income / 100) x tier multiplier x level factor.
+function StarMath.planetFactor(planetId: string, level: number?, tier: number?): number
 	local def = P.BY_ID[planetId]
 	if def == nil then
 		return 0
 	end
 	local lv = math.clamp(level or 1, 1, P.MAX_LEVEL)
-	return math.floor(def.income * (1 + P.LEVEL_INCOME_STEP * (lv - 1)) + 0.5)
+	return def.income / 100 * (1 + P.LEVEL_INCOME_STEP * (lv - 1)) * StarMath.tierMultiplier(tier)
 end
 
--- Price to raise a planet from `level` to the next, or nil at MAX_LEVEL.
-function StarMath.planetLevelCost(planetId: string, level: number): number?
+-- A planet's Stardust per second on a host star making `host` per second
+-- by itself.
+function StarMath.planetIncome(
+	planetId: string,
+	level: number?,
+	tier: number?,
+	host: number
+): number
+	return math.max(host, 0) * StarMath.planetFactor(planetId, level, tier)
+end
+
+-- Price to raise a planet from `level` to the next at the current egg price
+-- `eggPrice`, or nil at MAX_LEVEL. Rounded up.
+function StarMath.planetLevelCost(planetId: string, level: number, eggPrice: number): number?
 	local def = P.BY_ID[planetId]
 	if def == nil or level < 1 or level >= P.MAX_LEVEL then
 		return nil
 	end
-	local base = P.UPGRADE_COST[def.rarity] or 0
-	return math.floor(base * P.UPGRADE_GROWTH ^ (level - 1) + 0.5)
+	local share = P.UPGRADE_COST[def.rarity] or 0
+	return math.ceil(eggPrice * share * P.UPGRADE_GROWTH ^ (level - 1) - 1e-9)
 end
 
 -- A planet's radius at a level: a little bigger every level.
@@ -88,10 +111,11 @@ function StarMath.income(
 	star: Types.StarRecord,
 	equipped: { [number]: Types.PlanetRecord }?
 ): number
-	local total = StarMath.starIncome(star.typeId, star.level)
+	local own = StarMath.starIncome(star.typeId, star.level)
+	local total = own
 	if equipped then
 		for _, planet in equipped do
-			total += StarMath.planetIncome(planet.typeId, planet.level)
+			total += StarMath.planetIncome(planet.typeId, planet.level, planet.tier, own)
 		end
 	end
 	return total
@@ -108,9 +132,14 @@ function StarMath.totalIncome(
 	end
 	if planets then
 		for _, planet in planets do
-			local starId = planet.star
-			if starId and stars[starId] then
-				total += StarMath.planetIncome(planet.typeId, planet.level)
+			local host = if planet.star then stars[planet.star] else nil
+			if host then
+				total += StarMath.planetIncome(
+					planet.typeId,
+					planet.level,
+					planet.tier,
+					StarMath.starIncome(host.typeId, host.level)
+				)
 			end
 		end
 	end
@@ -149,22 +178,45 @@ function StarMath.nextTier(stars: { [string]: Types.StarRecord }): string?
 	return nil
 end
 
--- Price of a new star when the player already owns `owned` stars.
-function StarMath.placeCost(typeId: string, owned: number): number?
+-- The BuildIndex the next star built gets (0 for the first).
+function StarMath.nextBuild(galaxy: Types.GalaxyRecord): number
+	return galaxy.nextBuild
+end
+
+local function buildFactor(build: number?): number
+	return S.PRICE_GROWTH ^ math.max(build or 0, 0)
+end
+
+-- Price of a new star built with BuildIndex `build`, rounded up.
+function StarMath.placeCost(typeId: string, build: number): number?
 	local def = S.BY_ID[typeId]
 	if def == nil then
 		return nil
 	end
-	return math.floor(def.cost * S.PRICE_GROWTH ^ math.max(owned, 0) + 0.5)
+	return math.ceil(def.cost * buildFactor(build) - 1e-9)
 end
 
--- Cost to level a star up from `level`, or nil at its max level.
-function StarMath.upgradeCost(typeId: string, level: number): number?
+-- Cost to level a star (BuildIndex `build`) up from `level`, or nil at its
+-- max level. Rounded up.
+function StarMath.upgradeCost(typeId: string, level: number, build: number?): number?
 	local def = S.BY_ID[typeId]
 	if def == nil or level < 1 or level >= StarMath.maxLevel(typeId) then
 		return nil
 	end
-	return math.floor(def.cost * S.UPGRADE_SHARE * S.UPGRADE_GROWTH ^ (level - 1) + 0.5)
+	return math.ceil(
+		def.cost * S.UPGRADE_FACTOR * S.UPGRADE_GROWTH ^ (level - 1) * buildFactor(build) - 1e-9
+	)
+end
+
+-- Cost to evolve a star (BuildIndex `build`) of this type into the next,
+-- or nil for the last tier. Rounded up.
+function StarMath.evolveCost(typeId: string, build: number?): number?
+	local target = StarMath.evolveTarget(typeId)
+	local def = if target then S.BY_ID[target] else nil
+	if def == nil then
+		return nil
+	end
+	return math.ceil(def.cost * buildFactor(build) - 1e-9)
 end
 
 -- May this star evolve now? Only at its max level, and not past the top.
@@ -214,6 +266,17 @@ function StarMath.encodePlanetLevels(equipped: { [number]: Types.PlanetRecord })
 	for slot = 1, #S.SLOTS do
 		local planet = equipped[slot]
 		parts[slot] = if planet then tostring(planet.level) else ""
+	end
+	return table.concat(parts, ",")
+end
+
+-- Tiers of the equipped planets by slot, "7,,1," style (StarBuilder's
+-- PlanetTiers attribute); decodePlanetLevels reads it back.
+function StarMath.encodePlanetTiers(equipped: { [number]: Types.PlanetRecord }): string
+	local parts: { string } = {}
+	for slot = 1, #S.SLOTS do
+		local planet = equipped[slot]
+		parts[slot] = if planet then tostring(planet.tier) else ""
 	end
 	return table.concat(parts, ",")
 end

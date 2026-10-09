@@ -5,16 +5,16 @@ return function(T, Loader)
 	local E = Config.Economy
 
 	T.describe("OfflineMath", function()
-		T.test("stars earn while you're away, at your current rate", function()
+		T.test("stars earn a quarter of their rate while you're away", function()
 			local amount, seconds = OfflineMath.earned(10, 1000, 1000 + 3600)
-			T.equal(amount, 36000)
+			T.equal(amount, 9000)
 			T.equal(seconds, 3600)
 		end)
 
-		T.test("capped at 1 day of production", function()
-			T.equal(E.OFFLINE_CAP_SECONDS, 86400)
-			local amount = OfflineMath.earned(5, 1000, 1000 + 30 * 86400)
-			T.equal(amount, 5 * 86400)
+		T.test("capped at 8 hours of production, 12 with the Silo", function()
+			T.equal(E.OFFLINE_CAP_SECONDS, 8 * 3600)
+			T.equal(OfflineMath.earned(4, 1000, 1000 + 30 * 86400), 4 * 0.25 * 8 * 3600)
+			T.equal(OfflineMath.earned(4, 1000, 1000 + 30 * 86400, 1.5), 4 * 0.25 * 12 * 3600)
 		end)
 
 		T.test("nothing on a first visit, a short break or a clock going backwards", function()

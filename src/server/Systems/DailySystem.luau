@@ -20,12 +20,12 @@ local function claim(player: Player): (boolean, string)
 	if profile == nil then
 		return false, "Your save is still loading."
 	end
-	local day, prize = DataSystem.claimDaily(player, DailyMath.today(os.time()))
+	local day, amount = DataSystem.claimDaily(player, DailyMath.today(os.time()))
 	if day == nil then
 		return false, "Today's prize is already claimed. Come back tomorrow!"
 	end
 	DataSystem.addStat(player, "dailyClaims", 1)
-	return true, `Day {day} prize: {DailyMath.describe(prize)}!`
+	return true, `Day {day} prize: {DailyMath.describe(amount or 0)}!`
 end
 
 function DailySystem.start()

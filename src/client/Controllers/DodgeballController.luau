@@ -27,6 +27,7 @@ local Workspace = game:GetService("Workspace")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local SuitController = require(script.Parent.SuitController)
+local TouchController = require(script.Parent.TouchController)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -325,18 +326,22 @@ local function setBound(on: boolean)
 				throw()
 			end
 			return Enum.ContextActionResult.Sink
-		end, true, PRIORITY, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)
-		ContextActionService:SetTitle(THROW_ACTION, "Throw")
+		end, false, PRIORITY, Enum.UserInputType.MouseButton1, Enum.KeyCode.ButtonR2)
 		ContextActionService:BindActionAtPriority(LAUNCH_ACTION, function(_, state)
 			if state == Enum.UserInputState.Begin then
 				launch()
 			end
 			return Enum.ContextActionResult.Sink
-		end, true, PRIORITY, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonB)
-		ContextActionService:SetTitle(LAUNCH_ACTION, "Launch")
+		end, false, PRIORITY, Enum.KeyCode.LeftShift, Enum.KeyCode.ButtonB)
+		-- Touch screens: buttons in the touch arc (TouchController).
+		TouchController.setExtras({
+			{ id = "Throw", title = "Throw", press = throw },
+			{ id = "Launch", title = "Launch", press = launch },
+		})
 	else
 		ContextActionService:UnbindAction(THROW_ACTION)
 		ContextActionService:UnbindAction(LAUNCH_ACTION)
+		TouchController.setExtras({})
 	end
 end
 

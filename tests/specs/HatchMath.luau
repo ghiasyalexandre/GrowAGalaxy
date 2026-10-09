@@ -23,6 +23,16 @@ return function(T, Loader)
 			T.equal(hatch.endsAt, 1000 + P.RARITIES.Common.hatchSeconds)
 		end)
 
+		T.test("the egg's tier carries into the hatch and out with the planet", function()
+			local waiting, hatches = eggs(), {}
+			waiting.e1.tier = 6
+			local hatch = HatchMath.begin(waiting, hatches, "e1", 1, 0)
+			T.equal(hatch.tier, 6)
+			local done = HatchMath.advance(waiting, hatches, hatch.endsAt, false)
+			T.equal(#done, 1)
+			T.equal(done[1].tier, 6)
+		end)
+
 		T.test("hatch time comes from the planet's rarity", function()
 			local waiting, hatches = eggs(), {}
 			local hatch = HatchMath.begin(waiting, hatches, "e2", 1, 0)

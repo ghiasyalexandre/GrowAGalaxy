@@ -1,12 +1,21 @@
 --!strict
--- The star tycoon's stars. Eight types form a ladder from Brown Dwarf to
--- Black Hole. A new star of a type needs a star of the previous type already
--- in your galaxy.
+-- The star tycoon's stars. Seventeen types form a ladder from Brown Dwarf
+-- through the dying giants and their remnants (Wolf-Rayet, Neutron Star,
+-- Pulsar, Magnetar) to the Black Hole, and on to four fictional stars
+-- (Nebula Heart, Prism Star, Cosmic Phoenix, Void Flame). A new star of a
+-- type needs a star of the previous type already in your galaxy.
 --
 -- Levels: a star levels up from 1 to its tier's max level (MAX_LEVEL_BASE at
--- tier 1, MAX_LEVEL_STEP more per tier: 4, 6, 8 ... always even). Each level
+-- tier 1, one more every MAX_LEVEL_EVERY tiers: 4 ... 8). Each level
 -- multiplies the type's base production. At max level it can evolve into the
 -- next type in place: it keeps its planets and starts again at level 1.
+-- Each type makes 3x the one before it, so evolving never lowers income.
+--
+-- Prices (economy v2): every star gets a BuildIndex k when it is built (0
+-- for the first, never reused or lowered). A new star costs
+-- cost x PRICE_GROWTH^k (1.1^k); levelling it costs cost x UPGRADE_FACTOR x
+-- UPGRADE_GROWTH^(L - 1) x PRICE_GROWTH^k; evolving it costs the next type's
+-- cost x PRICE_GROWTH^k (Logic/StarMath).
 --
 -- Orbits: each type has its own number of orbital slots (`orbits`, never
 -- more than 9, never fewer than the type before); evolving a star opens its
@@ -24,7 +33,7 @@ export type StarTypeDef = {
 	cost: number, -- Stardust for a new star of this type (before PRICE_GROWTH); also the evolve price
 	income: number, -- Stardust per second at level 1
 	orbits: number, -- planet slots (1..9, nondecreasing up the ladder)
-	radius: number, -- studs at level 1; at most Config.Galaxy.STAR_MAX_RADIUS / 1.2
+	radius: number, -- studs at level 1; at most Config.Galaxy.STAR_MAX_RADIUS / MAX_RADIUS_SCALE
 	color: string,
 	light: string,
 	description: string,
@@ -34,20 +43,31 @@ export type StarTypeDef = {
 -- orbital period in (simulated) days, and the tilt of the orbit in degrees.
 export type SlotDef = { orbit: number, periodDays: number, tilt: number }
 
+local Galaxy = require(script.Parent.Galaxy)
+
 local ORDER: { string } = {
 	"BrownDwarf",
 	"RedDwarf",
 	"YellowDwarf",
+	"BinaryStar",
 	"WhiteDwarf",
 	"RedGiant",
 	"BlueGiant",
 	"RedSupergiant",
+	"WolfRayet",
+	"NeutronStar",
+	"Pulsar",
+	"Magnetar",
 	"BlackHole",
+	"NebulaHeart",
+	"PrismStar",
+	"CosmicPhoenix",
+	"VoidFlame",
 }
 
 -- Planet slots per tier: the old 4..11 scaled so the top is 9 (rounded),
 -- whole and never decreasing.
-local ORBITS_BY_TIER = { 3, 4, 5, 6, 7, 7, 8, 9 }
+local ORBITS_BY_TIER = { 3, 4, 5, 5, 6, 7, 7, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9 }
 
 local function star(
 	id: string,
@@ -91,8 +111,8 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"RedDwarf",
 		2,
 		"Red Dwarf",
-		700,
-		4,
+		450,
+		3,
 		12,
 		"#E2563B",
 		"#FF7A5C",
@@ -102,19 +122,30 @@ local BY_ID: { [string]: StarTypeDef } = {
 		"YellowDwarf",
 		3,
 		"Yellow Dwarf",
-		3500,
-		12,
+		1800,
+		9,
 		15,
 		"#FFD36B",
 		"#FFE6A3",
 		"A sun like ours."
 	),
+	BinaryStar = star(
+		"BinaryStar",
+		4,
+		"Binary Star",
+		7000,
+		27,
+		13,
+		"#FFC85A",
+		"#9FC8FF",
+		"Two suns dancing round each other, one stealing from the other."
+	),
 	WhiteDwarf = star(
 		"WhiteDwarf",
-		4,
+		5,
 		"White Dwarf",
-		14000,
-		30,
+		28000,
+		81,
 		11,
 		"#F2F6FF",
 		"#DDE8FF",
@@ -122,10 +153,10 @@ local BY_ID: { [string]: StarTypeDef } = {
 	),
 	RedGiant = star(
 		"RedGiant",
-		5,
+		6,
 		"Red Giant",
-		50000,
-		75,
+		110000,
+		243,
 		20,
 		"#FF6B3D",
 		"#FFA07A",
@@ -133,10 +164,10 @@ local BY_ID: { [string]: StarTypeDef } = {
 	),
 	BlueGiant = star(
 		"BlueGiant",
-		6,
+		7,
 		"Blue Giant",
-		170000,
-		180,
+		450000,
+		729,
 		21,
 		"#6FA8FF",
 		"#A9CCFF",
@@ -144,34 +175,127 @@ local BY_ID: { [string]: StarTypeDef } = {
 	),
 	RedSupergiant = star(
 		"RedSupergiant",
-		7,
+		8,
 		"Red Supergiant",
-		550000,
-		420,
+		2000000,
+		2187,
 		24,
 		"#FF4A2E",
 		"#FF8A66",
 		"One of the largest stars there is."
 	),
+	-- The remnants, between the dying giants and the Black Hole.
+	WolfRayet = star(
+		"WolfRayet",
+		9,
+		"Wolf-Rayet Star",
+		10000000,
+		6561,
+		16,
+		"#6A5CFF",
+		"#B8B0FF",
+		"So hot and fierce it blows its own outer layers away."
+	),
+	NeutronStar = star(
+		"NeutronStar",
+		10,
+		"Neutron Star",
+		50000000,
+		19683,
+		8,
+		"#DDEBFF",
+		"#9FC8FF",
+		"A city-sized cinder: a teaspoon weighs a billion tons."
+	),
+	Pulsar = star(
+		"Pulsar",
+		11,
+		"Pulsar",
+		250000000,
+		59049,
+		8,
+		"#9FF0FF",
+		"#3FD8FF",
+		"A spinning lighthouse sweeping beams across space."
+	),
+	Magnetar = star(
+		"Magnetar",
+		12,
+		"Magnetar",
+		1300000000,
+		177147,
+		9,
+		"#E060FF",
+		"#FF5AC8",
+		"The strongest magnet in the universe, cracking with starquakes."
+	),
 	BlackHole = star(
 		"BlackHole",
-		8,
+		13,
 		"Black Hole",
-		1800000,
-		1000,
+		7000000000,
+		531441,
 		14,
 		"#05020A",
 		"#B67CFF",
 		"Light can't escape. Stardust can."
 	),
+	-- Beyond the Black Hole: fictional stars, each a step up the ladder.
+	NebulaHeart = star(
+		"NebulaHeart",
+		14,
+		"Nebula Heart",
+		30000000000,
+		1594323,
+		20,
+		"#B04ACF",
+		"#5FE3FF",
+		"A newborn star still wrapped in the nebula that made it."
+	),
+	PrismStar = star(
+		"PrismStar",
+		15,
+		"Prism Star",
+		120000000000,
+		4782969,
+		17,
+		"#BFF6FF",
+		"#FF9AE8",
+		"Crystal-bright: it splits its light into every colour."
+	),
+	CosmicPhoenix = star(
+		"CosmicPhoenix",
+		16,
+		"Cosmic Phoenix",
+		480000000000,
+		14348907,
+		22,
+		"#FF7A1A",
+		"#FFD070",
+		"It burns, dies and is reborn, brighter every time."
+	),
+	VoidFlame = star(
+		"VoidFlame",
+		17,
+		"Void Flame",
+		1900000000000,
+		43046721,
+		24,
+		"#140A24",
+		"#5CFF8A",
+		"A star of dark matter, burning with green fire."
+	),
 }
 
 -- Orbits: evenly spaced from ORBIT_FIRST, ORBIT_GAP apart (wide enough for
--- the biggest planets side by side), enough for the top tier. Periods follow
+-- the biggest planets side by side), enough for the top tier. The first
+-- orbit sits ORBIT_CLEARANCE outside the biggest star at its top level
+-- (Galaxy.STAR_MAX_RADIUS), so orbits move out when stars grow bigger. Periods follow
 -- Kepler's third law from the innermost orbit's ORBIT_FIRST_DAYS (Mercury's
 -- year), so outer planets really are slower.
 local MAX_ORBITS = 9
-local ORBIT_FIRST = 44
+local ORBIT_CLEARANCE = 10 -- studs: a top-level planet (about 7) plus a gap
+local ORBIT_FIRST = math.ceil(Galaxy.STAR_MAX_RADIUS + ORBIT_CLEARANCE)
 local ORBIT_GAP = 14
 local ORBIT_FIRST_DAYS = 88
 local TILTS = { 4, -7, 10, -5, 7, -9, 3, -4, 8 }
@@ -191,18 +315,19 @@ return {
 	BY_ID = BY_ID,
 	SLOTS = SLOTS,
 	MAX_ORBITS = MAX_ORBITS, -- no star holds more planets than this
-	MAX_LEVEL_BASE = 4, -- max level at tier 1 (even)
-	MAX_LEVEL_STEP = 2, -- added per tier (even, so max levels stay even)
-	-- Production at level L: income x (1 + LINEAR x n + CURVE x n^2), n = L - 1.
-	-- The same as a flat 0.75 per level up to level 4, then it pulls ahead:
-	-- x10.5 at level 10 and x25.7 at level 18 (a flat step gave x7.75, x13.75).
-	LEVEL_INCOME_LINEAR = 0.6,
-	LEVEL_INCOME_CURVE = 0.05,
-	-- Level L -> L + 1 costs the type's price x UPGRADE_SHARE x UPGRADE_GROWTH^(L - 1).
-	UPGRADE_SHARE = 0.4,
-	UPGRADE_GROWTH = 1.35,
+	MAX_LEVEL_BASE = 4, -- max level at tier 1
+	MAX_LEVEL_EVERY = 4, -- one more max level every this many tiers (4 + floor((t - 1) / 4))
+	-- Production at level L: income x (1 + LINEAR x n + CURVE x n^2), n = L - 1
+	-- (x2.89 at level 8, the Phoenix's max).
+	-- Every star's production (and so its planets', a share of it) times this.
+	INCOME_BOOST = 1.1,
+	LEVEL_INCOME_LINEAR = 0.2,
+	LEVEL_INCOME_CURVE = 0.01,
+	-- Level L -> L + 1 costs cost x UPGRADE_FACTOR x UPGRADE_GROWTH^(L - 1) x PRICE_GROWTH^k.
+	UPGRADE_FACTOR = 0.18,
+	UPGRADE_GROWTH = 1.2,
 	-- A star at max level is this much bigger than at level 1.
-	MAX_RADIUS_SCALE = 1.2,
+	MAX_RADIUS_SCALE = 1.5,
 	-- Orbit clock (drawn by each client): simulated seconds per real second.
 	-- Normally the innermost planet takes about 16 s to go round; inspecting a
 	-- system, a slider sets the rate from INSPECT_RATE_MIN to INSPECT_RATE_MAX.
@@ -210,8 +335,9 @@ return {
 	INSPECT_RATE_MIN = 3600, -- 1 hour per second
 	INSPECT_RATE_MAX = 30 * 365.25 * 86400, -- 3 decades per second
 	DEFAULT_TYPE = "BrownDwarf", -- the first star; must be affordable at the start
-	-- Each star you already own multiplies the price of the next one.
-	PRICE_GROWTH = 1.35,
+	-- Per BuildIndex: the k-th star built (from 0) pays PRICE_GROWTH^k on
+	-- its price, every level and every evolution.
+	PRICE_GROWTH = 1.1,
 	-- Placement ghost: how far ahead of the camera it starts, and its range.
 	GHOST_DISTANCE = 300,
 	GHOST_MIN_DISTANCE = 60,

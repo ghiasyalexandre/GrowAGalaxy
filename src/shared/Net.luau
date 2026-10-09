@@ -38,8 +38,8 @@
 --   CodeRequest      RemoteFunction  client -> server  (code: string) -> (ok: boolean, message: string)
 --   RaidEvent        RemoteEvent     server -> client  (kind: "bolt" | "charge" | "superlaser" |
 --                                                       "bossDown" | "result", ...) raid effects
---   EggRequest       RemoteFunction  client -> server  ("status" | "buyMystery", price? |
---                                                       "buyChosen", typeId, price?) -> (ok, message, policy?)
+--   EggRequest       RemoteFunction  client -> server  ("status" | "roll", price? | "keep" |
+--                                                       "upgrade", cost?) -> (ok, message, policy?)
 --   HatchRequest     RemoteFunction  client -> server  ("start", eggId, chamber?) -> (ok, message)
 --   WheelRequest     RemoteFunction  client -> server  ("spin") -> (ok, message, prizeIndex?)
 --   TutorialRequest  RemoteFunction  client -> server  ("ack", stepIndex | "skip") -> (ok, message)

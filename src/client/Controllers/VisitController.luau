@@ -1,6 +1,6 @@
 --!strict
--- Visiting other players' hangars: a Visit button in the HUD's bottom row
--- (beside Launch Ship) opens a list of everyone else in this server, each
+-- Visiting other players' hangars: a Visit button in the bottom-right
+-- corner opens a list of everyone else in this server, each
 -- with a Visit button that travels to their hangar (SuitRecover "visit";
 -- the server checks the player is here and shares the travel cooldown).
 
@@ -12,6 +12,7 @@ local UserInputService = game:GetService("UserInputService")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local Theme = require(script.Parent.Parent.UI.Theme)
+local Layout = require(script.Parent.Parent.UI.Layout)
 
 local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 
@@ -93,22 +94,38 @@ local function buildButton()
 	rail.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	rail.DisplayOrder = -1
 	local button = Instance.new("TextButton")
-	-- Bottom row, right of Launch Ship (HudController: 288 + 190).
+	-- Desktop: bottom right. Touch screens: an icon in the top-right row (the
+	-- bottom right is for the touch buttons). See place() below.
 	button.Name = "Visit"
-	button.AnchorPoint = Vector2.new(0, 1)
-	button.Position = UDim2.new(0, 484, 1, -24)
-	button.Size = UDim2.new(0, 120, 0, 40)
+	button.Size = UDim2.new(0, 130, 0, 40)
 	button.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	button.BackgroundTransparency = 0.2
-	button.Font = Enum.Font.GothamBold
-	button.TextSize = 18
-	button.TextColor3 = Color3.fromRGB(255, 214, 120)
-	button.Text = "Visit"
+	button.Text = ""
 	button.Parent = rail
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(0, 8)
 	round.Parent = button
-	Theme.buttonIcon(button, "Portal")
+	-- The text is a label so the icon (wider than the button is tall) can sit
+	-- left of it without overlapping.
+	local label = Instance.new("TextLabel")
+	label.Name = "Label"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.ZIndex = 2
+	label.Font = Enum.Font.GothamBold
+	label.TextSize = 18
+	label.TextColor3 = Color3.fromRGB(255, 214, 120)
+	label.TextStrokeTransparency = 0.4
+	label.Text = "Visit"
+	label.Parent = button
+	local icon = Theme.icon(button, "Portal", 44)
+	if icon then
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.new(0, 2, 0.5, 0)
+		icon.ZIndex = 3
+		label.Position = UDim2.fromOffset(48, 0)
+		label.Size = UDim2.new(1, -56, 1, 0)
+	end
 	Theme.hover(button, function()
 		if gui.Enabled then
 			close()
@@ -117,6 +134,24 @@ local function buildButton()
 		end
 	end)
 	rail.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local function place()
+		local compact = Layout.compact()
+		if compact then
+			Layout.place(button, "TopRight", 1)
+			button.Size = UDim2.fromOffset(64, 64)
+		else
+			Layout.place(button, "BottomRight", 1)
+			button.Size = UDim2.new(0, 130, 0, 40)
+		end
+		label.Visible = not compact or icon == nil
+		if icon then
+			icon.AnchorPoint = if compact then Vector2.new(0.5, 0.5) else Vector2.new(0, 0.5)
+			icon.Position = if compact then UDim2.fromScale(0.5, 0.5) else UDim2.new(0, 2, 0.5, 0)
+			icon.Size = UDim2.fromOffset(if compact then 56 else 44, if compact then 56 else 44)
+		end
+	end
+	place()
+	Layout.changed:Connect(place)
 	-- Only on foot: travelling from a ship stows it, which surprises players.
 	local function fit()
 		button.Visible = ClientState.mode ~= "ship"

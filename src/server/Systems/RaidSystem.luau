@@ -90,6 +90,9 @@ type Raid = {
 	waves: { Wave },
 	raiders: { [Player]: Raider },
 	over: boolean,
+	center: Vector3, -- the arena's centre (the boss's leash)
+	lastStep: number, -- server time the boss last moved
+	rammedAt: { [Player]: number },
 }
 
 local RaidSystem = {}
@@ -262,10 +265,10 @@ local function finish(raid: Raid, won: boolean)
 			continue
 		end
 		if won and RaidMath.earnsReward(raider.damage, raid.max, raider.flying) then
-			DataSystem.grantRaidReward(player, def.reward)
+			local paid = DataSystem.grantRaidReward(player, def.reward)
 			DataSystem.addStat(player, "raidsWon", 1)
 			DataSystem.addStat(player, `raidsWon{raid.difficulty}`, 1)
-			Net.RaidEvent:FireClient(player, "result", true, raid.difficulty)
+			Net.RaidEvent:FireClient(player, "result", true, raid.difficulty, paid)
 		else
 			Net.RaidEvent:FireClient(player, "result", false, raid.difficulty)
 		end
@@ -300,7 +303,7 @@ local function start(difficulty: string, players: { Player })
 		weakStage = 0,
 		health = max,
 		max = max,
-		endsAt = now + R.TIME_LIMIT,
+		endsAt = now + R.BY_ID[difficulty].timeLimit,
 		nextMove = nextMove,
 		bigUntil = 0,
 		enraged = false,
@@ -308,6 +311,9 @@ local function start(difficulty: string, players: { Player })
 		waves = {},
 		raiders = {},
 		over = false,
+		center = center,
+		lastStep = now,
+		rammedAt = {},
 	}
 	model:SetAttribute("Difficulty", difficulty)
 	model:SetAttribute("Health", 1)
@@ -590,6 +596,57 @@ local function moveWeakPoint(raid: Raid)
 	Net.RaidEvent:FireAllClients("weakMoved", from, raid.weak.Position)
 end
 
+-- The boss drifts towards the nearest raider still flying (only this
+-- raid's players), slowly and within its leash, and rams any raider
+-- touching its hull: knockback (their client pushes the ship), an impact
+-- burst for everyone, and hull damage.
+local function follow(raid: Raid, now: number)
+	local dt = math.clamp(now - raid.lastStep, 0, 0.5)
+	raid.lastStep = now
+	local center = raid.body.Position
+	local nearest: Vector3? = nil
+	local best = math.huge
+	for player, raider in raid.raiders do
+		local at = if raider.flying then shipPosition(player) else nil
+		if at and (at - center).Magnitude < best then
+			nearest, best = at, (at - center).Magnitude
+		end
+	end
+	if nearest and best > R.BOSS_SIZE / 2 then
+		local step = math.min(R.BOSS_FOLLOW_SPEED * dt, best - R.BOSS_SIZE / 2)
+		local moved = center + (nearest - center).Unit * step
+		-- Stay within the leash around the arena.
+		local offset = moved - raid.center
+		if offset.Magnitude > R.BOSS_LEASH then
+			moved = raid.center + offset.Unit * R.BOSS_LEASH
+		end
+		raid.body.CFrame = raid.body.CFrame.Rotation + moved
+		RaidBuilder.placeWeakPoint(raid.weak, moved, vec(raid.weakDirection))
+		center = moved
+	end
+	-- Rams.
+	local def = R.BY_ID[raid.difficulty]
+	for player, raider in raid.raiders do
+		local at = if raider.flying then shipPosition(player) else nil
+		if at == nil then
+			continue
+		end
+		local away = at - center
+		if away.Magnitude > R.BOSS_SIZE / 2 + R.RAM_REACH then
+			continue
+		end
+		if now - (raid.rammedAt[player] or -math.huge) < R.RAM_COOLDOWN then
+			continue
+		end
+		raid.rammedAt[player] = now
+		local direction = if away.Magnitude > 0.01 then away.Unit else Vector3.yAxis
+		local contact = center + direction * R.BOSS_SIZE / 2
+		Net.RaidEvent:FireClient(player, "rammed", direction * R.RAM_KNOCKBACK)
+		Net.RaidEvent:FireAllClients("ram", contact)
+		hurt(raid, player, def.ramDamage)
+	end
+end
+
 local function tickRaid(raid: Raid, now: number)
 	if raid.over then
 		return
@@ -608,6 +665,11 @@ local function tickRaid(raid: Raid, now: number)
 	raid.model:SetAttribute("Raiders", #flying)
 	if #flying == 0 or now >= raid.endsAt then
 		finish(raid, false)
+		return
+	end
+
+	follow(raid, now)
+	if raid.over then
 		return
 	end
 

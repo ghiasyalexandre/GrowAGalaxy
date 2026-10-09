@@ -1,7 +1,7 @@
 --!strict
 -- The Galaxy Store: optional Robux purchases (Config.Products), opened only
--- by the player (HUD Store button). Four tabs: Passes, Boosts, Stardust,
--- Ships. Every offer shows its exact benefit, whether it's permanent or
+-- by the player (HUD Store button). Three tabs: Passes, Stardust (packs,
+-- and boosts when any are on sale), Ships. Every offer shows its exact benefit, whether it's permanent or
 -- timed, how it stacks, the price Roblox reports for this player, whether
 -- it's owned, and how to get the same thing by playing, when there is a way.
 --
@@ -62,7 +62,6 @@ type Price = { state: "loading" | "ok" | "failed", robux: number? }
 
 local TABS: { { id: Tab, text: string, icon: string } } = {
 	{ id = "pass", text = "Passes", icon = "Medal" },
-	{ id = "boost", text = "Boosts", icon = "Energy" },
 	{ id = "pack", text = "Stardust", icon = "CoinPile" },
 	{ id = "ship", text = "Ships", icon = "Rocket" },
 }
@@ -88,7 +87,7 @@ local firstButton: GuiButton? = nil
 local hintLabel: TextLabel
 
 local function configured(def: any): boolean
-	return P.PURCHASES_ENABLED and def.enabled and def.id > 0
+	return P.PURCHASES_ENABLED and def.enabled and def.onSale ~= false and def.id > 0
 end
 
 local function iconFor(def: any): string
@@ -101,6 +100,8 @@ local function iconFor(def: any): string
 		return "CoinPile"
 	elseif grants.boost then
 		return if grants.boost.source == "mining" then "Rocket" else "RainbowStar"
+	elseif grants.productionHours then
+		return "OpenChest"
 	elseif grants.stardust then
 		return if grants.stardust >= 400000
 			then "OpenChest"
@@ -136,7 +137,14 @@ local function playPath(def: any): string?
 				else ""
 			return `Or earn it: Shipyard, {Format.abbreviate(cost)} {CURRENCY}{after}.`
 		end
-	elseif def.grants.stardust then
+	elseif def.grants.stardust or def.grants.productionHours then
+		local profile = ClientState.profile
+		local rate = if profile then profile.incomeRate else 0
+		if def.grants.productionHours and rate > 0 then
+			return `Right now that's about {Format.abbreviate(
+				math.max(rate, 1) * 3600 * def.grants.productionHours
+			)} {CURRENCY}. Or earn it: mine asteroids and collect from your stars.`
+		end
 		return `Or earn it: mine asteroids and collect from your stars.`
 	end
 	return nil
@@ -343,7 +351,9 @@ refresh = function()
 	local order = 0
 	for _, key in P.ORDER do
 		local def = P.BY_KEY[key]
-		if def.enabled and def.category == tab then
+		-- Boosts share the Stardust tab (none are on sale in economy v2).
+		local shelf = if def.category == "boost" then "pack" else def.category
+		if def.enabled and def.onSale ~= false and shelf == tab then
 			loadPrice(def)
 			order += 1
 			card(order, def)
@@ -577,7 +587,10 @@ local function delivered(field: string)
 		local grants = P.BY_KEY[key] and P.BY_KEY[key].grants
 		if
 			grants
-			and ((field == "stardust" and grants.stardust) or (field == "boosts" and grants.boost))
+			and (
+				(field == "stardust" and (grants.stardust or grants.productionHours))
+				or (field == "boosts" and grants.boost)
+			)
 		then
 			pending[key] = nil
 			changed = true

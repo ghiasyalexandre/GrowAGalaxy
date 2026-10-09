@@ -13,7 +13,9 @@ local Movement = {
 	SHIP_REVERSE_FACTOR = 0.3,
 	SHIP_STRAFE_FACTOR = 0.45,
 	-- With no throttle input a ship slows down at this share of its braking.
-	SHIP_IDLE_BRAKE_FACTOR = 0.35,
+	SHIP_IDLE_BRAKE_FACTOR = 0.8,
+	-- Every ship's braking (Config.Ships) is multiplied by this in flight.
+	SHIP_BRAKE_MULTIPLIER = 1.6,
 	SHIP_MAX_PITCH_DEGREES = 80,
 
 	-- Ship feel. Visual only: speed and turn rate still come from the ship's
@@ -42,6 +44,8 @@ local Movement = {
 	-- world stays zero-g). Further out they float as usual.
 	WALK_GRAVITY = 196.2,
 	WALK_FLOOR_RANGE = 24, -- studs below the feet
+	-- Seconds between two presses of Up (jump) that switch floating on or off.
+	DOUBLE_JUMP_WINDOW = 0.3,
 	WALK_MAX_FALL_SPEED = 40, -- studs per second (the flight guard allows ~60)
 	SUIT_FLOOR_PUSH = 10,
 	-- Suit sound (SuitSoundController): the default footsteps, jump, landing

@@ -15,7 +15,10 @@
 -- Logic/ConfigCheck validates this table.
 
 return {
-	CENTER = { x = 0, y = -1000, z = 0 }, -- world position of the arena's middle
+	-- World position of the arena's middle: just under the ISS raid deck
+	-- (IssBuilder's RaidPlatform, centred at x 329, y -10), its roof about
+	-- 25 studs below the deck.
+	CENTER = { x = 329, y = -115, z = 0 },
 	SIZE = { x = 260, y = 160, z = 260 }, -- studs, inside the glass walls
 	BLOCK_COUNT = 34, -- floating cover blocks
 	BLOCK_SIZE = { 8, 22 } :: { number }, -- studs, smallest and largest side

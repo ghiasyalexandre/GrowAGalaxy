@@ -30,9 +30,12 @@ local function check(player: Player)
 		local def = Config.Achievements.BY_ID[id]
 		local reward = def.reward
 		local parts: { string } = {}
-		if reward.stardust > 0 then
-			DataSystem.addStardust(player, reward.stardust)
-			table.insert(parts, `+{reward.stardust} {CURRENCY}`)
+		local size = Config.Achievements.SIZES[reward.size]
+		local amount = if size
+			then DataSystem.grantMinutes(player, size.minutes, size.minimum, "achievement")
+			else 0
+		if amount > 0 then
+			table.insert(parts, `+{amount} {CURRENCY}`)
 		end
 		if reward.cosmetic and Config.Cosmetics.BY_ID[reward.cosmetic] then
 			DataSystem.grantCosmetic(player, reward.cosmetic)
@@ -45,7 +48,7 @@ local function check(player: Player)
 		Reward.send(
 			player,
 			"achievement",
-			reward.stardust,
+			amount,
 			nil,
 			`{def.displayName}|{table.concat(parts, ", ")}`
 		)

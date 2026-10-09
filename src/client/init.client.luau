@@ -1,15 +1,19 @@
 --!strict
 -- Client entry point. Same two-phase bootstrap as the server: init() every
 -- controller (build UI, connect events), load the starting state from the
--- server, then start() every controller. The shared input layer starts first.
+-- server, then start() every controller. The shared input layer and the HUD
+-- layout (UI/Layout) start first.
 --
 -- Each controller is loaded, initialised and started on its own: one that
 -- errors is reported in Output and skipped, and never stops the others.
 
 local ClientState = require(script.ClientState)
 local Input = require(script.Input)
+local Layout = require(script.UI.Layout)
 
 Input.init()
+-- The HUD's docks and scale, before any controller places its buttons.
+Layout.init()
 
 local Controllers = script.Controllers
 

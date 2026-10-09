@@ -1,11 +1,12 @@
 --!strict
 -- Redeemable codes, typed in the Settings panel (CodeSystem). Each can be
 -- redeemed once per player; letter case and spaces around it don't matter.
--- Rewards are fixed amounts (no multipliers apply).
+-- Stardust rewards are `minutes` of the player's reward rate R
+-- (Logic/EconomyMath.reward), so a code is worth the same share of
+-- progress at any stage.
 
 export type CodeDef = {
-	stardust: number?,
-	boost: { source: "mining" | "star", seconds: number }?,
+	minutes: number?,
 	allPlanets: boolean?, -- one level 1 planet of every type, into the inventory
 	allShips: boolean?, -- every ship in Config.Ships
 	cloak: boolean?, -- unlocks the Cloak switch in Settings (CloakSystem)
@@ -17,12 +18,12 @@ export type CodeDef = {
 
 local BY_CODE: { [string]: CodeDef } = {
 	ILUVGHIASY = {
-		stardust = 5000000,
-		message = "+5,000,000 Stardust!",
+		minutes = 120000,
+		message = "Two minutes of your production in Stardust!",
 	},
 	BETATESTER = {
-		stardust = 100000,
-		message = "+100,000 Stardust!",
+		minutes = 120,
+		message = "Two minutes of your production in Stardust!",
 	},
 	-- Codes are matched upper-cased: "PlanetzPlz" and "StarzShipz" work.
 	PLANETZPLZ = {

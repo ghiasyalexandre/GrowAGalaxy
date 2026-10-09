@@ -1,8 +1,10 @@
 --!strict
--- Daily prizes (Config.Daily): a "Daily" button on the right edge, with a
--- pulsing red badge while today's prize is waiting, and the calendar panel:
--- 14 tiles (claimed, today, still to come; days 7 and 14 are big prizes),
--- a Claim button, and a countdown to the next prize. The calendar opens by
+-- Daily rewards: one "Daily" button in the HUD's top-right row, with a
+-- pulsing red badge while today's prize or the free wheel spin is waiting,
+-- and the calendar panel (Config.Daily): 14 tiles (claimed, today, still to
+-- come; days 7 and 14 are big prizes), a Claim button with a countdown to
+-- the next prize, and a Daily Wheel button that opens the wheel
+-- (WheelController). The calendar opens by
 -- itself once per session when a prize is waiting. The server decides every
 -- claim (DailySystem); the day is UTC.
 
@@ -15,10 +17,13 @@ local Workspace = game:GetService("Workspace")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local Theme = require(script.Parent.Parent.UI.Theme)
+local Layout = require(script.Parent.Parent.UI.Layout)
+local WheelController = require(script.Parent.WheelController)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
 local DailyMath = require(Shared:WaitForChild("Logic"):WaitForChild("DailyMath"))
+local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local RewardMath = require(Shared:WaitForChild("Logic"):WaitForChild("RewardMath"))
 
@@ -51,15 +56,19 @@ local function record(): { day: number, lastClaim: number }?
 	return if profile then (profile :: any).daily else nil
 end
 
+-- Today's reward rate R (prizes are minutes of it).
+local function rewardRate(): number
+	local profile = ClientState.profile
+	local economy = if profile then (profile :: any).economy else nil
+	return if economy then economy.reward else 1
+end
+
 local function claimable(): boolean
 	local r = record()
 	return r ~= nil and DailyMath.canClaim(r, DailyMath.today(now()))
 end
 
 local function prizeIcon(prize: any): string
-	if prize.boost then
-		return if prize.boost.source == "mining" then "Rocket" else "RainbowStar"
-	end
 	return if prize.big then "OpenChest" else "Stardust"
 end
 
@@ -131,12 +140,7 @@ local function tile(index: number, r: { day: number, lastClaim: number }, ready:
 		icon.Position = UDim2.fromScale(0.5, 0.48)
 		icon.ImageTransparency = if done then 0.6 else 0
 	end
-	local amount = if prize.stardust
-		then (if prize.stardust >= 1000
-			then `{prize.stardust / 1000}K`
-			else tostring(prize.stardust))
-		elseif prize.boost then `2x {prize.boost.seconds // 60}m`
-		else ""
+	local amount = Format.abbreviate(DailyMath.amount(index, rewardRate()))
 	Theme.label(frame, {
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, -3),
@@ -145,13 +149,14 @@ local function tile(index: number, r: { day: number, lastClaim: number }, ready:
 		Font = Enum.Font.GothamBlack,
 		TextSize = if done then 11 else 14,
 		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = if done then Theme.COLORS.subtle elseif prize.boost then CYAN else GOLD,
+		TextColor3 = if done then Theme.COLORS.subtle else GOLD,
 	})
 end
 
 refresh = function()
 	local ready = claimable()
-	badge.Visible = ready
+	local spinReady = WheelController.isReady()
+	badge.Visible = ready or spinReady
 	if not gui.Enabled then
 		return
 	end
@@ -159,7 +164,7 @@ refresh = function()
 	if r == nil then
 		return
 	end
-	local key = `{r.day}|{r.lastClaim}|{ready}|{claiming}`
+	local key = `{r.day}|{r.lastClaim}|{ready}|{claiming}|{rewardRate()}|{spinReady}`
 	local current = claimButton
 	if key == shownKey and current then
 		-- Same state: only the countdown moves.
@@ -187,10 +192,9 @@ refresh = function()
 		`Day {r.day} of {#D.PRIZES}  ·  one prize a day (UTC)  ·  after day {#D.PRIZES} it starts again`
 
 	Theme.clear(claimButtonHolder)
-	local prize = D.PRIZES[r.day]
 	local text = if claiming
 		then "Claiming..."
-		elseif ready then `CLAIM: {DailyMath.describe(prize)}`
+		elseif ready then `CLAIM: {DailyMath.describe(DailyMath.amount(r.day, rewardRate()))}`
 		else `Next prize in {RewardMath.clock(DailyMath.secondsToNext(now()))}`
 	local button = Theme.button(
 		claimButtonHolder,
@@ -198,8 +202,23 @@ refresh = function()
 		if ready and not claiming then "buy" else "disabled",
 		if ready then claim else nil
 	)
-	button.Size = UDim2.fromScale(1, 1)
+	button.Size = UDim2.new(0.62, -4, 1, 0)
 	claimButton = button
+	local wheel = Theme.button(
+		claimButtonHolder,
+		if spinReady then "DAILY WHEEL: SPIN!" else "Daily Wheel",
+		if spinReady then "special" else "primary",
+		function()
+			gui.Enabled = false -- this panel closes; the wheel opens over the HUD
+			WheelController.open()
+		end
+	)
+	wheel.AnchorPoint = Vector2.new(1, 0)
+	wheel.Position = UDim2.fromScale(1, 0)
+	wheel.Size = UDim2.new(0.38, -4, 1, 0)
+	if spinReady then
+		Theme.shine(wheel)
+	end
 	if ready and not claiming then
 		Theme.shine(button)
 		if Input.device() == "gamepad" then
@@ -233,12 +252,21 @@ local function build()
 	local button = Instance.new("TextButton")
 	button.Name = "Daily"
 	button.AnchorPoint = Vector2.new(1, 0.5)
-	button.Position = UDim2.new(1, -18, 0.5, -130)
 	button.Size = UDim2.fromOffset(76, 76)
 	button.BackgroundColor3 = Color3.fromRGB(20, 24, 54)
 	button.AutoButtonColor = false
 	button.Text = ""
-	button.Parent = rail
+	-- Desktop: in the column under the Premium button (Spin above Daily).
+	-- Phones and tablets: in the HUD's top-right row (UI/Layout).
+	local function place()
+		if Layout.compact() then
+			Layout.place(button, "TopRight", 3)
+		else
+			Layout.place(button, "RightColumn", 2)
+		end
+	end
+	place()
+	Layout.changed:Connect(place)
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = button
@@ -307,7 +335,8 @@ local function build()
 	panel = Theme.panel(gui, "Panel")
 	panel.AnchorPoint = Vector2.new(0.5, 0.5)
 	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0.94, 0, 0, 400)
+	-- Up to 400 tall, shrinking on short (phone) screens.
+	panel.Size = UDim2.new(0.94, 0, 0.92, 0)
 	local size = Instance.new("UISizeConstraint")
 	size.MaxSize = Vector2.new(640, 400)
 	size.Parent = panel
@@ -340,7 +369,7 @@ local function build()
 	grid.Name = "Calendar"
 	grid.BackgroundTransparency = 1
 	grid.Position = UDim2.fromOffset(16, 72)
-	grid.Size = UDim2.new(1, -32, 0, 250)
+	grid.Size = UDim2.new(1, -32, 1, -150) -- between the day line and the buttons
 	grid.Parent = panel
 	local layout = Instance.new("UIGridLayout")
 	layout.CellPadding = UDim2.fromOffset(8, 10)
@@ -352,7 +381,7 @@ local function build()
 	claimButtonHolder.BackgroundTransparency = 1
 	claimButtonHolder.AnchorPoint = Vector2.new(0.5, 1)
 	claimButtonHolder.Position = UDim2.new(0.5, 0, 1, -16)
-	claimButtonHolder.Size = UDim2.new(0.7, 0, 0, 46)
+	claimButtonHolder.Size = UDim2.new(1, -32, 0, 46)
 	claimButtonHolder.Parent = panel
 end
 
@@ -362,7 +391,7 @@ end
 
 function DailyController.start()
 	ClientState.profileChanged:Connect(function(field)
-		if field == "daily" or field == "*" then
+		if field == "daily" or field == "economy" or field == "*" then
 			refresh()
 			if field == "*" and D.OPEN_ON_JOIN and not autoOpened and claimable() then
 				autoOpened = true

@@ -13,16 +13,25 @@
 --
 -- Only the owner can use their console; a visitor is told whose it is. The
 -- server checks every purchase (ShopSystem, StarSystem).
+--
+-- While the panel is open the camera eases (VIEW_SECONDS) to a view of the
+-- whole galaxy region (its box at the current expansion, from above and
+-- behind the station), and the panel sits in a column on the right so the
+-- galaxy stays in view. Closing eases back to the player. Inspect hands the
+-- camera straight to InspectController instead.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
 local ProximityPromptService = game:GetService("ProximityPromptService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local StarController = require(script.Parent.StarController)
+local Layout = require(script.Parent.Parent.UI.Layout)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -31,12 +40,21 @@ local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local PlanetInventory = require(Shared:WaitForChild("Logic"):WaitForChild("PlanetInventory"))
 local Progression = require(Shared:WaitForChild("Logic"):WaitForChild("Progression"))
+local RegionMath = require(Shared:WaitForChild("Logic"):WaitForChild("RegionMath"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 
 local S = Config.Stars
 local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local PURPLE = Color3.fromRGB(176, 107, 255)
+local VIEW_SECONDS = 1.2 -- the camera's ease to and from the galaxy view
+-- The camera stands on the galaxy's border: the near face, this share of
+-- the box's height above its middle (0.5 = the top edge).
+local BORDER_HEIGHT = 0.45
+local VIEW_FOV = 70
+-- The panel's share of the screen width (right column), wider on phones.
+local PANEL_WIDTH = 0.44
+local PANEL_WIDTH_COMPACT = 0.56
 
 local GalaxyController = {}
 
@@ -50,11 +68,124 @@ local function fmt(n: number): string
 	return Format.abbreviate(n)
 end
 
-local function close()
+-- The galaxy view: the camera's ease from `from` to `to` (CFrames), and
+-- back to the player when `returning`.
+type View = { from: CFrame, to: CFrame, started: number, returning: boolean, fov: number }
+local view: View? = nil
+local viewConnection: RBXScriptConnection? = nil
+
+local function smooth(t: number): number
+	t = math.clamp(t, 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+-- Where the camera sees the galaxy: on the region's border, high up on its
+-- near (station) face at the current expansion, looking into the middle of
+-- the box.
+local function galaxyCFrame(): CFrame?
+	local slot = ClientState.mySlot()
+	if slot == nil then
+		return nil
+	end
+	local profile = ClientState.profile
+	local level = if profile then profile.expansion else 1
+	local size = RegionMath.regionSize(level)
+	local origin, yaw = RegionMath.slotOrigin(slot)
+	local region = CFrame.new(origin.x, origin.y, origin.z) * CFrame.Angles(0, yaw, 0)
+	local center = region:PointToWorldSpace(Vector3.new(0, 0, size.z / 2))
+	-- On the border: the near (station) face, near its top edge.
+	local eye = region:PointToWorldSpace(Vector3.new(0, size.y * BORDER_HEIGHT, 0))
+	-- Turn a little right, so the galaxy's middle sits left of centre, in the
+	-- part of the screen the panel (on the right) leaves uncovered.
+	return CFrame.lookAt(eye, center) * CFrame.Angles(0, -math.rad(VIEW_FOV * PANEL_WIDTH / 2), 0)
+end
+
+local function stopView()
+	if viewConnection then
+		viewConnection:Disconnect()
+		viewConnection = nil
+	end
+	view = nil
+end
+
+local function stepView()
+	local current = view
+	if current == nil then
+		return
+	end
+	local camera = Workspace.CurrentCamera
+	local t = smooth((os.clock() - current.started) / VIEW_SECONDS)
+	if current.returning then
+		-- Back towards wherever the player's own camera would be now.
+		local target = camera.CFrame
+		local character = Players.LocalPlayer.Character
+		local root = character and character:FindFirstChild("HumanoidRootPart")
+		if root and root:IsA("BasePart") then
+			target = CFrame.lookAt(root.Position + current.to.Position, root.Position)
+		end
+		camera.CFrame = current.from:Lerp(target, t)
+		camera.FieldOfView = VIEW_FOV + (current.fov - VIEW_FOV) * t
+		if t >= 1 then
+			camera.CameraType = Enum.CameraType.Custom
+			stopView()
+		end
+		return
+	end
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CFrame = current.from:Lerp(current.to, t)
+	camera.FieldOfView = current.fov + (VIEW_FOV - current.fov) * t
+end
+
+local function startView()
+	local target = galaxyCFrame()
+	if target == nil then
+		return
+	end
+	stopView()
+	local camera = Workspace.CurrentCamera
+	view = {
+		from = camera.CFrame,
+		to = target,
+		started = os.clock(),
+		returning = false,
+		fov = camera.FieldOfView,
+	}
+	viewConnection = RunService.RenderStepped:Connect(stepView)
+end
+
+-- Eases back to the player's camera (`to` keeps its offset from the
+-- character when the view began).
+local function endView(handOff: boolean?)
+	local current = view
+	if current == nil then
+		return
+	end
+	if handOff then
+		-- Another controller (Inspect) takes the camera from here.
+		stopView()
+		return
+	end
+	local camera = Workspace.CurrentCamera
+	local character = Players.LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local offset = if root and root:IsA("BasePart")
+		then current.from.Position - root.Position
+		else Vector3.new(0, 10, 20)
+	view = {
+		from = camera.CFrame,
+		to = CFrame.new(offset),
+		started = os.clock(),
+		returning = true,
+		fov = current.fov,
+	}
+end
+
+local function close(handOff: boolean?)
 	gui.Enabled = false
 	if GuiService.SelectedObject and GuiService.SelectedObject:IsDescendantOf(gui) then
 		GuiService.SelectedObject = nil
 	end
+	endView(handOff)
 end
 
 local refresh: () -> ()
@@ -101,7 +232,7 @@ local function sizeCard(order: number, stars: number)
 	Theme.label(row, {
 		Position = UDim2.fromOffset(72, 8),
 		Size = UDim2.new(1, -260, 0, 24),
-		Text = `Galaxy size {level} of {#Config.Galaxy.EXPANSIONS}`,
+		Text = `Galaxy size {level}  ·  holds {current.maxSystems} stars`,
 		TextSize = 18,
 		Font = Enum.Font.GothamBlack,
 		TextColor3 = PURPLE,
@@ -112,7 +243,7 @@ local function sizeCard(order: number, stars: number)
 		Position = UDim2.fromOffset(72, 36),
 		Size = UDim2.new(1, -260, 0, 30),
 		Text = if nextDef
-			then `{stars}/{current.maxSystems} stars placed. Next size holds {nextDef.maxSystems} stars and gives you more space.`
+			then `{stars}/{current.maxSystems} stars placed. Expand for more stars and space.`
 			else `{stars}/{current.maxSystems} stars placed. Your galaxy is as big as it gets!`,
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.None,
@@ -163,7 +294,7 @@ local function starRow(order: number, starId: string, model: Model, stardust: nu
 		if def then Color3.fromHex(def.color) else C.gold,
 		if def then Color3.fromHex(def.light) else C.gold,
 		38,
-		if typeId == S.ORDER[#S.ORDER] then "blackHole" else "star"
+		if typeId == "BlackHole" or typeId == "VoidFlame" then "blackHole" else "star"
 	)
 	dot.Position = UDim2.fromOffset(10, 9)
 	Theme.label(row, {
@@ -182,14 +313,16 @@ local function starRow(order: number, starId: string, model: Model, stardust: nu
 	})
 	-- Right to left: Inspect, Manage, Level up / Evolve.
 	button(row, "Inspect", "primary", 8, 84, function()
-		close()
+		close(true)
 		ClientState.inspectStar:Fire(model)
 	end)
 	button(row, "Manage", "primary", 98, 90, function()
 		close()
 		StarController.openPanel(model)
 	end)
-	local upgrade = StarMath.upgradeCost(typeId, level)
+	local buildIndex = model:GetAttribute("Build")
+	local upgrade =
+		StarMath.upgradeCost(typeId, level, if type(buildIndex) == "number" then buildIndex else 0)
 	local target = StarMath.evolveTarget(typeId)
 	if upgrade then
 		local ok = stardust >= upgrade
@@ -270,19 +403,24 @@ end
 
 local function open()
 	gui.Enabled = true
+	panel.Size =
+		UDim2.new(if Layout.compact() then PANEL_WIDTH_COMPACT else PANEL_WIDTH, 0, 0.84, 0)
 	refresh()
 	Theme.popIn(panel)
+	startView()
 end
 
 function GalaxyController.init()
 	gui = Theme.screen("GalaxyControl", Players.LocalPlayer:WaitForChild("PlayerGui"))
 	gui.Enabled = false
 	panel = Theme.panel(gui, "Panel")
-	panel.AnchorPoint = Vector2.new(0.5, 0.5)
-	panel.Position = UDim2.fromScale(0.5, 0.5)
-	panel.Size = UDim2.new(0.94, 0, 0.84, 0)
+	-- A column on the right, so the galaxy view stays clear in the middle.
+	panel.AnchorPoint = Vector2.new(1, 0.5)
+	panel.Position = UDim2.new(1, -16, 0.5, 0)
+	panel.Size = UDim2.new(PANEL_WIDTH, 0, 0.84, 0)
 	local size = Instance.new("UISizeConstraint")
-	size.MaxSize = Vector2.new(820, 700)
+	size.MinSize = Vector2.new(360, 0)
+	size.MaxSize = Vector2.new(560, 700)
 	size.Parent = panel
 	local titleX = 16
 	local icon = Theme.icon(panel, "Galaxy", 44)

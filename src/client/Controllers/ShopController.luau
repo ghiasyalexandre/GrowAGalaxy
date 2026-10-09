@@ -434,19 +434,23 @@ local function upgradesTab(profile: any)
 		return order
 	end
 
+	-- Upgrades belong to one ship: the selected one. Better ships cost more.
+	local shipId = profile.activeShip
+	local shipDef = Config.Ships.BY_ID[shipId]
 	heading(
-		`Equipment: fitted to every ship, {Config.Equipment.MAX_LEVEL} levels each`,
+		`Upgrades for your {if shipDef then shipDef.displayName else "ship"}  ·  {Config.Equipment.MAX_LEVEL} levels each`,
 		nextOrder(),
 		"Mining"
 	)
+	local allLevels = profile.shipLevels or {}
+	local levels = allLevels[shipId] or {}
 	for _, itemId in Config.Equipment.ORDER do
 		local def = Config.Equipment.BY_ID[itemId]
 		if Progression.equipmentCost(itemId) == nil then
 			continue
 		end
-		local owned = profile.ownedEquipment[itemId] == true
-		local levels = profile.equipmentLevels or {}
-		local level = if owned then levels[itemId] or 1 else 0
+		local owned = levels[itemId] ~= nil
+		local level = if owned then levels[itemId] else 0
 		local top = Config.Equipment.MAX_LEVEL
 		-- What it gives at a level.
 		local function effects(at: number): string
@@ -457,7 +461,7 @@ local function upgradesTab(profile: any)
 			end
 			return table.concat(parts, ", ")
 		end
-		local cost = Progression.equipmentCost(itemId, level + 1)
+		local cost = Progression.equipmentCost(itemId, level + 1, shipId)
 		local title = if owned then `{def.displayName}  ·  Lv {level}/{top}` else def.displayName
 		if cost == nil then
 			row(nextOrder(), title, effects(level), "Max level", nil)
@@ -873,8 +877,7 @@ function ShopController.start()
 			field == "stardust"
 			or field == "ownedShips"
 			or field == "activeShip"
-			or field == "ownedEquipment"
-			or field == "equipmentLevels"
+			or field == "shipLevels"
 			or field == "looks"
 			or field == "showcase"
 			or field == "ownedTrails"

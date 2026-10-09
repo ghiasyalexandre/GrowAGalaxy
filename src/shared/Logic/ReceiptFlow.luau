@@ -12,6 +12,7 @@
 -- Pure module: no Roblox services.
 
 local Config = require(script.Parent.Parent.Config)
+local EconomyMath = require(script.Parent.EconomyMath)
 local RewardMath = require(script.Parent.RewardMath)
 
 type ProductDef = any
@@ -43,6 +44,10 @@ function ReceiptFlow.applyTo(data: any, purchaseId: string, grants: any): ApplyR
 	end
 	if grants.stardust then
 		data.stardust += math.floor(grants.stardust)
+	elseif grants.productionHours then
+		-- Hours of production B as it is now (at least 1/s).
+		local rate = math.max(EconomyMath.production(data), 1)
+		data.stardust += math.floor(rate * 3600 * grants.productionHours)
 	elseif grants.boost then
 		local source = grants.boost.source
 		data.boosts[source] = RewardMath.extend(data.boosts[source] or 0, grants.boost.seconds)

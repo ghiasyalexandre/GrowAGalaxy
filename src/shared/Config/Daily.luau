@@ -3,32 +3,30 @@
 -- starting again at day 1. Missing a day never loses progress: the next
 -- claim is simply the next day on the calendar.
 --
--- Each day gives Stardust, or free boost time (the same 2x boosts sold in the
--- Store, Config.Products.BOOST_MULTIPLIER). Rewards are fixed amounts:
--- multipliers never apply to them.
+-- Each day gives Stardust worth `minutes` of the player's reward rate R
+-- (Logic/EconomyMath.reward: today's snapshot of their production, at least
+-- 1/s), so prizes stay meaningful all game. No other multiplier applies.
 
 export type Prize = {
-	stardust: number?,
-	boost: { source: "mining" | "star", seconds: number }?,
+	minutes: number,
 	big: boolean?, -- shown larger, with extra sparkle (days 7 and 14)
 }
 
 local PRIZES: { Prize } = {
-	-- Each day's Stardust grows faster than the last (a curve, not a line).
-	{ stardust = 5000 },
-	{ stardust = 25000 },
-	{ boost = { source = "mining", seconds = 15 * 60 } },
-	{ stardust = 50000 },
-	{ stardust = 100000 },
-	{ boost = { source = "star", seconds = 20 * 60 } },
-	{ stardust = 250000, big = true },
-	{ stardust = 100000 },
-	{ stardust = 100000 },
-	{ boost = { source = "mining", seconds = 30 * 60 } },
-	{ stardust = 250000 },
-	{ stardust = 1000000 },
-	{ boost = { source = "star", seconds = 30 * 60 } },
-	{ stardust = 5000000, big = true },
+	{ minutes = 2 },
+	{ minutes = 3 },
+	{ minutes = 4 },
+	{ minutes = 4 },
+	{ minutes = 5 },
+	{ minutes = 6 },
+	{ minutes = 8, big = true },
+	{ minutes = 4 },
+	{ minutes = 5 },
+	{ minutes = 6 },
+	{ minutes = 8 },
+	{ minutes = 10 },
+	{ minutes = 12 },
+	{ minutes = 15, big = true },
 }
 
 return {

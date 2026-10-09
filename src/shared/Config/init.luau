@@ -18,6 +18,7 @@ return {
 	Equipment = require(script.Equipment),
 	Recipes = require(script.Recipes),
 	Stars = require(script.Stars),
+	StarLooks = require(script.StarLooks),
 	Planets = require(script.Planets),
 	Eggs = require(script.Eggs),
 	Wheel = require(script.Wheel),

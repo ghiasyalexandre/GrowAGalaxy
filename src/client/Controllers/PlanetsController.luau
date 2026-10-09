@@ -192,6 +192,33 @@ end
 
 -- Views --------------------------------------------------------------------
 
+-- A planet's share of its host star's own output, as a percentage.
+local function sharePercent(planet: Types.PlanetRecord): number
+	return StarMath.planetFactor(planet.typeId, planet.level, planet.tier) * 100
+end
+
+-- What a planet makes now: its share of the star it orbits (0 in inventory).
+local function earning(planet: Types.PlanetRecord, records: { [string]: Types.StarRecord }): number
+	local host = if planet.star then records[planet.star] else nil
+	if host == nil then
+		return 0
+	end
+	return StarMath.planetIncome(
+		planet.typeId,
+		planet.level,
+		planet.tier,
+		StarMath.starIncome(host.typeId, host.level)
+	)
+end
+
+-- The next egg roll's price as the server last told us (planet level
+-- prices are a share of it).
+local function eggPrice(): number
+	local profile = ClientState.profile
+	local economy = if profile then (profile :: any).economy else nil
+	return if economy then economy.eggPrice else Config.Eggs.PRICE_BASE
+end
+
 -- Choosing a star for one planet.
 local function showStars(planetId: string)
 	local planet = planets()[planetId]
@@ -201,8 +228,8 @@ local function showStars(planetId: string)
 		refresh()
 		return
 	end
-	local gain = StarMath.planetIncome(def.id, planet.level)
-	header.Text = `Choose a star for your {def.displayName} (+{fmt(gain)} {CURRENCY}/s)`
+	header.Text =
+		`Choose a star for your {def.displayName} (+{Format.rate(sharePercent(planet))}% of the star's output)`
 	backRow("Back to planets")
 	local stars = StarController.myStars()
 	local ids: { string } = {}
@@ -231,11 +258,20 @@ local function showStars(planetId: string)
 			if starDef then Color3.fromHex(starDef.color) else C.gold,
 			if starDef then Color3.fromHex(starDef.light) else C.gold,
 			36,
-			if typeId == S.ORDER[#S.ORDER] then "blackHole" else "star"
+			if typeId == "BlackHole" or typeId == "VoidFlame" then "blackHole" else "star"
 		)
 		icon.Position = UDim2.fromOffset(8, 8)
 		local income = model:GetAttribute("Income")
 		local now = if type(income) == "number" then income else 0
+		local level = model:GetAttribute("Level")
+		local gain = if type(typeId) == "string"
+			then StarMath.planetIncome(
+				planet.typeId,
+				planet.level,
+				planet.tier,
+				StarMath.starIncome(typeId, if type(level) == "number" then level else 1)
+			)
+			else 0
 		text(
 			row,
 			`{starName(model)}  ·  orbits {used}/{open}`,
@@ -307,7 +343,9 @@ local function showBulk()
 		text(
 			row,
 			rarity.displayName,
-			`{#sellable} sellable  ·  {#dupes} duplicates  ·  {fmt(P.SELL_VALUE[rarityId])} each at level 1`,
+			`{#sellable} sellable  ·  {#dupes} duplicates  ·  sells for {math.floor(
+				(P.SELL_FRACTION[rarityId] or 0) * 100 + 0.5
+			)}% of its roll price`,
 			300,
 			Color3.fromHex(rarity.color)
 		)
@@ -367,7 +405,7 @@ local function showAutoSell()
 		text(
 			row,
 			rarity.displayName,
-			`Sold for {fmt(P.SELL_VALUE[rarityId])} {CURRENCY} each as they hatch`,
+			`Sold as they hatch, for {math.floor((P.SELL_FRACTION[rarityId] or 0) * 100 + 0.5)}% of the roll price`,
 			170,
 			Color3.fromHex(rarity.color)
 		)
@@ -429,8 +467,8 @@ end
 
 local function sorted(list_: { Entry }): { Entry }
 	table.sort(list_, function(a, b)
-		local ia = StarMath.planetIncome(a.def.id, a.planet.level)
-		local ib = StarMath.planetIncome(b.def.id, b.planet.level)
+		local ia = sharePercent(a.planet)
+		local ib = sharePercent(b.planet)
 		local ra, rb = RARITY_RANK[a.def.rarity], RARITY_RANK[b.def.rarity]
 		if sortBy == "rarity" and ra ~= rb then
 			return ra > rb
@@ -448,10 +486,11 @@ end
 local function showList()
 	local all = entries()
 	local inOrbit, production = 0, 0
+	local records = StarController.myRecords()
 	for _, entry in all do
 		if entry.planet.star then
 			inOrbit += 1
-			production += StarMath.planetIncome(entry.def.id, entry.planet.level)
+			production += earning(entry.planet, records)
 		end
 	end
 	local profile = ClientState.profile
@@ -478,7 +517,7 @@ local function showList()
 		text(
 			row,
 			"No planets yet",
-			"Buy planet eggs at the ISS Egg Lab, hatch them in your hangar, then put them in orbit.",
+			"Roll planet eggs at your Planet Egg Lab (beside the Collector), hatch them, then put them in orbit.",
 			14
 		)
 		return
@@ -502,8 +541,10 @@ local function showList()
 			else "inventory: not producing"
 		text(
 			row,
-			`{if planet.locked then "[locked] " else ""}{def.displayName}  ·  Lv {planet.level}  ·  {rarity.displayName}`,
-			`+{fmt(StarMath.planetIncome(def.id, planet.level))}/s  ·  {placeText}`,
+			`{if planet.locked then "[locked] " else ""}{P.TIERS[planet.tier].name} {def.displayName}  ·  Lv {planet.level}  ·  {rarity.displayName} T{planet.tier}`,
+			if planet.star
+				then `+{fmt(earning(planet, records))}/s ({Format.rate(sharePercent(planet))}% of its star)  ·  {placeText}`
+				else `{Format.rate(sharePercent(planet))}% of a star's output  ·  {placeText}`,
 			400,
 			Color3.fromHex(rarity.color):Lerp(Color3.new(1, 1, 1), 0.35)
 		)
@@ -540,7 +581,7 @@ local function showList()
 			116,
 			92
 		)
-		local cost = StarMath.planetLevelCost(def.id, planet.level)
+		local cost = StarMath.planetLevelCost(def.id, planet.level, eggPrice())
 		local affordable = cost ~= nil and stardust >= (cost :: number)
 		at(
 			Theme.button(

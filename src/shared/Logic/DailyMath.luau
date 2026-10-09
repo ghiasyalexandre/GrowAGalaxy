@@ -5,11 +5,9 @@
 -- Pure module: no Roblox services.
 
 local Config = require(script.Parent.Parent.Config)
-local DailyConfig = require(script.Parent.Parent.Config.Daily)
+local EconomyMath = require(script.Parent.EconomyMath)
 
 local D = Config.Daily
-
-type Prize = DailyConfig.Prize
 
 export type DailyRecord = { day: number, lastClaim: number }
 
@@ -41,28 +39,28 @@ function DailyMath.secondsToNext(unixTime: number): number
 	return (DailyMath.today(unixTime) + 1) * D.DAY_SECONDS - unixTime
 end
 
--- A short label for a prize: "2,500 Stardust" or "2x Mining 10 min".
-function DailyMath.describe(prize: Prize): string
-	if prize.stardust then
-		local digits = tostring(math.floor(prize.stardust))
-		local formatted = digits
-		local length = #digits
-		if length > 3 then
-			formatted = ""
-			for i = 1, length do
-				formatted ..= string.sub(digits, i, i)
-				local left = length - i
-				if left > 0 and left % 3 == 0 then
-					formatted ..= ","
-				end
+-- The Stardust a calendar day pays at reward rate R.
+function DailyMath.amount(day: number, rate: number): number
+	local prize = D.PRIZES[math.clamp(day, 1, #D.PRIZES)]
+	return EconomyMath.reward(prize.minutes, rate)
+end
+
+-- A short label for a Stardust prize: "2,500 Stardust".
+function DailyMath.describe(amount: number): string
+	local digits = tostring(math.floor(amount))
+	local formatted = digits
+	local length = #digits
+	if length > 3 then
+		formatted = ""
+		for i = 1, length do
+			formatted ..= string.sub(digits, i, i)
+			local left = length - i
+			if left > 0 and left % 3 == 0 then
+				formatted ..= ","
 			end
 		end
-		return `{formatted} Stardust`
-	elseif prize.boost then
-		local name = if prize.boost.source == "mining" then "Mining" else "Stars"
-		return `2x {name} {prize.boost.seconds // 60} min`
 	end
-	return "Prize"
+	return `{formatted} Stardust`
 end
 
 return DailyMath

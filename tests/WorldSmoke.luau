@@ -17,10 +17,10 @@ local luau = require("@lune/luau")
 local process = require("@lune/process")
 local roblox = require("@lune/roblox")
 
-local ISS_PART_BUDGET = 400
-local REGION_PART_BUDGET = 130 -- the station before any hangar upgrades (with its three machines)
-local HANGAR_PART_BUDGET = 30 -- per hangar building
-local VANITY_PART_BUDGET = 40 -- per vanity building (runway, hologram, spire, dock)
+local ISS_PART_BUDGET = 850 -- one shared hub per server: modules, truss, gravity wheel
+local REGION_PART_BUDGET = 320 -- the station before any hangar upgrades, with the imported machine and chamber meshes
+local HANGAR_PART_BUDGET = 120 -- per hangar building (voxel designs, tools/hangar_voxels)
+local VANITY_PART_BUDGET = 120 -- per vanity building (runway, hologram, spire, dock)
 local SHIP_PART_BUDGET = 20
 -- How far a ship's launch path (straight out of its berth) must be clear.
 local LAUNCH_PATH = 150
@@ -204,13 +204,13 @@ local arrival = WorldSystem.getMarker("ArrivalSpawn")
 check(arrival ~= nil and arrival:IsA("SpawnLocation"), "ArrivalSpawn is a SpawnLocation")
 check(count(tagged.WarpPrompt) == 3, "ISS has 2 airlock warp prompts and the Dodgeball portal")
 check(count(tagged.LaunchPrompt) == 0, "ISS has no hangar (raids replace the berths)")
-check(count(tagged.RoutePrompt) == 1, "ISS has a navigation route prompt")
+check(count(tagged.RoutePrompt) == 0, "ISS has no navigation console (the Central Hub has signs)")
 check(count(tagged.DockZone) == 0, "ISS has no docking zone")
 check(count(tagged.SafeZone) == 1, "ISS has a PvP safe zone")
 local workspace = game:GetService("Workspace")
 check(workspace.Gravity == 0, "the place has zero gravity")
 check(workspace.FallenPartsDestroyHeight <= -5000, "parts below the ISS are not destroyed")
-check(countParts(world.Earth) > 0, "Earth backdrop built")
+check(countParts(world.Nebula) > 0, "Helix Nebula backdrop built")
 check(#warnings == 0, `no warnings ({table.concat(warnings, "; ")})`)
 
 local RegionMath = requireModule(shared.Logic.RegionMath)
@@ -242,12 +242,13 @@ for slot = 1, requireModule(shared.Config).World.MAX_PLAYERS do
 	check(facesRegion, `slot {slot}: station spawn faces into the region`)
 	table.insert(stations, { slot = slot, region = region, station = station })
 end
+check(count(tagged.GaG_EggLab) == 8, "every station has its own Egg Lab")
 check(count(tagged.WarpPrompt) == 3, "stations have no warp prompts (ships replace them)")
 check(count(tagged.LaunchPrompt) == 0, "stations have no launch consoles (HUD button)")
-check(count(tagged.RoutePrompt) == 1, "stations have no navigation consoles")
+check(count(tagged.RoutePrompt) == 0, "stations have no navigation consoles")
 check(
-	count(tagged.TycoonPrompt) == 9,
-	"every station has exactly one console (Collect), plus the ISS Egg Lab console"
+	count(tagged.TycoonPrompt) == 16,
+	"every station has exactly two consoles (Collect, Egg Lab); the ISS has none"
 )
 
 -- Hangar upgrades: every pad and building builds on the first station's deck.
@@ -264,6 +265,23 @@ for _, id in HangarConfig.ORDER do
 		`{id}: pad has a circle with a Build prompt`
 	)
 	local building = HangarBuilder.structure(def, floor)
+	if building:GetAttribute("Mesh") then
+		-- An imported mesh model: its markers must land on the floor point and
+		-- 8 studs out of the front, upright.
+		local origin = building:FindFirstChild("Marker_Origin")
+		local front = building:FindFirstChild("Marker_Front")
+		local up = building:FindFirstChild("Marker_Up")
+		check(
+			origin ~= nil
+				and front ~= nil
+				and up ~= nil
+				and (origin.CFrame.Position - floor.Position).Magnitude < 0.05
+				and (front.CFrame.Position - (floor * roblox.CFrame.new(0, 0, -8)).Position).Magnitude < 0.05
+				and (up.CFrame.Position - (floor * roblox.CFrame.new(0, 8, 0)).Position).Magnitude
+					< 0.05,
+			`{id}: mesh model placed on its pad, facing front, upright`
+		)
+	end
 	local n = countParts(building)
 	local budget = if def.vanity then VANITY_PART_BUDGET else HANGAR_PART_BUDGET
 	check(n > 3 and n <= budget, `{id}: building has {n} parts (budget {budget})`)

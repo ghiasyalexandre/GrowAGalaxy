@@ -9,8 +9,9 @@
 --   * each product needs its real `id` from the Creator Hub. An id of 0 means
 --     not set up: the product is disabled (hidden, never fulfilled).
 --
--- Connected (Creator Hub ids): Meteor Slicer ship pass 2005413560, 2x Star
--- Production pass 2006121509, Automatic Collection pass 2005767573, Mining
+-- Connected (Creator Hub ids): Meteor Slicer ship pass 2005413560, Quasar
+-- Board ship pass 2005851533, 2x Mining Stardust pass 2006121509, Automatic
+-- Collection pass 2005767573 (2x Star Production has no pass yet), Mining
 -- Boost product 3716697618, Small Stardust Pack product 3716697789.
 -- ConfigCheck refuses PURCHASES_ENABLED with an enabled product whose id is
 -- 0. See docs/monetization-setup.md for creating the passes and products.
@@ -29,6 +30,9 @@
 --   ship = id                       a ship (identical to the Stardust version)
 --   boost = { source, seconds }     adds time to a 2x boost (Config.Products.BOOST_MULTIPLIER)
 --   stardust = n                    a fixed amount, never multiplied
+--   productionHours = h             h hours of the buyer's production B at
+--                                   purchase (stars and planets with trail
+--                                   and Refinery; no passes or boosts)
 --   cosmetic = id                   a cosmetic (none on sale yet)
 
 export type BoostSource = "mining" | "star"
@@ -40,6 +44,7 @@ export type Grants = {
 	ship: string?,
 	boost: { source: BoostSource, seconds: number }?,
 	stardust: number?,
+	productionHours: number?,
 	cosmetic: string?,
 }
 
@@ -50,6 +55,10 @@ export type ProductDef = {
 	kind: "GamePass" | "DeveloperProduct",
 	id: number, -- Creator Hub id; 0 = not configured, can't be bought
 	enabled: boolean, -- false = hidden from the Store and never fulfilled
+	-- false = not sold any more (hidden from the Store), but receipts already
+	-- paid for are still fulfilled. Economy v2 stopped new sales of
+	-- Stardust packs and temporary boosts (docs/stage-48).
+	onSale: boolean,
 	category: Category,
 	displayName: string,
 	benefit: string, -- the exact effect, shown in the Store
@@ -71,6 +80,7 @@ local function pass(
 		kind = "GamePass",
 		id = id,
 		enabled = id > 0,
+		onSale = true,
 		category = category or "pass",
 		displayName = name,
 		benefit = benefit,
@@ -93,6 +103,9 @@ local function product(
 		kind = "DeveloperProduct",
 		id = id,
 		enabled = id > 0,
+		-- Economy v2: boosts and fixed packs are no longer sold (paid ones
+		-- still arrive); production packs are.
+		onSale = category ~= "boost" and (category ~= "pack" or grants.productionHours ~= nil),
 		category = category,
 		displayName = name,
 		benefit = benefit,
@@ -107,7 +120,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	-- Permanent passes
 	MiningMultiplier = pass(
 		"MiningMultiplier",
-		0,
+		2006121509,
 		"2x Mining Stardust",
 		"Doubles the Stardust you get for breaking asteroids. Star income is not affected.",
 		"Stacks with a Mining Boost: 4x while both are active.",
@@ -115,7 +128,7 @@ local BY_KEY: { [string]: ProductDef } = {
 	),
 	StarMultiplier = pass(
 		"StarMultiplier",
-		2006121509,
+		0,
 		"2x Star Production",
 		"Doubles the Stardust your stars make from now on. Mining and Stardust already made are not affected.",
 		"Stacks with a Star Production Boost: 4x while both are active.",
@@ -166,6 +179,15 @@ local BY_KEY: { [string]: ProductDef } = {
 		{ ship = "MeteorSlicer" },
 		"ship"
 	),
+	QuasarBoardShip = pass(
+		"QuasarBoardShip",
+		2005851533,
+		"Quasar Hoverboard",
+		"Unlocks the Quasar Hoverboard (ship 12, the top tier) at once. Same stats as the Stardust version.",
+		"Permanent. Already own it? Nothing to buy.",
+		{ ship = "QuasarBoard" },
+		"ship"
+	),
 	InterstellarRunnerShip = pass(
 		"InterstellarRunnerShip",
 		0,
@@ -201,10 +223,10 @@ local BY_KEY: { [string]: ProductDef } = {
 	StardustSmall = product(
 		"StardustSmall",
 		3716697789,
-		"Small Stardust Pack",
-		"Adds exactly 25,000 Stardust to your wallet.",
-		"Buy as often as you like. Fixed amount: multipliers and boosts don't apply.",
-		{ stardust = 25000 },
+		"Stardust Pack",
+		"Adds 12 hours of your current Stardust production to your wallet, at once.",
+		"Buy as often as you like. Worth more as your galaxy grows. Passes and boosts don't apply.",
+		{ productionHours = 12 },
 		"pack"
 	),
 	StardustMedium = product(
@@ -232,6 +254,7 @@ local BY_KEY: { [string]: ProductDef } = {
 		kind = "GamePass",
 		id = 0,
 		enabled = false,
+		onSale = false,
 		category = "cosmetic",
 		displayName = "Aurora Thruster Trail",
 		benefit = "A cosmetic thruster trail. No gameplay effect.",
@@ -255,6 +278,7 @@ local ORDER: { string } = {
 	"CamoStellarShip",
 	"InterstellarRunnerShip",
 	"MeteorSlicerShip",
+	"QuasarBoardShip",
 	"AuroraTrailPack",
 }
 

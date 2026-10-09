@@ -31,6 +31,7 @@ local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
 local CombatController = require(script.Parent.CombatController)
+local ShipController = require(script.Parent.ShipController)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -239,19 +240,16 @@ local function onBossDown(pivot: unknown, size: unknown)
 	end)
 end
 
-local function onResult(won: unknown, difficulty: unknown)
+local function onResult(won: unknown, difficulty: unknown, paid: unknown)
 	if type(difficulty) ~= "string" or R.BY_ID[difficulty] == nil then
 		return
 	end
-	local reward = R.BY_ID[difficulty].reward
 	if won == true then
-		local details = `+{Format.abbreviate(reward.stardust)} Stardust`
-		if reward.boost then
-			local what = if reward.boost.source == "mining"
-				then "2x Mining"
-				else "2x Star Production"
-			details ..= ` and {math.floor(reward.boost.seconds / 60)} min of {what}`
-		end
+		local amount = if type(paid) == "number" then paid else 0
+		local details = if amount > 0
+			then `+{Format.abbreviate(amount)} Stardust (today's first raid win)`
+			else "Raid Stardust is paid for the first win each day: come back tomorrow"
+
 		ClientState.celebrate:Fire(
 			"RAID VICTORY",
 			`{difficulty} Death Star destroyed`,
@@ -410,6 +408,23 @@ local function onWeakMoved(from: unknown, to: unknown)
 	showWarning("WEAK POINT MOVED!", LASER_GREEN, 1.4)
 end
 
+-- The boss rammed this player's ship: the push (the server worked out its
+-- direction and speed).
+local function onRammed(push: unknown)
+	if typeof(push) == "Vector3" then
+		ShipController.knock(push)
+	end
+end
+
+-- Someone was rammed: a burst of sparks and fire at the contact point.
+local function onRam(at: unknown)
+	if typeof(at) ~= "Vector3" then
+		return
+	end
+	CombatController.explode(CFrame.new(at), Vector3.new(30, 30, 30), "#FF8A3D", 0)
+	shakeFrom(at, 1.2, 200)
+end
+
 local function onEnraged(at: unknown)
 	if typeof(at) ~= "Vector3" then
 		return
@@ -443,6 +458,10 @@ local function onEvent(kind: unknown, ...: unknown)
 		onWeakMoved(...)
 	elseif kind == "enraged" then
 		onEnraged(...)
+	elseif kind == "rammed" then
+		onRammed(...)
+	elseif kind == "ram" then
+		onRam(...)
 	end
 end
 

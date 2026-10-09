@@ -26,7 +26,7 @@ local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
 local S = Config.Stars
 local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
-local TOP_STAR = S.ORDER[#S.ORDER] -- drawn as a black hole
+local TOP_STAR = "BlackHole" -- drawn as a black hole (and the Void Flame)
 
 local StarShopController = {}
 
@@ -77,7 +77,7 @@ local function refresh()
 		local row = Theme.row(list, 80, order)
 		local style: Theme.StarIconStyle = if not unlocked
 			then "locked"
-			elseif typeId == TOP_STAR then "blackHole"
+			elseif typeId == TOP_STAR or typeId == "VoidFlame" then "blackHole"
 			else "star"
 		local icon =
 			Theme.starIcon(row, Color3.fromHex(def.color), Color3.fromHex(def.light), 46, style)

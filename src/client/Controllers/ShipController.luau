@@ -67,6 +67,9 @@ type Handling = {
 	boostRecharge: number,
 }
 
+-- How fast an outside push (ShipController.knock) dies away, per second.
+local KNOCK_DECAY = 2.5
+
 type Flight = {
 	ship: Model,
 	hull: BasePart,
@@ -79,6 +82,9 @@ type Flight = {
 	heading: number, -- yaw of `orientation` last frame, for the turn rate
 	bank: number, -- roll in radians, positive lowers the left wing
 	localVelocity: Vector3, -- commanded velocity in ship space
+	-- A push from outside (a raid boss ram), world space, added on top of
+	-- the commanded velocity and dying away (KNOCK_DECAY per second).
+	knock: Vector3,
 	cameraPosition: Vector3,
 	muzzle: Attachment?,
 	rayParams: RaycastParams,
@@ -237,7 +243,13 @@ local function update(dt: number)
 		-- The inspect view has the camera and mouse: the ship coasts to a stop.
 		UserInputService.MouseBehavior = Enum.MouseBehavior.Default
 		UserInputService.MouseIconEnabled = true
-		f.localVelocity = FlightMath.step(f.localVelocity, Vector3.zero, 0, f.handling.braking, dt)
+		f.localVelocity = FlightMath.step(
+			f.localVelocity,
+			Vector3.zero,
+			0,
+			f.handling.braking * M.SHIP_BRAKE_MULTIPLIER,
+			dt
+		)
 		f.engine.VectorVelocity = f.orientation:VectorToWorldSpace(f.localVelocity)
 		f.wasHeld = true -- a click while inspecting doesn't fire on return
 		return
@@ -284,11 +296,11 @@ local function update(dt: number)
 		})
 		else Vector3.zero
 	local decel = if thrusting or braking
-		then f.handling.braking
-		else f.handling.braking * M.SHIP_IDLE_BRAKE_FACTOR
+		then f.handling.braking * M.SHIP_BRAKE_MULTIPLIER
+		else f.handling.braking * M.SHIP_BRAKE_MULTIPLIER * M.SHIP_IDLE_BRAKE_FACTOR
 	if thrusting and not boosting and f.localVelocity.Magnitude > f.handling.maxSpeed then
 		-- Coming off a boost: ease back down to top speed instead of braking.
-		decel = f.handling.braking * M.SHIP_IDLE_BRAKE_FACTOR
+		decel = f.handling.braking * M.SHIP_BRAKE_MULTIPLIER * M.SHIP_IDLE_BRAKE_FACTOR
 	end
 	local accel = f.handling.acceleration * (if boosting then M.BOOST_ACCEL_FACTOR else 1)
 
@@ -297,7 +309,11 @@ local function update(dt: number)
 		f.localVelocity = f.localVelocity.Unit * (actual.Magnitude + COLLISION_SLACK)
 	end
 	f.localVelocity = FlightMath.step(f.localVelocity, target, accel, decel, dt)
-	local velocity = f.orientation:VectorToWorldSpace(f.localVelocity)
+	f.knock *= math.exp(-KNOCK_DECAY * dt)
+	if f.knock.Magnitude < 1 then
+		f.knock = Vector3.zero
+	end
+	local velocity = f.orientation:VectorToWorldSpace(f.localVelocity) + f.knock
 	f.engine.VectorVelocity = FlightMath.clampToBounds(
 		f.hull.Position,
 		velocity,
@@ -417,6 +433,7 @@ local function enter(ship: Model)
 		heading = yaw,
 		bank = 0,
 		localVelocity = Vector3.zero,
+		knock = Vector3.zero,
 		cameraPosition = camera.CFrame.Position,
 		muzzle = if muzzle and muzzle:IsA("Attachment") then muzzle else nil,
 		rayParams = rayParams,
@@ -477,6 +494,17 @@ local function filterPrompt(prompt: Instance)
 			prompt.Enabled = false
 		end
 	end)
+end
+
+-- Pushes the ship you're flying (world-space velocity, studs per second),
+-- dying away over a second or so: a raid boss's ram. Shakes the camera.
+function ShipController.knock(velocity: Vector3)
+	local f = flight
+	if f == nil then
+		return
+	end
+	f.knock = velocity
+	f.shake = math.max(f.shake, 1.5)
 end
 
 function ShipController.init()

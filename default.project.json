@@ -119,6 +119,10 @@
           "$path": "assets/roblox/Stuff",
           "$ignoreUnknownInstances": true
         },
+        "Hangar": {
+        	"$path": "assets/roblox/Hangar",
+        	"$ignoreUnknownInstances": true
+        },
         "Bosses": {
           "$path": "assets/roblox/Bosses",
           "$ignoreUnknownInstances": true

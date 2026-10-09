@@ -233,14 +233,10 @@ function ConfigCheck.run(config: any): { string }
 		end
 	end
 
-	-- Daily prizes: each day gives exactly one positive prize.
+	-- Daily prizes: each day pays a positive number of minutes of R.
 	for day, prize in config.Daily.PRIZES do
-		local stardust = prize.stardust and prize.stardust > 0
-		local boost = prize.boost
-			and prize.boost.seconds > 0
-			and (prize.boost.source == "mining" or prize.boost.source == "star")
-		if (stardust and 1 or 0) + (boost and 1 or 0) ~= 1 then
-			fail(`Daily day {day}: needs exactly one positive prize`)
+		if type(prize.minutes) ~= "number" or prize.minutes <= 0 then
+			fail(`Daily day {day}: needs a positive number of minutes`)
 		end
 	end
 
@@ -253,10 +249,17 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Raid {id}: missing or misnamed`)
 			continue
 		end
-		if def.reward.stardust <= lastStardust or def.bossHealth <= lastHealth then
+		if
+			def.reward.minutes <= lastStardust
+			or def.bossHealth <= lastHealth
+			or def.reward.minimum <= 0
+		then
 			fail(`Raid {id}: must pay more and be tougher than the difficulty before it`)
 		end
-		lastStardust, lastHealth = def.reward.stardust, def.bossHealth
+		lastStardust, lastHealth = def.reward.minutes, def.bossHealth
+		if def.timeLimit < 300 or def.timeLimit > 600 or def.ramDamage <= 0 then
+			fail(`Raid {id}: timeLimit must be 5 to 10 minutes and ramDamage positive`)
+		end
 		-- Every move present needs a positive interval and damage (and count).
 		for name, move in def.moves :: { [string]: any } do
 			local count = move.count or move.bolts or 1
@@ -270,17 +273,14 @@ function ConfigCheck.run(config: any): { string }
 				fail(`Raid {id}: move {name} needs a positive interval, damage and count`)
 			end
 		end
-		local boost = def.reward.boost
-		if
-			boost and (boost.seconds <= 0 or (boost.source ~= "mining" and boost.source ~= "star"))
-		then
-			fail(`Raid {id}: bad boost reward`)
-		end
 	end
 	if
 		raids.MAX_RAIDERS < 1
 		or raids.QUEUE_COUNTDOWN < raids.FULL_COUNTDOWN
-		or raids.TIME_LIMIT <= 0
+		or raids.BOSS_FOLLOW_SPEED <= 0
+		or raids.BOSS_LEASH <= 0
+		or raids.RAM_COOLDOWN <= 0
+		or raids.RAM_KNOCKBACK <= 0
 	then
 		fail("Raids: bad queue or time settings")
 	end
@@ -305,8 +305,7 @@ function ConfigCheck.run(config: any): { string }
 			fail(`Code {code}: must be upper case and at most MAX_LENGTH letters`)
 		end
 		if
-			(def.stardust or 0) <= 0
-			and def.boost == nil
+			(def.minutes or 0) <= 0
 			and not def.allPlanets
 			and not def.allShips
 			and not def.cloak
@@ -388,7 +387,16 @@ function ConfigCheck.run(config: any): { string }
 	end
 	local bottom = dodge.CENTER.y - dodge.SIZE.y / 2
 	local top = dodge.CENTER.y + dodge.SIZE.y / 2
-	local clearOfField = top < -config.Asteroids.HEIGHT or bottom > config.Asteroids.HEIGHT
+	-- Clear of the asteroid field: above or below its band, or wholly inside
+	-- the ISS's clearance (its farthest corner closer than ISS_CLEARANCE).
+	local c = dodge.CENTER
+	local fx = math.abs(c.x) + dodge.SIZE.x / 2
+	local fy = math.max(math.abs(bottom), math.abs(top))
+	local fz = math.abs(c.z) + dodge.SIZE.z / 2
+	local far = math.sqrt(fx * fx + fy * fy + fz * fz)
+	local clearOfField = top < -config.Asteroids.HEIGHT
+		or bottom > config.Asteroids.HEIGHT
+		or far < config.Asteroids.ISS_CLEARANCE
 	if
 		math.max(math.abs(bottom), math.abs(top)) > config.Movement.FLIGHT_BOUNDS_HEIGHT
 		or not clearOfField
@@ -495,7 +503,7 @@ function ConfigCheck.run(config: any): { string }
 	local largestRock = 0
 	for sizeId, size in asteroids.SIZES do
 		local where = `Asteroid size {sizeId}`
-		for _, field in { "weight", "radius", "weakPointRadius", "durability", "reward" } do
+		for _, field in { "weight", "radius", "weakPointRadius", "durability", "work" } do
 			if type(size[field]) ~= "number" or size[field] <= 0 then
 				fail(`{where}: {field} must be a positive number`)
 			end
@@ -720,19 +728,48 @@ function ConfigCheck.run(config: any): { string }
 		fail("Planets: LEGACY_FALLBACK must be a planet type")
 	end
 
-	-- Selling: a whole value per rarity, auto-sell only for real rarities,
-	-- and no profit from buying mystery eggs to sell them.
-	local expectedSale = 0
+	-- Selling: a share of the roll price per rarity, auto-sell only for real
+	-- rarities, and no profit from rolling eggs to sell them, even at the
+	-- luckiest lab level (selling ignores the tier).
+	local labs = config.Eggs.LAB_LEVELS
+	local bestLuck = if #labs > 0 then labs[#labs].rarityLuck else 1
+	local expectedShare, luckyTotal = 0, 0
 	for _, rarityId in planets.RARITY_ORDER do
-		local value = planets.SELL_VALUE[rarityId]
-		if not isWhole(value) or value <= 0 then
-			fail(`Planets: SELL_VALUE.{rarityId} must be a positive whole number`)
+		local fraction = planets.SELL_FRACTION[rarityId]
+		local rarity = planets.RARITIES[rarityId]
+		local weight = rarity.weight * bestLuck ^ rarity.index
+		luckyTotal += weight
+		if type(fraction) ~= "number" or fraction < 0 or fraction >= 1 then
+			fail(`Planets: SELL_FRACTION.{rarityId} must be from 0 to below 1`)
 		else
-			expectedSale += planets.RARITIES[rarityId].weight / planets.WEIGHT_TOTAL * value
+			expectedShare += weight * fraction
+		end
+		local legacy = planets.LEGACY_SELL_VALUE[rarityId]
+		if not isWhole(legacy) or legacy < 0 then
+			fail(`Planets: LEGACY_SELL_VALUE.{rarityId} must be a whole number, 0 or more`)
+		end
+		local upgrade = planets.UPGRADE_COST[rarityId]
+		if type(upgrade) ~= "number" or upgrade <= 0 then
+			fail(`Planets: UPGRADE_COST.{rarityId} must be a positive share of the egg price`)
 		end
 	end
-	if expectedSale >= config.Eggs.PRICE_BASE then
-		fail("Planets: a mystery egg's expected SELL_VALUE must stay below Eggs.PRICE_BASE")
+	if luckyTotal > 0 and expectedShare / luckyTotal >= 1 then
+		fail("Planets: an egg's expected sale value (best lab level) must stay below its price")
+	end
+	-- Tiers: multipliers from x1 rising every tier, with known colours.
+	if #planets.TIERS < 1 or planets.TIERS[1].multiplier ~= 1 then
+		fail("Planets: TIERS must start at a x1 tier")
+	end
+	for index, tier in planets.TIERS do
+		if index > 1 and tier.multiplier <= planets.TIERS[index - 1].multiplier then
+			fail("Planets: every tier must multiply more than the one before")
+		end
+		if type(tier.name) ~= "string" or tier.name == "" then
+			fail(`Planets: TIERS[{index}] needs a name`)
+		end
+		if type(tier.color) ~= "string" or string.match(tier.color, "^#%x%x%x%x%x%x$") == nil then
+			fail(`Planets: TIERS[{index}].color must be a hex colour`)
+		end
 	end
 	if planets.SELL_LEVEL_REFUND < 0 or planets.SELL_LEVEL_REFUND > 1 then
 		fail("Planets: SELL_LEVEL_REFUND must be from 0 to 1")
@@ -748,8 +785,27 @@ function ConfigCheck.run(config: any): { string }
 
 	-- Eggs: prices that never fall, sensible incubator limits.
 	local eggs = config.Eggs
-	if not isWhole(eggs.PRICE_BASE) or eggs.PRICE_BASE <= 0 or eggs.PRICE_GROWTH < 1 then
-		fail("Eggs: PRICE_BASE must be a positive whole number and PRICE_GROWTH at least 1")
+	if
+		not isWhole(eggs.PRICE_BASE)
+		or eggs.PRICE_BASE <= 0
+		or eggs.PRICE_GROWTH < 1
+		or eggs.PRICE_GROWTH_CAP < 1
+		or eggs.PRICE_INCOME_SECONDS <= 0
+	then
+		fail(
+			"Eggs: PRICE_BASE must be a positive whole number, PRICE_GROWTH and PRICE_GROWTH_CAP at least 1, PRICE_INCOME_SECONDS positive"
+		)
+	end
+	local lastTier = 0
+	for index, lab in eggs.LAB_LEVELS do
+		if
+			not isWhole(lab.minTier)
+			or lab.minTier < lastTier
+			or stars.BY_ID[stars.ORDER[lab.minTier]] == nil
+		then
+			fail(`Eggs: LAB_LEVELS[{index}].minTier must be a star tier, never falling`)
+		end
+		lastTier = lab.minTier
 	end
 	if planets.RARITIES[eggs.CHAT_RARITY] == nil then
 		fail("Eggs: CHAT_RARITY must be a rarity")
@@ -763,12 +819,47 @@ function ConfigCheck.run(config: any): { string }
 	if eggs.POLICY_RETRY <= 0 then
 		fail("Eggs: POLICY_RETRY must be positive")
 	end
-	if not table.find(eggs.MULTI_BUY, 1) then
-		fail("Eggs: MULTI_BUY must offer single eggs (1)")
+	-- Tier odds: one whole positive weight per tier.
+	if #eggs.TIER_WEIGHTS ~= #planets.TIERS then
+		fail("Eggs: TIER_WEIGHTS needs one weight per Planets tier")
 	end
-	for _, size in eggs.MULTI_BUY do
-		if not isWhole(size) or size < 1 or size > eggs.MAX_UNHATCHED then
-			fail("Eggs: MULTI_BUY sizes must be whole, from 1 to MAX_UNHATCHED")
+	for _, weight in eggs.TIER_WEIGHTS do
+		if not isWhole(weight) or weight <= 0 then
+			fail("Eggs: TIER_WEIGHTS must be positive whole numbers")
+		end
+	end
+	-- Lab levels: level 1 free, costs rising, luck never below 1 or falling.
+	if #eggs.LAB_LEVELS < 1 or eggs.LAB_LEVELS[1].cost ~= 0 then
+		fail("Eggs: LAB_LEVELS must start with a free level 1")
+	end
+	for index, lab in eggs.LAB_LEVELS do
+		local before = eggs.LAB_LEVELS[index - 1]
+		if not isWhole(lab.cost) or lab.cost < 0 then
+			fail(`Eggs: LAB_LEVELS[{index}].cost must be a whole number`)
+		end
+		if lab.rarityLuck < 1 or lab.tierLuck < 1 then
+			fail(`Eggs: LAB_LEVELS[{index}] luck must be at least 1`)
+		end
+		if
+			before
+			and (
+				lab.cost <= before.cost
+				or lab.rarityLuck < before.rarityLuck
+				or lab.tierLuck < before.tierLuck
+			)
+		then
+			fail(
+				`Eggs: LAB_LEVELS[{index}] must cost more and be no less lucky than the level before`
+			)
+		end
+	end
+	if eggs.ROLL_SECONDS < 0 then
+		fail("Eggs: ROLL_SECONDS can't be negative")
+	end
+	for _, name in { "ANNOUNCE_TIER", "CHAT_TIER" } do
+		local tier = (eggs :: any)[name]
+		if not isWhole(tier) or tier < 1 or tier > #planets.TIERS then
+			fail(`Eggs: {name} must be a tier`)
 		end
 	end
 	if planets.RARITIES[eggs.ANNOUNCE_RARITY] == nil then
@@ -858,8 +949,8 @@ function ConfigCheck.run(config: any): { string }
 	end
 	local wheelTotal = 0
 	for index, prize in wheel.PRIZES do
-		if not isWhole(prize.stardust) or prize.stardust <= 0 then
-			fail(`Wheel prize {index}: stardust must be a positive whole number`)
+		if type(prize.minutes) ~= "number" or prize.minutes <= 0 then
+			fail(`Wheel prize {index}: minutes must be positive`)
 		end
 		if not isWhole(prize.weight) or prize.weight <= 0 then
 			fail(`Wheel prize {index}: weight must be a positive whole number`)
@@ -869,22 +960,35 @@ function ConfigCheck.run(config: any): { string }
 	if #wheel.PRIZES == 0 or wheelTotal ~= 100 then
 		fail("Wheel: PRIZES weights must add up to 100 (they are the percentages shown)")
 	end
-	-- Levels: max levels stay even; production and upgrade prices only rise.
-	if stars.MAX_LEVEL_BASE < 2 or stars.MAX_LEVEL_BASE % 2 ~= 0 then
-		fail("Stars: MAX_LEVEL_BASE must be an even number of at least 2")
+	-- Levels: production and upgrade prices only rise.
+	if not isWhole(stars.MAX_LEVEL_BASE) or stars.MAX_LEVEL_BASE < 2 then
+		fail("Stars: MAX_LEVEL_BASE must be a whole number of at least 2")
 	end
-	if stars.MAX_LEVEL_STEP < 2 or stars.MAX_LEVEL_STEP % 2 ~= 0 then
-		fail("Stars: MAX_LEVEL_STEP must be an even number of at least 2")
+	if not isWhole(stars.MAX_LEVEL_EVERY) or stars.MAX_LEVEL_EVERY < 1 then
+		fail("Stars: MAX_LEVEL_EVERY must be a positive whole number")
 	end
 	if
 		stars.LEVEL_INCOME_LINEAR <= 0
+		or stars.INCOME_BOOST <= 0
 		or stars.LEVEL_INCOME_CURVE < 0
-		or stars.UPGRADE_SHARE <= 0
+		or stars.UPGRADE_FACTOR <= 0
 		or stars.UPGRADE_GROWTH < 1
 	then
 		fail(
-			"Stars: LEVEL_INCOME_LINEAR and UPGRADE_SHARE must be positive, LEVEL_INCOME_CURVE not negative, UPGRADE_GROWTH at least 1"
+			"Stars: LEVEL_INCOME_LINEAR and UPGRADE_FACTOR must be positive, LEVEL_INCOME_CURVE not negative, UPGRADE_GROWTH at least 1"
 		)
+	end
+	-- Evolving never lowers income: the next type at level 1 makes at least
+	-- as much as this one at its max level.
+	for index = 1, #stars.ORDER - 1 do
+		local def, nextDef = stars.BY_ID[stars.ORDER[index]], stars.BY_ID[stars.ORDER[index + 1]]
+		local topLevel = stars.MAX_LEVEL_BASE + (def.tier - 1) // stars.MAX_LEVEL_EVERY
+		local n = topLevel - 1
+		local best = def.income
+			* (1 + stars.LEVEL_INCOME_LINEAR * n + stars.LEVEL_INCOME_CURVE * n * n)
+		if nextDef.income < best then
+			fail(`Stars: evolving {def.id} into {nextDef.id} would lower its income`)
+		end
 	end
 	if stars.MAX_RADIUS_SCALE < 1 then
 		fail("Stars: MAX_RADIUS_SCALE must be at least 1")
@@ -907,6 +1011,41 @@ function ConfigCheck.run(config: any): { string }
 		local grown = def.radius
 			* (1 + config.Planets.LEVEL_SIZE_STEP * (config.Planets.MAX_LEVEL - 1))
 		largestPlanet = math.max(largestPlanet, grown)
+	end
+	-- Star looks (cosmetic): every star type has one, with sane numbers.
+	local looks = config.StarLooks
+	if looks then
+		for _, id in stars.ORDER do
+			local look = looks.LOOKS[id]
+			if look == nil then
+				fail(`StarLooks: no look for star type {id}`)
+				continue
+			end
+			if look.corona and (look.corona.scale < 1 or look.corona.transparency < 0) then
+				fail(`StarLooks {id}: corona scale must be at least 1, transparency not negative`)
+			end
+			local flare = look.flares
+			if
+				flare
+				and (
+					flare.every[1] <= 0
+					or flare.every[2] < flare.every[1]
+					or flare.life <= 0
+					or flare.width <= 0
+				)
+			then
+				fail(`StarLooks {id}: flare timing and width must be positive`)
+			end
+			if look.granules and look.granules.rate <= 0 then
+				fail(`StarLooks {id}: granule rate must be positive`)
+			end
+		end
+		if not (looks.NEAR > 0 and looks.MID > looks.NEAR and looks.LOD_INTERVAL > 0) then
+			fail("StarLooks: need 0 < NEAR < MID and a positive LOD_INTERVAL")
+		end
+		if looks.CORONA_ORBIT_MARGIN < 0 or looks.CORONA_ORBIT_MARGIN >= stars.SLOTS[1].orbit then
+			fail("StarLooks: CORONA_ORBIT_MARGIN must sit inside the first orbit")
+		end
 	end
 	for index, slot in stars.SLOTS do
 		local where = `Stars slot {index}`
@@ -932,7 +1071,7 @@ function ConfigCheck.run(config: any): { string }
 	end
 
 	-- The flight area must hold every region at its largest and stay clear of
-	-- the Earth backdrop.
+	-- the nebula backdrop.
 	local world = config.World
 	local largest = config.Galaxy.EXPANSIONS[#config.Galaxy.EXPANSIONS].size
 	local farthest = math.sqrt((world.REGION_RING_RADIUS + largest.z) ^ 2 + (largest.x / 2) ^ 2)
@@ -946,9 +1085,16 @@ function ConfigCheck.run(config: any): { string }
 	if movement.FLIGHT_BOUNDS_HEIGHT <= math.abs(world.REGION_RING_HEIGHT) + largest.y / 2 then
 		fail("Movement: FLIGHT_BOUNDS_HEIGHT does not cover the tallest region")
 	end
-	local earthTop = world.EARTH_CENTER.y + world.EARTH_DIAMETER / 2
-	if -movement.FLIGHT_BOUNDS_HEIGHT <= earthTop then
-		fail("Movement: the flight area reaches into the Earth backdrop")
+	if -movement.FLIGHT_BOUNDS_HEIGHT <= world.NEBULA.TOP then
+		fail("Movement: the flight area reaches into the nebula backdrop")
+	end
+	if world.NEBULA.SIZE > 4096 or #world.NEBULA.LAYERS == 0 then
+		fail("World: NEBULA needs layers and a SIZE of at most 4096 studs (2 x 2 tiles of 2048)")
+	end
+	for _, item in world.NEBULA.LAYERS do
+		if world.NEBULA.CENTER.y + item.height > world.NEBULA.TOP then
+			fail(`World: nebula layer {item.name} is above NEBULA.TOP`)
+		end
 	end
 
 	-- Equipment
@@ -1232,7 +1378,9 @@ function ConfigCheck.run(config: any): { string }
 		if count ~= 1 then
 			fail(`Product {key} must grant exactly one thing`)
 		end
-		local repeatable = product.grants.stardust ~= nil or product.grants.boost ~= nil
+		local repeatable = product.grants.stardust ~= nil
+			or product.grants.productionHours ~= nil
+			or product.grants.boost ~= nil
 		if repeatable ~= (product.kind == "DeveloperProduct") then
 			fail(`Product {key}: packs and boosts are developer products, everything else passes`)
 		end
@@ -1251,6 +1399,10 @@ function ConfigCheck.run(config: any): { string }
 			)
 		then
 			fail(`Product {key}: bad multiplier`)
+		end
+		local hours = product.grants.productionHours
+		if hours and hours <= 0 then
+			fail(`Product {key}: a production pack must add a positive number of hours`)
 		end
 		if product.grants.stardust and product.grants.stardust <= 0 then
 			fail(`Product {key}: a pack must add Stardust`)

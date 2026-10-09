@@ -13,10 +13,15 @@
 --   setMode(mode)   "suit" or "ship": which actions are bound
 --   device()        "keyboard", "gamepad" or "touch", the last one used
 --   hint(mode)      one-line control summary for the HUD
+--   touchActions(mode)  the actions that get an on-screen touch button in a
+--                   mode, in order: { name, title, hold }
+--   touchInput(name, began)  a touch button pressed or released (drawn by
+--                   Controllers/TouchController, laid out round the jump
+--                   button; ContextActionService makes no buttons of its own)
 --
 -- Walking input (WASD, the thumbstick, the left stick) comes from Roblox's
 -- own ControlModule, so it works the same on every device. Everything else
--- is bound with ContextActionService, which also makes the touch buttons.
+-- is bound with ContextActionService; touch buttons are our own.
 
 local ContextActionService = game:GetService("ContextActionService")
 local Players = game:GetService("Players")
@@ -40,6 +45,8 @@ type Binding = {
 	touch: boolean,
 	-- A hold binding released quickly fires this action instead.
 	tap: string?,
+	-- Extra keys bound only in one mode (e.g. X brakes the suit, not ships).
+	modeKeys: { [Mode]: { Enum.KeyCode } }?,
 }
 
 local BOTH = { suit = true, ship = true }
@@ -60,7 +67,9 @@ local BINDINGS: { [string]: Binding } = {
 		touch = true,
 	},
 	Brake = {
-		keys = { Enum.KeyCode.X, Enum.KeyCode.ButtonL2 },
+		keys = { Enum.KeyCode.ButtonL2 },
+		-- X brakes in the suit only: ships slow down when you let go.
+		modeKeys = { suit = { Enum.KeyCode.X } },
 		title = "Brake",
 		hold = true,
 		modes = BOTH,
@@ -155,7 +164,7 @@ local HINTS: { [Mode]: { [Device]: string } } = {
 		touch = "Thumbstick to float  ·  Up, Down and Brake buttons",
 	},
 	ship = {
-		keyboard = "Mouse steer  ·  Click laser  ·  Q rocket  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  X brake  ·  F exit  ·  M mouse cursor on/off  ·  Alt shoulder view",
+		keyboard = "Mouse steer  ·  Click laser  ·  Q rocket  ·  W/S throttle  ·  Shift boost  ·  A/D strafe  ·  Space/Ctrl up/down  ·  F exit  ·  M mouse cursor on/off  ·  Alt shoulder view",
 		gamepad = "Right stick steer  ·  RT laser  ·  B rocket  ·  Left stick throttle  ·  L3 boost  ·  RB/LB up/down  ·  LT brake  ·  Y exit  ·  D-pad right shoulder",
 		touch = "Drag to steer  ·  Thumbstick throttle and strafe  ·  Laser to fire  ·  Rocket  ·  Boost  ·  Exit to leave",
 	},
@@ -164,6 +173,9 @@ local HINTS: { [Mode]: { [Device]: string } } = {
 local Input = {}
 
 Input.pressed = Signal.new() :: Signal.Signal<string>
+-- Fires the moment any action's input goes down, hold actions included
+-- (e.g. the suit's double jump on Up).
+Input.began = Signal.new() :: Signal.Signal<string>
 Input.deviceChanged = Signal.new() :: Signal.Signal<()>
 
 local mode: Mode? = nil
@@ -193,6 +205,9 @@ end
 
 local function handle(name: string, state: Enum.UserInputState): Enum.ContextActionResult
 	local binding = BINDINGS[name]
+	if state == Enum.UserInputState.Begin then
+		Input.began:Fire(name)
+	end
 	if binding.hold then
 		if state == Enum.UserInputState.Begin then
 			held[name] = true
@@ -223,14 +238,34 @@ function Input.setMode(newMode: Mode)
 	for _, name in ORDER do
 		local binding = BINDINGS[name]
 		if binding.modes[newMode] then
+			local keys: { any } = table.clone(binding.keys)
+			local extra = binding.modeKeys and binding.modeKeys[newMode]
+			if extra then
+				table.move(extra, 1, #extra, #keys + 1, keys)
+			end
 			ContextActionService:BindActionAtPriority(PREFIX .. name, function(_, state)
 				return handle(name, state)
-			end, binding.touch, PRIORITY, table.unpack(binding.keys))
-			if binding.touch then
-				ContextActionService:SetTitle(PREFIX .. name, binding.title)
-			end
+			end, false, PRIORITY, table.unpack(keys))
 		end
 	end
+end
+
+function Input.touchActions(forMode: Mode): { { name: string, title: string, hold: boolean } }
+	local actions = {}
+	for _, name in ORDER do
+		local binding = BINDINGS[name]
+		if binding.touch and binding.modes[forMode] then
+			table.insert(actions, { name = name, title = binding.title, hold = binding.hold })
+		end
+	end
+	return actions
+end
+
+function Input.touchInput(name: string, began: boolean)
+	if BINDINGS[name] == nil or mode == nil or not BINDINGS[name].modes[mode] then
+		return
+	end
+	handle(name, if began then Enum.UserInputState.Begin else Enum.UserInputState.End)
 end
 
 function Input.mode(): Mode?

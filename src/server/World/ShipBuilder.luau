@@ -385,7 +385,11 @@ function ShipBuilder.build(
 	local seat = Instance.new("Seat")
 	seat.Name = "PilotSeat"
 	seat.Size = Vector3.new(2, 1, 2)
-	seat.CFrame = cframe * CFrame.new(0, layout.seatY, -1)
+	-- A rider stands on the deck: the seat sits low, so the standing pose's
+	-- feet land on the board (the deck top is about a fifth of the way down).
+	local seatY = if def.rider and skin then -hullSize.Y * 0.25 + 1 else layout.seatY
+	seat.CFrame = cframe * CFrame.new(0, seatY, if def.rider then 0 else -1)
+	seat:SetAttribute("Rider", def.rider)
 	seat.Anchored = false
 	style(seat, COLORS.console, nil, if skin then 1 else 0)
 	weld(hull, seat)

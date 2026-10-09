@@ -171,15 +171,15 @@ function AsteroidField.inGroup(centre: Vec3, plan: GroupPlan, rng: () -> number)
 end
 
 -- A copy of a size with its radius scaled by (1 +- SIZE_JITTER), and its
--- durability and reward scaled with the rock's area (whole numbers, at
--- least 1). The weak point keeps its size.
+-- durability (whole, at least 1) and reference work scaled with the rock's
+-- area. The weak point keeps its size.
 function AsteroidField.varied(size: SizeDef, rng: () -> number): SizeDef
 	local scale = 1 + (rng() * 2 - 1) * A.SIZE_JITTER
 	local area = scale * scale
 	local copy = table.clone(size)
 	copy.radius = size.radius * scale
 	copy.durability = math.max(1, math.floor(size.durability * area + 0.5))
-	copy.reward = math.max(1, math.floor(size.reward * area + 0.5))
+	copy.work = size.work * area
 	return copy
 end
 

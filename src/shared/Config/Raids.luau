@@ -23,8 +23,18 @@
 --   bombard     (Hard) warning zones appear on and around raiders, then
 --               detonate
 --
--- Raiders whose ships are destroyed are out. Win before TIME_LIMIT to earn
--- the difficulty's reward (fixed amounts: no multiplier applies).
+-- The Death Star drifts slowly after the nearest raider (only players in
+-- this raid), at BOSS_FOLLOW_SPEED, never more than BOSS_LEASH from its
+-- arena. A raider who touches its hull is rammed: knocked back
+-- RAM_KNOCKBACK studs per second, and their hull takes the difficulty's
+-- ramDamage (at most once per RAM_COOLDOWN).
+--
+-- Raiders whose ships are destroyed are out. Win before the difficulty's
+-- timeLimit to earn
+-- the difficulty's reward: Stardust worth `minutes` of the raider's reward
+-- rate R (Logic/EconomyMath.reward), at least `minimum`, for the first win
+-- of each reward day only. Later wins that day count for stats and
+-- achievements but pay no Stardust.
 -- Logic/ConfigCheck validates this table.
 
 export type Difficulty = "Easy" | "Medium" | "Hard"
@@ -47,7 +57,9 @@ export type DifficultyDef = {
 	bossHealth: number, -- for one raider
 	healthPerExtraRaider: number, -- share of bossHealth added per extra raider
 	moves: Moves, -- intervals in seconds, damage in hull points
-	reward: { stardust: number, boost: { source: "mining" | "star", seconds: number }? },
+	timeLimit: number, -- seconds to beat the boss (5 to 10 minutes)
+	ramDamage: number, -- hull points when the boss rams a raider
+	reward: { minutes: number, minimum: number },
 }
 
 local ORDER: { Difficulty } = { "Easy", "Medium", "Hard" }
@@ -60,6 +72,8 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 1,
 		pad = { angle = -50 },
 		arena = { x = -1200, y = 1100, z = 0 },
+		timeLimit = 300,
+		ramDamage = 15,
 		bossHealth = 4000,
 		healthPerExtraRaider = 0.6,
 		moves = {
@@ -67,7 +81,7 @@ local BY_ID: { [string]: DifficultyDef } = {
 			drones = { interval = 18, count = 2, damage = 15 },
 			shockwave = { interval = 22, damage = 20 },
 		},
-		reward = { stardust = 4000 },
+		reward = { minutes = 2, minimum = 120 },
 	},
 	Medium = {
 		id = "Medium",
@@ -76,6 +90,8 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 2,
 		pad = { angle = 0 },
 		arena = { x = 0, y = 1100, z = 1200 },
+		timeLimit = 450,
+		ramDamage = 25,
 		bossHealth = 12000,
 		healthPerExtraRaider = 0.7,
 		moves = {
@@ -84,7 +100,7 @@ local BY_ID: { [string]: DifficultyDef } = {
 			shockwave = { interval = 18, damage = 30 },
 			superlaser = { interval = 30, damage = 70 },
 		},
-		reward = { stardust = 14000, boost = { source = "mining", seconds = 10 * 60 } },
+		reward = { minutes = 4, minimum = 240 },
 	},
 	Hard = {
 		id = "Hard",
@@ -93,6 +109,8 @@ local BY_ID: { [string]: DifficultyDef } = {
 		order = 3,
 		pad = { angle = 50 },
 		arena = { x = 1200, y = 1100, z = 0 },
+		timeLimit = 600,
+		ramDamage = 40,
 		bossHealth = 35000,
 		healthPerExtraRaider = 0.8,
 		moves = {
@@ -102,7 +120,7 @@ local BY_ID: { [string]: DifficultyDef } = {
 			superlaser = { interval = 20, damage = 120 },
 			bombard = { interval = 16, count = 6, damage = 60 },
 		},
-		reward = { stardust = 45000, boost = { source = "star", seconds = 20 * 60 } },
+		reward = { minutes = 6, minimum = 360 },
 	},
 }
 
@@ -112,7 +130,12 @@ return {
 	MAX_RAIDERS = 6,
 	QUEUE_COUNTDOWN = 20, -- seconds from the first player joining
 	FULL_COUNTDOWN = 5, -- seconds once the queue is full
-	TIME_LIMIT = 300, -- seconds to beat the boss
+	-- The boss follows raiders (see the header).
+	BOSS_FOLLOW_SPEED = 12, -- studs per second; every ship can outrun it
+	BOSS_LEASH = 700, -- studs from the arena centre it may wander
+	RAM_REACH = 10, -- studs past the hull that count as touching it
+	RAM_COOLDOWN = 1.5, -- seconds between rams on the same raider
+	RAM_KNOCKBACK = 70, -- studs per second pushed away from the boss
 	END_DELAY = 6, -- seconds after a win or loss before raiders go home
 	OUT_DELAY = 3, -- seconds after losing your ship before you go home
 	-- Boss

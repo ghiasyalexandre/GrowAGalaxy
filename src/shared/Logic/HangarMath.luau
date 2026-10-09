@@ -23,8 +23,26 @@ function HangarMath.available(id: string, owned: Owned): boolean
 	return true
 end
 
+-- An upgrade's price: its cost, or for vanity priced in minutes, that many
+-- minutes of reward rate R (at least 1/s), never under its cost.
+function HangarMath.price(id: string, rewardRate: number?): number
+	local def = Config.Hangar.BY_ID[id]
+	if def == nil then
+		return 0
+	end
+	if def.minutes then
+		return math.max(def.cost, math.floor(60 * def.minutes * math.max(rewardRate or 1, 1)))
+	end
+	return def.cost
+end
+
 -- The price of an upgrade the player can buy now, or nil and why not.
-function HangarMath.canBuy(id: string, owned: Owned, stardust: number): (number?, string?)
+function HangarMath.canBuy(
+	id: string,
+	owned: Owned,
+	stardust: number,
+	rewardRate: number?
+): (number?, string?)
 	local def = Config.Hangar.BY_ID[id]
 	if def == nil then
 		return nil, "That upgrade doesn't exist."
@@ -37,10 +55,12 @@ function HangarMath.canBuy(id: string, owned: Owned, stardust: number): (number?
 			table.insert(names, if other then other.displayName else need)
 		end
 		return nil, `Build the {table.concat(names, " and ")} first.`
-	elseif stardust < def.cost then
-		return nil, `You need {def.cost} {Config.Economy.CURRENCY_NAME} for the {def.displayName}.`
 	end
-	return def.cost, nil
+	local price = HangarMath.price(id, rewardRate)
+	if stardust < price then
+		return nil, `You need {price} {Config.Economy.CURRENCY_NAME} for the {def.displayName}.`
+	end
+	return price, nil
 end
 
 -- Combined multiplier for a ship stat from the upgrades built.
@@ -68,12 +88,12 @@ local function product(owned: Owned, field: "income" | "storage"): number
 	return multiplier
 end
 
--- Multiplier on star income.
+-- Multiplier on star and planet income (the Refinery).
 function HangarMath.incomeMultiplier(owned: Owned): number
 	return product(owned, "income")
 end
 
--- Multiplier on the uncollected Stardust cap.
+-- Multiplier on the collector tank's and offline earnings' caps (the Silo).
 function HangarMath.storageMultiplier(owned: Owned): number
 	return product(owned, "storage")
 end

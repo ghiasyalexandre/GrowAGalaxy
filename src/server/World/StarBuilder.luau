@@ -3,10 +3,11 @@
 -- planets and orbits from the Planets attribute (StarController).
 --
 --   Star_<id>     Model, PrimaryPart = Core, streams persistently
---                 attributes: StarId, OwnerUserId, TypeId, Level, Income
+--                 attributes: StarId, OwnerUserId, TypeId, Level, Build, Income
 --                 (star plus planets in orbit), Orbits (open slots),
 --                 Planets ("Basalt,,Aurora," planet type by orbit slot),
 --                 PlanetLevels ("3,,1,")
+--                 PlanetTiers ("7,,1,", Config.Planets.TIERS)
 --     Core        Neon ball in the type's colour, with a PointLight
 --       Manage    ProximityPrompt tagged "TycoonPrompt", TycoonAction = "Manage"
 --     Disk        Black holes only: a glowing accretion disk
@@ -100,10 +101,12 @@ function StarBuilder.apply(
 	end
 	model:SetAttribute("TypeId", def.id)
 	model:SetAttribute("Level", star.level)
+	model:SetAttribute("Build", star.build)
 	model:SetAttribute("Income", StarMath.income(star, equipped))
 	model:SetAttribute("Orbits", StarMath.slots(def.id))
 	model:SetAttribute("Planets", StarMath.encodePlanets(equipped))
 	model:SetAttribute("PlanetLevels", StarMath.encodePlanetLevels(equipped))
+	model:SetAttribute("PlanetTiers", StarMath.encodePlanetTiers(equipped))
 end
 
 function StarBuilder.build(

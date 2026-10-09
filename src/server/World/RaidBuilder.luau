@@ -309,11 +309,7 @@ function RaidBuilder.pad(def: DifficultyDef, floor: CFrame, parent: Instance): M
 		label.TextWrapped = true
 		label.Parent = panel
 	end
-	local reward = `{def.reward.stardust} Stardust`
-	if def.reward.boost then
-		local name = if def.reward.boost.source == "mining" then "Mining" else "Stars"
-		reward ..= ` + 2x {name} {def.reward.boost.seconds // 60} min`
-	end
+	local reward = `{def.reward.minutes} min of production (first win each day)`
 	line("Title", `{string.upper(def.displayName)} RAID`, 6, 28, 24, Color3.fromHex(def.color))
 	line("Reward", `Reward: {reward}`, 36, 20, 13, Color3.fromRGB(255, 214, 110))
 	line("Queue", `0 / {R.MAX_RAIDERS} in queue`, 60, 22, 16, Color3.new(1, 1, 1))

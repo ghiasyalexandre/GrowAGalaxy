@@ -12,9 +12,9 @@
 -- With the autoIncubate setting a chamber that frees up takes the next
 -- waiting egg by itself (also while offline). Hatched planets of a rarity
 -- the player auto-sells are sold on the spot (DataSystem.advanceHatches).
--- Hatches of Config.Eggs.ANNOUNCE_RARITY or rarer are announced to the
--- whole server and listed in the hatch feed (the ISS Egg Lab board);
--- CHAT_RARITY or rarer (Legendary, Interstellar) also go to the chat.
+-- Hatches of Config.Eggs.ANNOUNCE_RARITY or rarer, or ANNOUNCE_TIER or
+-- higher, are announced to the whole server and listed in the hatch feed
+-- (the ISS Star Lounge board); CHAT_RARITY or CHAT_TIER also go to the chat.
 --
 -- Hatches are saved as unix start and end times, so they keep going while
 -- the player is offline. Every second (and when a profile loads) any hatch
@@ -24,8 +24,8 @@
 -- player was away are summed up in one message.
 --
 -- Each chamber part shows its state to everyone near the station (owner and
--- visitors) through attributes: Rarity, StartedAt, EndsAt while hatching
--- (never the planet), and HatchedType / HatchedAt for a moment after it
+-- visitors) through attributes: Rarity, Tier, StartedAt, EndsAt while
+-- hatching (never the planet), and HatchedType / HatchedTier / HatchedAt after it
 -- hatches. Only the owner's client enables the chambers' prompts, and a
 -- request only ever touches the requester's own profile.
 
@@ -51,7 +51,7 @@ local SUMMARY_DELAY = 9
 
 local HatchSystem = {}
 
-export type FeedEntry = { name: string, typeId: string, at: number }
+export type FeedEntry = { name: string, typeId: string, tier: number, at: number }
 
 -- Fires after a rare hatch joins the feed.
 HatchSystem.feedChanged = Signal.new() :: Signal.Signal<()>
@@ -84,35 +84,46 @@ local function show(player: Player)
 			)
 			part:SetAttribute("StartedAt", if hatch then hatch.startedAt else nil)
 			part:SetAttribute("EndsAt", if hatch then hatch.endsAt else nil)
+			part:SetAttribute("Tier", if hatch then hatch.tier else nil)
 		end
 	end
 end
 
-local function announceRank(): number
-	return P.RARITIES[E.ANNOUNCE_RARITY].index
+-- "Radiant Legendary Phoenix Core" (tier, rarity, type).
+local function planetName(def: any, tier: number): string
+	return `{P.TIERS[tier].name} {P.RARITIES[def.rarity].displayName} {def.displayName}`
 end
 
--- A rare hatch: everyone in the server hears about it, and it joins the feed.
-local function announce(player: Player, typeId: string)
+-- A rare hatch (by rarity or by tier): everyone in the server hears about
+-- it, and it joins the feed.
+local function announce(player: Player, typeId: string, tier: number)
 	local def = P.BY_ID[typeId]
-	if def == nil or P.RARITIES[def.rarity].index < announceRank() then
+	if def == nil then
 		return
 	end
-	table.insert(feed, 1, { name = player.DisplayName, typeId = typeId, at = os.time() })
+	local rank = P.RARITIES[def.rarity].index
+	if rank < P.RARITIES[E.ANNOUNCE_RARITY].index and tier < E.ANNOUNCE_TIER then
+		return
+	end
+	table.insert(
+		feed,
+		1,
+		{ name = player.DisplayName, typeId = typeId, tier = tier, at = os.time() }
+	)
 	while #feed > E.HATCH_FEED_SIZE do
 		table.remove(feed)
 	end
 	HatchSystem.feedChanged:Fire()
-	local rarity = P.RARITIES[def.rarity].displayName
-	if P.RARITIES[def.rarity].index >= P.RARITIES[E.CHAT_RARITY].index then
+	local name = planetName(def, tier)
+	if rank >= P.RARITIES[E.CHAT_RARITY].index or tier >= E.CHAT_TIER then
 		Net.ChatAnnounce:FireAllClients(
-			`[Planet Egg] {player.DisplayName} hatched a {rarity} {def.displayName}!`,
+			`[Planet Egg] {player.DisplayName} hatched a {name}!`,
 			P.RARITIES[def.rarity].color
 		)
 	end
 	for _, other in Players:GetPlayers() do
 		if other ~= player then
-			Notify.send(other, `{player.DisplayName} hatched a {rarity} {def.displayName}!`)
+			Notify.send(other, `{player.DisplayName} hatched a {name}!`)
 		end
 	end
 end
@@ -124,15 +135,16 @@ local function settle(player: Player, now: number): { DataSystem.HatchResult }
 	if #results == 0 then
 		return results
 	end
-	local latest: { [string]: string } = {}
+	local latest: { [string]: DataSystem.HatchResult } = {}
 	for _, result in results do
-		latest[result.chamber] = result.typeId
-		announce(player, result.typeId)
+		latest[result.chamber] = result
+		announce(player, result.typeId, result.tier)
 	end
-	for chamber, typeId in latest do
+	for chamber, result in latest do
 		local part = chamberPart(player, tonumber(chamber) or 0)
 		if part then
-			part:SetAttribute("HatchedType", typeId)
+			part:SetAttribute("HatchedType", result.typeId)
+			part:SetAttribute("HatchedTier", result.tier)
 			part:SetAttribute("HatchedAt", Workspace:GetServerTimeNow())
 		end
 	end
@@ -278,15 +290,15 @@ function HatchSystem.start()
 			for _, result in settle(player, now) do
 				local def = P.BY_ID[result.typeId]
 				if def then
-					local rarity = P.RARITIES[def.rarity].displayName
+					local name = planetName(def, result.tier)
 					Notify.send(
 						player,
 						if result.sold
-							then `A {def.displayName} hatched ({rarity}) and was sold for {result.sold} {Config.Economy.CURRENCY_NAME}{if result.reason
+							then `A {name} hatched and was sold for {result.sold} {Config.Economy.CURRENCY_NAME}{if result.reason
 									== "full"
 								then ": your planet storage is full"
 								else ""}.`
-							else `A {def.displayName} hatched ({rarity}){if result.new
+							else `A {name} hatched{if result.new
 								then ": a new type for your Planet Index!"
 								else "!"} Equip it from Planets (P).`
 					)

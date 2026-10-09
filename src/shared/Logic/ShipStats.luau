@@ -12,14 +12,9 @@ type ShipStats = typeof(Config.Ships.BY_ID.MicroRecon.stats)
 local ShipStats = {}
 
 -- Stats for `shipId` with `loadout` fitted, or nil for an unknown ship.
--- Equipment that is unknown, in the wrong slot, or not owned is ignored;
--- each item counts at its level in `levels` (1 when missing).
-function ShipStats.effective(
-	shipId: string,
-	loadout: Types.Loadout?,
-	ownedEquipment: { [string]: boolean }?,
-	levels: { [string]: number }?
-): ShipStats?
+-- Equipment that is unknown, in the wrong slot, or not bought for this ship
+-- (loadout.levels) is ignored; each item counts at its level there.
+function ShipStats.effective(shipId: string, loadout: Types.Loadout?): ShipStats?
 	local def = Config.Ships.BY_ID[shipId]
 	if def == nil then
 		return nil
@@ -30,9 +25,8 @@ function ShipStats.effective(
 	end
 	for slot, itemId in loadout.equipment do
 		local item = Config.Equipment.BY_ID[itemId]
-		local owned = ownedEquipment == nil or ownedEquipment[itemId] == true
-		if item and item.slot == slot and owned then
-			local level = if levels then levels[itemId] or 1 else 1
+		local level = loadout.levels[itemId]
+		if item and item.slot == slot and level then
 			for stat, multiplier in item.modifiers do
 				local value = (stats :: any)[stat]
 				if type(value) == "number" then
@@ -47,12 +41,7 @@ end
 
 -- The player's active ship's stats.
 function ShipStats.forProfile(profile: Types.Profile): ShipStats
-	local stats = ShipStats.effective(
-		profile.activeShip,
-		profile.loadouts[profile.activeShip],
-		profile.ownedEquipment,
-		profile.equipmentLevels
-	)
+	local stats = ShipStats.effective(profile.activeShip, profile.loadouts[profile.activeShip])
 	local result = stats or table.clone(Config.Ships.BY_ID[Config.Ships.STARTER_SHIP].stats)
 	-- Hangar upgrades boost every ship.
 	for stat, value in result :: any do

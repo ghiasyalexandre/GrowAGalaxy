@@ -17,6 +17,7 @@ for a missing one). The Shipyard shows the same model as a spinning preview.
 | `DualStriker.rbxm` | Dual Striker | DualStriker.obj |
 | `UltravioletIntruder.rbxm` | Ultraviolet Intruder | UltravioletIntruder.obj |
 | `MeteorSlicer.rbxm` | Meteor Slicer | (none yet) |
+| `QuasarBoard.rbxm` | Quasar Hoverboard | QuasarBoard.obj (built by `tools/ship_meshes/QuasarBoard.py` in Blender) |
 
 The file name must match the ship's `model` in `src/shared/Config/Ships.luau`.
 

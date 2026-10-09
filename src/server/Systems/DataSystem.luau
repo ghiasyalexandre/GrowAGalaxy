@@ -13,6 +13,9 @@ local ServerScriptService = game:GetService("ServerScriptService")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local DailyMath = require(ReplicatedStorage.Shared.Logic.DailyMath)
+local EconomyAnalytics = require(script.Parent.Parent.Util.EconomyAnalytics)
+local EconomyMath = require(ReplicatedStorage.Shared.Logic.EconomyMath)
+local Format = require(ReplicatedStorage.Shared.Util.Format)
 local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
 local HatchMath = require(ReplicatedStorage.Shared.Logic.HatchMath)
 local Entitlements = require(script.Parent.Parent.Util.Entitlements)
@@ -47,16 +50,35 @@ local store: any = nil
 local sessions: { [Player]: any } = {}
 -- os.clock() when each online player's income was last added up (settleIncome).
 local settledAt: { [Player]: number } = {}
+-- Each online player's recent production, for their reward rate R
+-- (EconomyMath.track), and the economy view last sent to them.
+local windows: { [Player]: EconomyMath.Window } = {}
+local sentEconomy: { [Player]: Types.EconomyView } = {}
 
 local function keyFor(player: Player): string
 	return `Player_{player.UserId}`
 end
 
--- Offline earnings (Logic/OfflineMath): what the player's stars made while
--- they were away, at their rate now with the passes Roblox last confirmed
--- and their trail (boosts don't run offline), up to OFFLINE_CAP_SECONDS,
--- straight into the wallet. Then they count as online from now.
+-- Offline earnings (Logic/OfflineMath): OFFLINE_RATE of what the player's
+-- stars and planets made while they were away, at their production B (with
+-- trail and Refinery) and the star pass Roblox last confirmed (boosts don't
+-- run offline), up to OFFLINE_CAP_SECONDS (raised by the Silo), straight
+-- into the wallet. Then they count as online from now.
 local payOffline: (player: Player, profile: Profile) -> ()
+
+-- Today's reward rate R: snapshotted from the last session's production on
+-- the first visit of each reward (UTC) day. A brand-new account's first
+-- day uses 1.
+local function refreshReward(profile: Profile, now: number): boolean
+	local day = DailyMath.today(now)
+	local economy = profile.economy
+	if economy.rewardDay == day then
+		return false
+	end
+	economy.rewardDay = day
+	economy.reward = EconomyMath.snapshot(economy.recent)
+	return true
+end
 
 local function load(player: Player)
 	local session = store:StartSessionAsync(keyFor(player), {
@@ -97,6 +119,8 @@ local function load(player: Player)
 	end
 	sessions[player] = session
 	settledAt[player] = os.clock()
+	windows[player] = {}
+	refreshReward(session.Data, os.time())
 	payOffline(player, session.Data)
 	DataSystem.profileLoaded:Fire(player, session.Data)
 end
@@ -109,13 +133,15 @@ payOffline = function(player: Player, profile: Profile)
 	local now = os.time()
 	local rate = ProfileSchema.incomeRate(profile)
 		* RewardMath.permanent("star", profile.verifiedPasses)
-		* ProfileSchema.trailMultiplier(profile)
-	local amount, seconds = OfflineMath.earned(rate, profile.lastOnline, now)
+	local capMultiplier = HangarMath.storageMultiplier(profile.hangar)
+	local cap = Config.Economy.OFFLINE_CAP_SECONDS * capMultiplier
+	local amount, seconds = OfflineMath.earned(rate, profile.lastOnline, now, capMultiplier)
 	profile.lastOnline = now
 	if amount <= 0 then
 		return
 	end
 	profile.stardust += amount
+	EconomyAnalytics.source(player, amount, profile.stardust, "star_offline")
 	DataSystem.addStat(player, "offlineStardust", amount)
 	local hours = math.floor(seconds / 3600)
 	local away = if hours >= 1 then `{hours} h` else `{math.floor(seconds / 60)} min`
@@ -125,9 +151,9 @@ payOffline = function(player: Player, profile: Profile)
 			push(player, "stardust", profile.stardust)
 			Notify.send(
 				player,
-				`Welcome back! Your stars made {amount} Stardust while you were away ({away}{if seconds
-						>= Config.Economy.OFFLINE_CAP_SECONDS
-					then ", the 3-day maximum"
+				`Welcome back! Your stars made {Format.abbreviate(amount)} Stardust while you were away ({away}{if seconds
+						>= cap
+					then `, the {math.floor(cap / 3600)} h maximum`
 					else ""}).`
 			)
 		end
@@ -157,31 +183,57 @@ function DataSystem.waitForProfile(player: Player, timeout: number?): Profile?
 	return DataSystem.getProfile(player)
 end
 
-function DataSystem.addStardust(player: Player, amount: number): boolean
+-- Adds Stardust to the wallet; `sku` names where it came from (analytics,
+-- Util/EconomyAnalytics).
+function DataSystem.addStardust(player: Player, amount: number, sku: string?): boolean
 	local profile = DataSystem.getProfile(player)
 	local whole = wholePositive(amount)
 	if profile == nil or whole == nil then
 		return false
 	end
 	profile.stardust += whole
+	EconomyAnalytics.source(player, whole, profile.stardust, sku or "other")
 	push(player, "stardust", profile.stardust)
 	return true
 end
 
--- Deducts Stardust only if the player can afford all of it.
-function DataSystem.spendStardust(player: Player, amount: number): boolean
+-- Deducts Stardust only if the player can afford all of it; `sku` names
+-- what it bought (analytics).
+function DataSystem.spendStardust(player: Player, amount: number, sku: string?): boolean
 	local profile = DataSystem.getProfile(player)
 	local whole = wholePositive(amount)
 	if profile == nil or whole == nil or profile.stardust < whole then
 		return false
 	end
 	profile.stardust -= whole
+	EconomyAnalytics.sink(player, whole, profile.stardust, sku or "other")
 	push(player, "stardust", profile.stardust)
 	return true
 end
 
+-- Tells the owner their economy view (H, R, egg price, next BuildIndex)
+-- when it changed.
+local function pushEconomy(player: Player, profile: Profile)
+	local view = ProfileSchema.economyView(profile)
+	local last = sentEconomy[player]
+	if
+		last == nil
+		or last.eggPrice ~= view.eggPrice
+		or last.reward ~= view.reward
+		or last.nextBuild ~= view.nextBuild
+		or math.floor(last.high) ~= math.floor(view.high)
+	then
+		sentEconomy[player] = view
+		push(player, "economy", view)
+	end
+end
+
+-- Production changed: raise H if it's a new best and tell the owner.
 local function pushIncome(player: Player, profile: Profile)
-	push(player, "incomeRate", ProfileSchema.incomeRate(profile))
+	local rate = ProfileSchema.incomeRate(profile)
+	profile.economy.high = math.max(profile.economy.high, rate)
+	push(player, "incomeRate", rate)
+	pushEconomy(player, profile)
 end
 
 -- Adds a star to the player's galaxy and returns its new id. The caller has
@@ -194,6 +246,9 @@ function DataSystem.addStar(player: Player, star: Types.StarRecord): string?
 	local galaxy = profile.galaxy
 	local id = `s{galaxy.nextId}`
 	galaxy.nextId += 1
+	-- Its BuildIndex, never reused.
+	star.build = galaxy.nextBuild
+	galaxy.nextBuild += 1
 	galaxy.stars[id] = star
 	pushIncome(player, profile)
 	return id
@@ -243,6 +298,9 @@ function DataSystem.addPlanet(player: Player, typeId: string, level: number?): s
 	profile.planets[id] = {
 		typeId = typeId,
 		level = math.clamp(level or 1, 1, Config.Planets.MAX_LEVEL),
+		tier = 1,
+		paid = 0,
+		spent = 0,
 	}
 	pushPlanets(player, profile)
 	return id
@@ -285,61 +343,137 @@ function DataSystem.unequipPlanet(player: Player, planetId: string): boolean
 	return true
 end
 
-export type EggProblem = "NoProfile" | "Full" | "Poor"
+export type EggProblem = "NoProfile" | "Full" | "Storage" | "Poor" | "Empty" | "Top"
 
--- Buys one planet egg in a single step: checks room (Config.Eggs
--- MAX_UNHATCHED) and the balance, takes `price`, counts the purchase (later
--- mystery eggs cost more) and saves the egg with its planet already chosen.
--- Nothing yields in between, so the Stardust and the egg are saved together
--- or not at all. Returns the new egg id, or nil and why.
-function DataSystem.buyEggs(
-	player: Player,
-	outcomes: { string },
-	guaranteed: boolean,
-	prices: { number }
-): ({ string }?, EggProblem?)
-	local profile = DataSystem.getProfile(player)
-	if profile == nil or #outcomes == 0 or #outcomes ~= #prices then
-		return nil, "NoProfile"
-	end
-	local total = 0
-	for _, price in prices do
-		local whole = wholePositive(price)
-		if whole == nil then
-			return nil, "NoProfile"
-		end
-		total += whole
-	end
-	if EggMath.held(profile.eggs, profile.hatches) + #outcomes > Config.Eggs.MAX_UNHATCHED then
-		return nil, "Full"
-	end
-	if profile.stardust < total then
-		return nil, "Poor"
-	end
-	profile.stardust -= total
-	profile.eggsBought += #outcomes
-	local ids: { string } = {}
-	local now = os.time()
-	for _, outcome in outcomes do
-		local id = `e{profile.nextEggId}`
-		profile.nextEggId += 1
-		profile.eggs[id] = { outcome = outcome, guaranteed = guaranteed, boughtAt = now }
-		table.insert(ids, id)
-	end
-	push(player, "stardust", profile.stardust)
-	push(player, "eggsBought", profile.eggsBought)
-	push(player, "eggs", ProfileSchema.eggsView(profile))
-	return ids, nil
+-- Whether one more planet has room: owned planets plus every egg kept or
+-- incubating (each reserves a place) stay under MAX_PLANETS.
+function DataSystem.storageFree(profile: Profile): boolean
+	return PlanetInventory.count(profile.planets) + EggMath.held(profile.eggs, profile.hatches)
+		< Config.Planets.MAX_PLANETS
 end
 
-function DataSystem.buyEgg(
+-- Pays `price` and puts a freshly rolled egg (its planet and tier chosen by
+-- EggSystem) on the Egg Lab's pedestal, replacing any egg there, in one
+-- step: the Stardust and the new egg are saved together or not at all.
+function DataSystem.rollEgg(
 	player: Player,
 	outcome: string,
-	guaranteed: boolean,
+	tier: number,
 	price: number
-): (string?, EggProblem?)
-	local ids, problem = DataSystem.buyEggs(player, { outcome }, guaranteed, { price })
-	return if ids then ids[1] else nil, problem :: EggProblem?
+): (boolean, EggProblem?)
+	local profile = DataSystem.getProfile(player)
+	local whole = wholePositive(price)
+	if profile == nil or whole == nil or Config.Planets.BY_ID[outcome] == nil then
+		return false, "NoProfile"
+	end
+	if not DataSystem.storageFree(profile) then
+		return false, "Storage"
+	end
+	if profile.stardust < whole then
+		return false, "Poor"
+	end
+	profile.stardust -= whole
+	EconomyAnalytics.sink(
+		player,
+		whole,
+		profile.stardust,
+		if profile.eggLab.current then "egg_reroll" else "egg_roll"
+	)
+	profile.eggLab.current = { outcome = outcome, tier = tier, paid = whole }
+	profile.eggLab.rolls += 1
+	push(player, "stardust", profile.stardust)
+	push(player, "eggLab", ProfileSchema.eggLabView(profile))
+	return true, nil
+end
+
+-- Moves the pedestal egg into the player's eggs (ready to incubate) in one
+-- step, counting it as kept (later eggs cost more). Returns its id, or nil
+-- and why ("Empty": nothing rolled; "Full": too many unhatched eggs).
+function DataSystem.keepEgg(player: Player): (string?, EggProblem?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil, "NoProfile"
+	end
+	local current = profile.eggLab.current
+	if current == nil then
+		return nil, "Empty"
+	end
+	if EggMath.held(profile.eggs, profile.hatches) >= Config.Eggs.MAX_UNHATCHED then
+		return nil, "Full"
+	end
+	if not DataSystem.storageFree(profile) then
+		return nil, "Storage"
+	end
+	local id = `e{profile.nextEggId}`
+	profile.nextEggId += 1
+	profile.eggs[id] = {
+		outcome = current.outcome,
+		tier = current.tier,
+		guaranteed = false,
+		boughtAt = os.time(),
+		paid = current.paid,
+	}
+	profile.eggLab.current = nil
+	profile.eggsBought += 1
+	pushEconomy(player, profile)
+	push(player, "eggsBought", profile.eggsBought)
+	push(player, "eggs", ProfileSchema.eggsView(profile))
+	push(player, "eggLab", ProfileSchema.eggLabView(profile))
+	return id, nil
+end
+
+-- Gives the free tutorial egg once (Config.Eggs.TUTORIAL_EGG_SECONDS into
+-- a first session): the cheapest Common type, tier 1, nothing paid (so it
+-- sells for nothing). Returns its id, or nil if it was already given.
+function DataSystem.grantTutorialEgg(player: Player): string?
+	local profile = DataSystem.getProfile(player)
+	if profile == nil or profile.tutorialEgg then
+		return nil
+	end
+	local P = Config.Planets
+	local cheapest: string? = nil
+	for _, typeId in P.BY_RARITY.Common do
+		if cheapest == nil or P.BY_ID[typeId].income < P.BY_ID[cheapest].income then
+			cheapest = typeId
+		end
+	end
+	if cheapest == nil then
+		return nil
+	end
+	profile.tutorialEgg = true
+	local id = `e{profile.nextEggId}`
+	profile.nextEggId += 1
+	profile.eggs[id] = {
+		outcome = cheapest,
+		tier = 1,
+		guaranteed = false,
+		boughtAt = os.time(),
+		paid = 0,
+	}
+	push(player, "eggs", ProfileSchema.eggsView(profile))
+	return id
+end
+
+-- Pays `cost` and raises the Egg Lab one level, in one step. "Top": it's
+-- already at the last level.
+function DataSystem.upgradeEggLab(player: Player, cost: number): (boolean, EggProblem?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return false, "NoProfile"
+	end
+	if profile.eggLab.level >= #Config.Eggs.LAB_LEVELS then
+		return false, "Top"
+	end
+	if profile.stardust < cost then
+		return false, "Poor"
+	end
+	profile.stardust -= cost
+	EconomyAnalytics.sink(player, cost, profile.stardust, "lab_level")
+	profile.eggLab.level += 1
+	EconomyAnalytics.progression(player, "labLevel", profile.eggLab.level)
+	push(player, "stardust", profile.stardust)
+	push(player, "eggLab", ProfileSchema.eggLabView(profile))
+	return true, nil
 end
 
 -- Puts a waiting egg into an incubator chamber ("1".."HATCH_SLOTS") in one
@@ -361,6 +495,7 @@ end
 
 export type HatchResult = {
 	typeId: string,
+	tier: number,
 	chamber: string,
 	at: number,
 	planetId: string?, -- kept: the new planet's id
@@ -373,9 +508,10 @@ export type HatchResult = {
 -- order they ended, in one step (Logic/HatchMath). With the autoIncubate
 -- setting a freed chamber takes the oldest waiting egg from the moment it
 -- freed, so incubation carries on offline. Each hatched planet is granted
--- exactly once: it joins the inventory, or is sold at once (paying its
--- sale value) when its rarity is set to auto-sell (and, with keepNewTypes,
--- it isn't a type the player has never had) or the inventory is full.
+-- exactly once: it joins the inventory (its place was reserved when the
+-- egg was kept, so a hatch is never sold for lack of room), or is sold at
+-- once (paying its sale value) when the player chose to auto-sell its
+-- rarity (and, with keepNewTypes, it isn't a type they've never had).
 function DataSystem.advanceHatches(player: Player, now: number): { HatchResult }
 	local profile = DataSystem.getProfile(player)
 	if profile == nil or next(profile.hatches) == nil then
@@ -394,21 +530,30 @@ function DataSystem.advanceHatches(player: Player, now: number): { HatchResult }
 		profile.discovered[item.typeId] = true
 		local result: HatchResult = {
 			typeId = item.typeId,
+			tier = item.tier,
 			chamber = item.chamber,
 			at = item.at,
 			new = isNew,
 		}
-		local full = PlanetInventory.count(profile.planets) >= Config.Planets.MAX_PLANETS
 		local auto = settings.autoSell[def.rarity] == true and not (settings.keepNewTypes and isNew)
-		if full or auto then
-			local value = PlanetInventory.sellValue({ typeId = item.typeId, level = 1 })
+		-- What it cost; an egg from before economy v2 keeps the old value.
+		local record: Types.PlanetRecord = {
+			typeId = item.typeId,
+			level = 1,
+			tier = item.tier,
+			paid = item.paid or 0,
+			spent = 0,
+			legacy = if item.paid == nil then Config.Planets.LEGACY_SELL_VALUE[def.rarity] else nil,
+		}
+		if auto then
+			local value = PlanetInventory.sellValue(record)
 			earned += value
 			result.sold = value
-			result.reason = if full then "full" else "auto"
+			result.reason = "auto"
 		else
 			local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
 			profile.nextPlanetId = nextId
-			profile.planets[id] = { typeId = item.typeId, level = 1 }
+			profile.planets[id] = record
 			result.planetId = id
 		end
 		profile.stats.planetsHatched = (profile.stats.planetsHatched or 0) + 1
@@ -416,6 +561,7 @@ function DataSystem.advanceHatches(player: Player, now: number): { HatchResult }
 	end
 	profile.stardust += earned
 	if earned > 0 then
+		EconomyAnalytics.source(player, earned, profile.stardust, "planet_sale")
 		push(player, "stardust", profile.stardust)
 	end
 	push(player, "eggs", ProfileSchema.eggsView(profile))
@@ -460,6 +606,7 @@ function DataSystem.sellPlanets(player: Player, ids: { string }): (number, numbe
 	end
 	if sold > 0 then
 		profile.stardust += total
+		EconomyAnalytics.source(player, total, profile.stardust, "planet_sale")
 		push(player, "stardust", profile.stardust)
 		push(player, "planets", ProfileSchema.planetsView(profile))
 		DataSystem.addStat(player, "planetsSold", sold)
@@ -593,33 +740,61 @@ function DataSystem.setAutoSell(player: Player, rarity: unknown, on: unknown): b
 	return true
 end
 
--- The daily wheel (Config.Wheel): if a spin is ready at `now` (unix
--- seconds) and the player has SPIN_COST Stardust, takes the cost, records
--- the spin (next one a COOLDOWN later), remembers the prize and adds its
--- Stardust, all in one step and before the client's
--- animation starts. The prize is fixed: no multiplier applies. Returns
--- whether it spun.
-function DataSystem.spinWheel(player: Player, prizeIndex: number, now: number): boolean
+-- The daily wheel (Config.Wheel): if the free spin is ready at `now` (unix
+-- seconds), records the spin (next one a COOLDOWN later), remembers the
+-- prize and adds its Stardust (its minutes of reward rate R), all in one
+-- step and before the client's animation starts. Returns the Stardust won,
+-- or nil if it didn't spin.
+function DataSystem.spinWheel(player: Player, prizeIndex: number, now: number): number?
 	local profile = DataSystem.getProfile(player)
 	local prize = Config.Wheel.PRIZES[prizeIndex]
-	if profile == nil or prize == nil or profile.stardust < Config.Wheel.SPIN_COST then
-		return false
+	if profile == nil or prize == nil then
+		return nil
 	end
 	local nextSpin = WheelMath.spin(profile.wheel.nextSpin, now)
 	if nextSpin == nil then
-		return false
+		return nil
 	end
 	profile.wheel.nextSpin = nextSpin
 	profile.wheel.lastPrize = prizeIndex
-	profile.stardust += prize.stardust - Config.Wheel.SPIN_COST
+	local amount = EconomyMath.reward(prize.minutes, DataSystem.rewardRate(player))
+	profile.stardust += amount
+	EconomyAnalytics.source(player, amount, profile.stardust, "wheel_prize")
 	push(player, "stardust", profile.stardust)
 	push(player, "wheel", table.clone(profile.wheel))
-	return true
+	return amount
+end
+
+-- The player's reward rate R for today (refreshed if a new reward day has
+-- begun), at least 1.
+function DataSystem.rewardRate(player: Player): number
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return 1
+	end
+	if refreshReward(profile, os.time()) then
+		pushEconomy(player, profile)
+	end
+	return profile.economy.reward
+end
+
+-- Stardust worth `minutes` of the player's reward rate (at least
+-- `minimum`), added with analytics `sku`. Returns the amount.
+function DataSystem.grantMinutes(
+	player: Player,
+	minutes: number,
+	minimum: number?,
+	sku: string
+): number
+	local amount = EconomyMath.reward(minutes, DataSystem.rewardRate(player), minimum)
+	DataSystem.addStardust(player, amount, sku)
+	return amount
 end
 
 -- Sets an owned planet's level (already validated and paid for by the
--- caller), settling income first.
-function DataSystem.setPlanetLevel(player: Player, planetId: string, level: number)
+-- caller, `paid` Stardust, recorded for its sale value), settling income
+-- first.
+function DataSystem.setPlanetLevel(player: Player, planetId: string, level: number, paid: number?)
 	local profile = DataSystem.getProfile(player)
 	local planet = profile and profile.planets[planetId]
 	if profile == nil or planet == nil then
@@ -627,6 +802,7 @@ function DataSystem.setPlanetLevel(player: Player, planetId: string, level: numb
 	end
 	DataSystem.settleIncome(player)
 	planet.level = math.clamp(level, 1, Config.Planets.MAX_LEVEL)
+	planet.spent = (planet.spent or 0) + math.max(paid or 0, 0)
 	pushPlanets(player, profile)
 end
 
@@ -642,19 +818,28 @@ local function accrue(player: Player, profile: Profile, dt: number, passes: { [s
 	profile.lastOnline = os.time()
 	local boosts = profile.boosts
 	local rate = ProfileSchema.incomeRate(profile)
+	-- R's window: production B (no passes or boosts) while online.
+	local window = windows[player]
+	if window then
+		profile.economy.recent = EconomyMath.track(window, rate, dt, os.clock())
+	end
+	profile.economy.high = math.max(profile.economy.high, rate)
+	if refreshReward(profile, os.time()) then
+		pushEconomy(player, profile)
+	end
 	if rate > 0 then
-		local made = RewardMath.starIncome(
-			rate,
-			dt,
-			boosts.star,
-			passes,
-			ProfileSchema.trailMultiplier(profile)
+		-- B already includes the trail and the Refinery.
+		local made = RewardMath.starIncome(rate, dt, boosts.star, passes, nil)
+		-- The tank holds UNCOLLECTED_CAP_SECONDS of permanent income (with
+		-- the star pass, not a temporary boost); the Silo raises it.
+		local cap = EconomyMath.tankCap(
+			rate * RewardMath.permanent("star", passes),
+			HangarMath.storageMultiplier(profile.hangar)
 		)
-		-- The cap grows with the permanent pass, not with a temporary boost.
-		local cap = rate
-			* RewardMath.permanent("star", passes)
-			* Config.Economy.UNCOLLECTED_CAP_SECONDS
-			* HangarMath.storageMultiplier(profile.hangar)
+		-- The collector's tank shows uncollected / cap (MachineController).
+		if player:GetAttribute("UncollectedCap") ~= cap then
+			player:SetAttribute("UncollectedCap", cap)
+		end
 		local before = profile.uncollected
 		profile.uncollected = StarMath.accrue(before, made, 1, cap)
 		if RewardMath.autoCollect(passes) and profile.uncollected >= 1 then
@@ -710,7 +895,7 @@ function DataSystem.collectIncome(player: Player): number
 	end
 	profile.uncollected -= whole
 	push(player, "uncollected", math.floor(profile.uncollected))
-	DataSystem.addStardust(player, whole)
+	DataSystem.addStardust(player, whole, "star_online")
 	return whole
 end
 
@@ -724,20 +909,21 @@ function DataSystem.addStat(player: Player, stat: string, amount: number)
 	end
 end
 
--- Gives the player a ship, fitted with all the equipment they own.
+local function pushShipLevels(player: Player, profile: Profile)
+	push(player, "shipLevels", ProfileSchema.shipLevels(profile))
+end
+
+-- Gives the player a ship. It comes with no equipment: every ship has its
+-- own upgrades (Config.Equipment).
 function DataSystem.grantShip(player: Player, shipId: string)
 	local profile = DataSystem.getProfile(player)
 	if profile == nil or profile.ownedShips[shipId] then
 		return
 	end
 	profile.ownedShips[shipId] = true
-	local equipment: { [string]: string } = {}
-	local starter = profile.loadouts[profile.activeShip]
-	if starter then
-		equipment = table.clone(starter.equipment)
-	end
-	profile.loadouts[shipId] = { equipment = equipment }
+	profile.loadouts[shipId] = { equipment = {}, levels = {} }
 	push(player, "ownedShips", table.clone(profile.ownedShips))
+	pushShipLevels(player, profile)
 end
 
 -- Records a hangar upgrade as built. The caller has already validated and
@@ -763,35 +949,29 @@ function DataSystem.setActiveShip(player: Player, shipId: string): boolean
 	return true
 end
 
--- Gives the player an equipment item and fits it to every ship they own.
-function DataSystem.grantEquipment(player: Player, itemId: string, slot: string)
+-- Buys an equipment item (level 1) for one owned ship and fits it in its
+-- slot. The caller has paid.
+function DataSystem.grantEquipment(player: Player, shipId: string, itemId: string, slot: string)
 	local profile = DataSystem.getProfile(player)
-	if profile == nil then
+	local loadout = if profile then profile.loadouts[shipId] else nil
+	if profile == nil or loadout == nil then
 		return
 	end
-	profile.ownedEquipment[itemId] = true
-	profile.equipmentLevels[itemId] = profile.equipmentLevels[itemId] or 1
-	for shipId in profile.ownedShips do
-		local loadout = profile.loadouts[shipId]
-		if loadout == nil then
-			loadout = { equipment = {} }
-			profile.loadouts[shipId] = loadout
-		end
-		loadout.equipment[slot] = itemId
-	end
-	push(player, "ownedEquipment", table.clone(profile.ownedEquipment))
-	push(player, "equipmentLevels", table.clone(profile.equipmentLevels))
+	loadout.levels[itemId] = loadout.levels[itemId] or 1
+	loadout.equipment[slot] = itemId
+	pushShipLevels(player, profile)
 end
 
--- Raises an owned equipment item one level (the caller has paid).
-function DataSystem.levelEquipment(player: Player, itemId: string)
+-- Raises an item bought for a ship one level (the caller has paid).
+function DataSystem.levelEquipment(player: Player, shipId: string, itemId: string)
 	local profile = DataSystem.getProfile(player)
-	if profile == nil or not profile.ownedEquipment[itemId] then
+	local loadout = if profile then profile.loadouts[shipId] else nil
+	local level = if loadout then loadout.levels[itemId] else nil
+	if profile == nil or loadout == nil or level == nil then
 		return
 	end
-	local level = profile.equipmentLevels[itemId] or 1
-	profile.equipmentLevels[itemId] = math.min(level + 1, Config.Equipment.MAX_LEVEL)
-	push(player, "equipmentLevels", table.clone(profile.equipmentLevels))
+	loadout.levels[itemId] = math.min(level + 1, Config.Equipment.MAX_LEVEL)
+	pushShipLevels(player, profile)
 end
 
 function DataSystem.setExpansion(player: Player, level: number)
@@ -880,9 +1060,9 @@ function DataSystem.showPasses(player: Player, passes: { [string]: boolean })
 end
 
 -- Claims today's daily prize (Config.Daily) if it hasn't been claimed.
--- Returns the calendar day claimed and its prize, or nil. Prizes are fixed:
--- no multiplier applies.
-function DataSystem.claimDaily(player: Player, today: number): (number?, any)
+-- Returns the calendar day claimed and the Stardust it paid (its minutes
+-- of reward rate R), or nil.
+function DataSystem.claimDaily(player: Player, today: number): (number?, number?)
 	local profile = DataSystem.getProfile(player)
 	if profile == nil then
 		return nil, nil
@@ -893,30 +1073,25 @@ function DataSystem.claimDaily(player: Player, today: number): (number?, any)
 	end
 	profile.daily = record
 	local prize = Config.Daily.PRIZES[day]
-	if prize.stardust then
-		DataSystem.addStardust(player, prize.stardust)
-	elseif prize.boost then
-		local source = prize.boost.source
-		profile.boosts[source] = RewardMath.extend(profile.boosts[source], prize.boost.seconds)
-		push(player, "boosts", table.clone(profile.boosts))
-	end
+	local amount = DataSystem.grantMinutes(player, prize.minutes, nil, "calendar_day")
 	push(player, "daily", table.clone(profile.daily))
-	return day, prize
+	return day, amount
 end
 
--- Grants a raid reward (Config.Raids): fixed Stardust, plus boost time
--- added to any running boost. No multiplier applies.
-function DataSystem.grantRaidReward(player: Player, reward: any)
+-- Grants a raid reward (Config.Raids): its minutes of reward rate R (at
+-- least its minimum), for the first win of each reward day only. Returns
+-- the Stardust paid (0 for a later win that day).
+function DataSystem.grantRaidReward(player: Player, reward: any): number
 	local profile = DataSystem.getProfile(player)
 	if profile == nil then
-		return
+		return 0
 	end
-	DataSystem.addStardust(player, reward.stardust)
-	if reward.boost then
-		local source = reward.boost.source
-		profile.boosts[source] = RewardMath.extend(profile.boosts[source], reward.boost.seconds)
-		push(player, "boosts", table.clone(profile.boosts))
+	local today = DailyMath.today(os.time())
+	if profile.economy.raidDay == today then
+		return 0
 	end
+	profile.economy.raidDay = today
+	return DataSystem.grantMinutes(player, reward.minutes, reward.minimum, "raid_first_clear")
 end
 
 -- Player settings a client may change (all booleans).
@@ -1003,7 +1178,7 @@ function DataSystem.redeemCode(player: Player, code: string): (any, string?)
 		for _, typeId in P.ORDER do
 			local id, nextId = PlanetInventory.newId(profile.nextPlanetId)
 			profile.nextPlanetId = nextId
-			profile.planets[id] = { typeId = typeId, level = 1 }
+			profile.planets[id] = { typeId = typeId, level = 1, tier = 1, paid = 0, spent = 0 }
 			profile.discovered[typeId] = true
 		end
 		push(player, "discovered", table.clone(profile.discovered))
@@ -1017,16 +1192,38 @@ function DataSystem.redeemCode(player: Player, code: string): (any, string?)
 	if def.cloak then
 		push(player, "cloakUnlocked", true)
 	end
-	if def.stardust then
-		DataSystem.addStardust(player, def.stardust)
-	end
-	local boost = def.boost
-	if boost then
-		profile.boosts[boost.source] =
-			RewardMath.extend(profile.boosts[boost.source], boost.seconds)
-		push(player, "boosts", table.clone(profile.boosts))
+	if def.minutes then
+		DataSystem.grantMinutes(player, def.minutes, nil, "code")
 	end
 	return def, nil
+end
+
+-- Completes a Constellation Project (Config.Economy): pays its price from
+-- the wallet and raises constellationRank by one, in one step. Returns the
+-- new rank, or nil and why not.
+function DataSystem.completeConstellation(player: Player, expected: unknown): (number?, string?)
+	local profile = DataSystem.getProfile(player)
+	if profile == nil then
+		return nil, "Your save isn't ready yet."
+	end
+	if not EconomyMath.constellationReady(profile) then
+		return nil,
+			`Constellation Projects open once you have {Config.Economy.CONSTELLATION_STARS} max-level {Config.Stars.BY_ID[Config.Stars.ORDER[#Config.Stars.ORDER]].displayName} stars and the best Egg Lab.`
+	end
+	local price = EconomyMath.constellationPrice(profile.constellationRank)
+	if expected ~= nil and expected ~= price then
+		return nil, "The price changed. Check it and try again."
+	end
+	if profile.stardust < price then
+		return nil, `You need {price} Stardust for this project.`
+	end
+	profile.stardust -= price
+	profile.constellationRank += 1
+	EconomyAnalytics.sink(player, price, profile.stardust, "constellation_project")
+	EconomyAnalytics.progression(player, "constellationRank", profile.constellationRank)
+	push(player, "stardust", profile.stardust)
+	push(player, "constellationRank", profile.constellationRank)
+	return profile.constellationRank, nil
 end
 
 -- Erases the player's progress: the save becomes a brand-new profile (all
@@ -1067,8 +1264,11 @@ function DataSystem.equipTrail(player: Player, trailId: string?): boolean
 	if profile == nil or (trailId ~= nil and not profile.ownedTrails[trailId]) then
 		return false
 	end
+	-- The trail is part of production B: settle at the old rate first.
+	DataSystem.settleIncome(player)
 	profile.trail = trailId
 	push(player, "trail", trailId or false)
+	pushIncome(player, profile)
 	return true
 end
 
@@ -1121,6 +1321,8 @@ function DataSystem.start()
 			session:EndSession()
 		end
 		settledAt[player] = nil
+		windows[player] = nil
+		sentEconomy[player] = nil
 	end)
 end
 

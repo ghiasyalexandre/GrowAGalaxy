@@ -5,6 +5,16 @@
 
 export type Vec3 = { x: number, y: number, z: number }
 
+-- One image layer of the nebula backdrop (NEBULA.LAYERS).
+export type NebulaLayer = {
+	name: string,
+	image: string, -- rbxassetid
+	height: number, -- studs above NEBULA.CENTER
+	spin: number, -- radians per second (negative turns the other way)
+	brightness: number, -- SurfaceGui brightness
+	transparency: number, -- extra image transparency
+}
+
 local World = {
 	-- One galaxy region per player. Set Game Settings > Places > Max Players to match.
 	MAX_PLAYERS = 8,
@@ -24,10 +34,59 @@ local World = {
 	-- and the Zero G Dodgeball arena (BloomController eases between them).
 	BLOOM_INTENSITY = 0.6,
 	BLOOM_INDOOR = 0.2,
+	-- Lighting.Ambient and OutdoorAmbient (WorldSystem): the light everything
+	-- gets before any lamp.
+	AMBIENT = "#5F6273",
+	OUTDOOR_AMBIENT = "#5A5D73",
 	STATION_DISTANCE = 140,
 
-	EARTH_CENTER = { x = 0, y = -3000, z = 0 } :: Vec3,
-	EARTH_DIAMETER = 2000, -- a single Part can be at most 2048 studs
+	-- The Helix Nebula backdrop far below (World/NebulaBuilder): image
+	-- layers painted by tools/nebula/helix.py (uploaded as Roblox images),
+	-- stacked from the bottom up, `height` studs above CENTER, each turning
+	-- slowly at `spin` radians per second. TOP is the highest point of the
+	-- backdrop (the flight area stays above it, ConfigCheck).
+	NEBULA = {
+		CENTER = { x = 0, y = -2300, z = 0 } :: Vec3,
+		-- Studs across. A Part can be at most 2048, so each layer is built as
+		-- 2 x 2 tiles (NebulaBuilder): up to 4096.
+		SIZE = 2724,
+		STAR_HEIGHT = 110, -- the white dwarf, above CENTER
+		TOP = -2150,
+		LAYERS = {
+			{
+				name = "Halo",
+				image = "rbxassetid://89347641877952",
+				height = 0,
+				spin = 0.004,
+				brightness = 1.2,
+				transparency = 0,
+			},
+			{
+				name = "Ring",
+				image = "rbxassetid://71338801270797",
+				height = 40,
+				spin = -0.006,
+				brightness = 1.4,
+				transparency = 0,
+			},
+			{
+				name = "Core",
+				image = "rbxassetid://93167090080763",
+				height = 70,
+				spin = 0.009,
+				brightness = 1.3,
+				transparency = 0.05,
+			},
+			{
+				name = "Glow",
+				image = "rbxassetid://105028283456003",
+				height = 100,
+				spin = 0,
+				brightness = 2,
+				transparency = 0,
+			},
+		} :: { NebulaLayer },
+	},
 
 	-- Asteroids are scattered across the whole flight area: see Config.Asteroids.
 
@@ -45,8 +104,6 @@ local World = {
 		glass = "#A9DCFF",
 		deck = "#4E5463",
 		console = "#2B3040",
-		earthOcean = "#1F5FBF",
-		earthLand = "#3F8F45",
 		atmosphere = "#7EC8FF",
 	},
 

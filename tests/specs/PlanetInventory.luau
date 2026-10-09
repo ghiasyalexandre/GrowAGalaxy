@@ -61,7 +61,7 @@ return function(T, Loader)
 			T.equal(planets.p1.slot, nil)
 			T.near(
 				before - StarMath.totalIncome(stars, planets),
-				StarMath.planetIncome("Basalt", 2)
+				StarMath.planetIncome("Basalt", 2, 1, StarMath.starIncome("BrownDwarf", 1))
 			)
 			T.falsy(PlanetInventory.unequip(planets, "p9"))
 		end)
@@ -70,18 +70,20 @@ return function(T, Loader)
 			local stars, planets = setup()
 			PlanetInventory.equip(planets, stars, "p2", "s2", 1)
 			PlanetInventory.equip(planets, stars, "p3", "s2", 2)
-			local expected = StarMath.starIncome("BrownDwarf", 1)
-				+ StarMath.starIncome("BlackHole", 1)
-				+ StarMath.planetIncome("Basalt", 2)
-				+ StarMath.planetIncome("Aurora", 1)
-				+ StarMath.planetIncome("Singularity", 5)
+			local brown, hole =
+				StarMath.starIncome("BrownDwarf", 1), StarMath.starIncome("BlackHole", 1)
+			local expected = brown
+				+ hole
+				+ StarMath.planetIncome("Basalt", 2, 1, brown)
+				+ StarMath.planetIncome("Aurora", 1, 1, hole)
+				+ StarMath.planetIncome("Singularity", 5, 1, hole)
 			T.near(StarMath.totalIncome(stars, planets), expected)
 			local on = PlanetInventory.equippedOn(planets, "s2")
 			T.near(
 				StarMath.income(stars.s2, on),
-				StarMath.starIncome("BlackHole", 1)
-					+ StarMath.planetIncome("Aurora", 1)
-					+ StarMath.planetIncome("Singularity", 5)
+				hole
+					+ StarMath.planetIncome("Aurora", 1, 1, hole)
+					+ StarMath.planetIncome("Singularity", 5, 1, hole)
 			)
 		end)
 
@@ -103,19 +105,51 @@ return function(T, Loader)
 			T.near(StarMath.totalIncome(stars, planets), StarMath.starIncome("BlackHole", 1))
 		end)
 
-		T.test("sale value: rarity value plus half the levelling spent", function()
-			T.equal(
-				PlanetInventory.sellValue({ typeId = "Basalt", level = 1 }),
-				P.SELL_VALUE.Common
-			)
-			local spent = StarMath.planetLevelCost("Aurora", 1)
-				+ StarMath.planetLevelCost("Aurora", 2)
-			T.equal(
-				PlanetInventory.sellValue({ typeId = "Aurora", level = 3 }),
-				P.SELL_VALUE.Rare + math.floor(spent * P.SELL_LEVEL_REFUND)
-			)
-			T.equal(PlanetInventory.sellValue({ typeId = "Nope", level = 1 }), 0)
-		end)
+		T.test(
+			"sale value: a share of the roll price plus a quarter of the levelling spent",
+			function()
+				T.equal(
+					PlanetInventory.sellValue({
+						typeId = "Basalt",
+						level = 1,
+						tier = 1,
+						paid = 1000,
+					}),
+					math.floor(1000 * P.SELL_FRACTION.Common)
+				)
+				T.equal(
+					PlanetInventory.sellValue({
+						typeId = "Aurora",
+						level = 3,
+						tier = 7,
+						paid = 5000,
+						spent = 4000,
+					}),
+					math.floor(5000 * P.SELL_FRACTION.Rare + 4000 * P.SELL_LEVEL_REFUND),
+					"tier adds nothing"
+				)
+				T.equal(
+					PlanetInventory.sellValue({
+						typeId = "Basalt",
+						level = 1,
+						tier = 1,
+						legacy = 40,
+					}),
+					40,
+					"a planet from before economy v2 keeps its fixed value"
+				)
+				T.equal(
+					PlanetInventory.sellValue({ typeId = "Basalt", level = 1, tier = 1 }),
+					0,
+					"free"
+				)
+				T.equal(PlanetInventory.sellValue({ typeId = "Nope", level = 1, tier = 1 }), 0)
+				-- Resale never returns what a planet cost.
+				for _, rarity in P.RARITY_ORDER do
+					T.truthy(P.SELL_FRACTION[rarity] < 1 and P.SELL_LEVEL_REFUND < 1, rarity)
+				end
+			end
+		)
 
 		T.test("only unlocked inventory planets can be sold", function()
 			local _, planets = setup()
@@ -150,8 +184,17 @@ return function(T, Loader)
 			end
 		end)
 
+		T.test("equip best puts the best planets on the strongest star", function()
+			local stars, planets = setup()
+			local layout = PlanetInventory.best(planets, stars)
+			for id in planets do
+				T.equal(layout[id].star, "s2", `{id} goes to the Black Hole`)
+			end
+		end)
+
 		T.test("equip best leaves an already best layout alone", function()
 			local stars, planets = setup()
+			planets.p1.star, planets.p1.slot = "s2", 3
 			planets.p2.star, planets.p2.slot = "s2", 1
 			planets.p3.star, planets.p3.slot = "s2", 2
 			local layout = PlanetInventory.best(planets, stars)
@@ -173,18 +216,19 @@ return function(T, Loader)
 	end)
 
 	T.describe("Planet catalog", function()
-		T.test("28 types in six rarities with the exact odds", function()
-			T.equal(#P.ORDER, 28)
+		T.test("42 types in six rarities with the exact odds", function()
+			T.equal(#P.ORDER, 42)
 			local counts =
-				{ Common = 4, Uncommon = 4, Rare = 6, Epic = 6, Legendary = 4, Interstellar = 4 }
-			-- Percent per type, from the design: 12.5, 7, 14/6, 5/6, 0.5, 0.25.
+				{ Common = 6, Uncommon = 6, Rare = 9, Epic = 9, Legendary = 6, Interstellar = 6 }
+			-- Percent per type: each rarity's share (45.6, 25.6, 12.8, 10, 4, 2)
+			-- split evenly among its types.
 			local each = {
-				Common = 12.5,
-				Uncommon = 7,
-				Rare = 14 / 6,
-				Epic = 5 / 6,
-				Legendary = 0.5,
-				Interstellar = 0.25,
+				Common = 45.6 / 6,
+				Uncommon = 25.6 / 6,
+				Rare = 12.8 / 9,
+				Epic = 10 / 9,
+				Legendary = 4 / 6,
+				Interstellar = 2 / 6,
 			}
 			local total = 0
 			for rarity, n in counts do
@@ -209,27 +253,29 @@ return function(T, Loader)
 			local expected = 0
 			for _, id in P.ORDER do
 				local def = P.BY_ID[id]
-				expected += def.weight / P.WEIGHT_TOTAL * P.SELL_VALUE[def.rarity]
+				expected += def.weight / P.WEIGHT_TOTAL * P.SELL_FRACTION[def.rarity]
 			end
-			T.truthy(expected < Config.Eggs.PRICE_BASE, `expected sale {expected}`)
+			T.near(expected, 0.04, 1e-6, "4% of the roll price at lab 1")
 		end)
 
-		T.test("every old planet maps to a type that earns at least as much", function()
-			-- Version 14 incomes (Config.Planets before the egg overhaul).
-			local old = {
-				Barren = 2,
-				Molten = 5,
-				Desert = 14,
-				Ocean = 35,
-				Terran = 85,
-				IceGiant = 200,
-				GasGiant = 480,
-				Crystal = 1100,
+		T.test("incomes are evenly spaced within each rarity, rarer always higher", function()
+			local ranges = {
+				Common = { 0.5, 0.8 },
+				Uncommon = { 1.2, 1.6 },
+				Rare = { 2.4, 3.4 },
+				Epic = { 5, 7 },
+				Legendary = { 10, 13 },
+				Interstellar = { 16, 20 },
 			}
-			for oldId, income in old do
-				local target = P.LEGACY[oldId]
-				T.truthy(target and P.BY_ID[target], oldId)
-				T.truthy(P.BY_ID[target].income >= income, `{oldId} -> {target}`)
+			for rarity, range in ranges do
+				local ids = P.BY_RARITY[rarity]
+				for index, id in ids do
+					local want = range[1] + (range[2] - range[1]) * (index - 1) / (#ids - 1)
+					T.near(P.BY_ID[id].income, want, 0.001, id)
+				end
+			end
+			for oldId in P.LEGACY do
+				T.truthy(P.BY_ID[P.LEGACY[oldId]], oldId)
 			end
 		end)
 	end)

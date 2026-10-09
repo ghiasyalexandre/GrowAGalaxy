@@ -1,7 +1,12 @@
 --!strict
--- The new-player tutorial: one step at a time on a card at the top of the
--- screen (TutorialController), written so young players can follow it:
--- a short title and one short line (at most MAX_TEXT letters) per step.
+-- The new-player tutorial: one step at a time on a card (TutorialController),
+-- written so young players can follow it: a short title and one short line
+-- (at most MAX_TEXT letters) per step.
+--
+-- Order: move, then place the first star (the starting Stardust buys it) and
+-- collect from it, then fly and mine, then hatch the free tutorial egg
+-- (Config.Eggs.TUTORIAL_EGG_SECONDS), equip the planet, level the star, and
+-- finally roll an egg of their own.
 --
 -- A step is done once its stat (profile.stats) is at least 1; the card shows
 -- the first step not done yet, so steps the player already did are skipped.
@@ -53,6 +58,26 @@ local STEPS: { StepDef } = {
 		touch = "Use the joystick to move.",
 	},
 	{
+		id = "star",
+		stat = "starsPlaced",
+		hud = "StarShop",
+		icon = "StarPlus",
+		title = "Buy your first star",
+		text = "Press Hangar, then Star Shop. Pick the Brown Dwarf and place it with Enter!",
+		touch = "Tap Hangar, then Star Shop. Pick the Brown Dwarf and place it!",
+	},
+	{
+		id = "collect",
+		stat = "collections",
+		hud = "Hangar",
+		world = "collect",
+		icon = "CoinPile",
+		title = "Collect Stardust",
+		text = "Press Hangar. Go to the glowing console. Press E.",
+		gamepad = "Press Hangar. Go to the glowing console. Press X.",
+		touch = "Tap Hangar. Go to the glowing console. Tap the button.",
+	},
+	{
 		id = "launch",
 		stat = "shipsLaunched",
 		hud = "LaunchShip",
@@ -82,45 +107,15 @@ local STEPS: { StepDef } = {
 		touch = "Shoot the blue diamond marked Asteroids. Hold Laser on the glowing spot!",
 	},
 	{
-		id = "star",
-		stat = "starsPlaced",
-		hud = "StarShop",
-		icon = "StarPlus",
-		title = "Buy a star",
-		text = "Teleport to Hangar. Press Star Shop. Pick a star and place it with enter! (scroll wheel to control)",
-		touch = "Teleport to Hangar. Tap Star Shop. Pick a star and place it!",
-	},
-	{
-		id = "collect",
-		stat = "collections",
-		hud = "Hangar",
-		world = "collect",
-		icon = "CoinPile",
-		title = "Collect Stardust",
-		text = "Press Hangar. Go to the glowing console. Press E.",
-		gamepad = "Press Hangar. Go to the glowing console. Press X.",
-		touch = "Tap Hangar. Go to the glowing console. Tap the button.",
-	},
-	{
-		id = "egg",
-		stat = "eggsBought",
-		hud = "Station",
-		world = "eggLab",
-		icon = "GalaxyOrb",
-		title = "Get a planet egg",
-		text = "Press Station. Find the Planet Egg Lab. Buy an egg!",
-		touch = "Tap Station. Find the Planet Egg Lab. Buy an egg!",
-	},
-	{
 		id = "incubate",
 		stat = "eggsIncubated",
 		hud = "Hangar",
 		world = "incubator",
 		icon = "OpenChest",
 		title = "Hatch your egg",
-		text = "Press Hangar. Go through the left door. Press E at a glass dome.",
-		gamepad = "Press Hangar. Go through the left door. Press X at a glass dome.",
-		touch = "Tap Hangar. Go through the left door. Tap the button at a glass dome.",
+		text = "A free egg comes soon! Press Hangar, go through the left door, press E at a glass dome.",
+		gamepad = "A free egg comes soon! Press Hangar, go through the left door, press X at a dome.",
+		touch = "A free egg comes soon! Tap Hangar, go through the left door, tap a glass dome.",
 	},
 	{
 		id = "hatch",
@@ -148,6 +143,16 @@ local STEPS: { StepDef } = {
 		text = "Fly to your star. Press E, then Level up!",
 		gamepad = "Fly to your star. Press X, then Level up!",
 		touch = "Fly to your star. Tap the button, then Level up!",
+	},
+	{
+		id = "egg",
+		stat = "eggsBought",
+		hud = "Hangar",
+		world = "eggLab",
+		icon = "GalaxyOrb",
+		title = "Roll a planet egg",
+		text = "Press Hangar. Go to the Planet Egg Lab beside the Collector. Press ROLL, then KEEP!",
+		touch = "Tap Hangar. Go to the Planet Egg Lab beside the Collector. Tap ROLL, then KEEP!",
 	},
 	{
 		id = "finish",

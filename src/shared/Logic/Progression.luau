@@ -57,11 +57,19 @@ function Progression.shipCost(shipId: string): number?
 end
 
 -- True when the ship may be bought: it's the first on the ladder or the
--- player owns the ship before it in Config.Ships.ORDER.
-function Progression.shipUnlocked(shipId: string, ownedShips: { [string]: boolean }): boolean
+-- player owns the ship before it in Config.Ships.ORDER, and (when the best
+-- star tier is given) their best star has reached the ship's minTier.
+function Progression.shipUnlocked(
+	shipId: string,
+	ownedShips: { [string]: boolean },
+	bestTier: number?
+): boolean
 	local order = Config.Ships.ORDER
 	local index = table.find(order, shipId)
 	if index == nil then
+		return false
+	end
+	if bestTier and bestTier < Config.Ships.BY_ID[shipId].minTier then
 		return false
 	end
 	return index == 1 or ownedShips[order[index - 1]] == true
@@ -74,14 +82,18 @@ function Progression.previousShip(shipId: string): string?
 end
 
 -- Stardust price of level `level` (1 = buying it) of an equipment item on
--- sale, or nil (not for sale, or past MAX_LEVEL). A whole number.
-function Progression.equipmentCost(itemId: string, level: number?): number?
+-- sale for ship `shipId`, or nil (not for sale, or past MAX_LEVEL): the
+-- item's share of the ship's price (at least the item's own cost), doubling
+-- each level (Config.Equipment). A whole number.
+function Progression.equipmentCost(itemId: string, level: number?, shipId: string?): number?
 	local def = Config.Equipment.BY_ID[itemId]
 	local wanted = level or 1
 	if def == nil or not def.enabled or wanted < 1 or wanted > Config.Equipment.MAX_LEVEL then
 		return nil
 	end
-	return math.floor(def.cost.stardust * Config.Equipment.COST_GROWTH ^ (wanted - 1) + 0.5)
+	local shipPrice = if shipId then Progression.shipCost(shipId) or 0 else 0
+	local base = math.max(def.cost.stardust, shipPrice * def.costShare)
+	return math.ceil(base * Config.Equipment.COST_GROWTH ^ (wanted - 1) - 1e-9)
 end
 
 -- An equipment modifier at a level: its bonus (multiplier - 1) grows by

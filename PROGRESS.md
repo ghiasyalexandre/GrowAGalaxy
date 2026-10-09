@@ -51,6 +51,8 @@ Last updated: 2026-10-05 (stage 46 merged into `main`).
 | 44. Code ResetMyGalaxy erases your own progress and code history (typed twice to confirm; purchase receipts kept) ([doc](docs/stage-44-reset-code.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 45. Galaxy Control console on the hangar deck: every solar system (level up, evolve, manage, inspect) and galaxy expansion in one panel ([doc](docs/stage-45-galaxy-control.md)) | Merged | Passing (227 tests) | **Not yet** |
 | 46. Stardust Collector, Galaxy Control and Planet Egg dispenser are real machines; Neon Runway on/off switch in Settings (save v18) ([doc](docs/stage-46-devices-runway.md)) | Merged | Passing (228 tests) | **Not yet** |
+| 47. Unified HUD layout (phone/tablet/desktop); ISS rebuild with gravity wheel; personal Egg Lab with rolls, rerolls, lab upgrades and 7 planet tiers (save v19) ([doc](docs/stage-47-egg-lab-tiers.md)) | Branch `stage-47-hud-layout`, uncommitted | Passing (235 tests) | **Not yet** |
+| 48. Economy v2 from REBALANCE.md: BuildIndex star pricing, host-scaled planets, H-priced eggs, R-scaled rewards, B-based mining, 8 h offline at 25%, 2 h tank, ship tier gates, Constellation Projects (save v21) ([doc](docs/stage-48-economy-v2.md)) | Branch `stage-47-hud-layout`, uncommitted | Passing (253 tests) | **Not yet** |
 
 ## What works in code (unverified in Studio)
 

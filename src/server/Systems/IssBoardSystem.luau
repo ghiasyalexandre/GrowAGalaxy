@@ -6,7 +6,7 @@
 --              (LeaderboardSystem.top), or, where the leaderboard data
 --              store can't be read (Studio without API access), the richest
 --              players in this server
---   HatchFeed  the Egg Lab's latest rare hatches in this server
+--   HatchFeed  the latest rare hatches in this server (Star Lounge)
 --              (HatchSystem.feed, Config.Eggs.ANNOUNCE_RARITY and rarer)
 --
 -- Text set here replicates to every client. Nothing is read from players.
@@ -104,7 +104,7 @@ local function showFeed()
 			local when = if ago < 60 then "just now" else `{ago // 60} min ago`
 			table.insert(
 				lines,
-				`<b>{plain(entry.name)}</b> hatched <font color="{rarity.color}"><b>{def.displayName}</b> ({rarity.displayName})</font>  <font color="#9AA6C8">{when}</font>`
+				`<b>{plain(entry.name)}</b> hatched <font color="{rarity.color}"><b>{def.displayName}</b> ({P.TIERS[entry.tier].name} {rarity.displayName})</font>  <font color="#9AA6C8">{when}</font>`
 			)
 		end
 	end

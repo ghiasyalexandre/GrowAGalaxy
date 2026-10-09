@@ -72,15 +72,47 @@ return function(T, Loader)
 			T.equal(data.activeShip, starter)
 		end)
 
-		T.test("drops loadout equipment the player does not own", function()
+		T.test("drops loadout equipment not bought for that ship", function()
 			local data = {
-				ownedEquipment = { BeamMk2 = true },
-				loadouts = { [starter] = { equipment = { Beam = "BeamMk2", Cargo = "CargoMk2" } } },
+				loadouts = {
+					[starter] = {
+						equipment = { Beam = "BeamMk2", Cargo = "CargoMk2" },
+						levels = { BeamMk2 = 3, Nope = 2 },
+					},
+				},
 			}
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.loadouts[starter].equipment.Beam, "BeamMk2")
 			T.equal(data.loadouts[starter].equipment.Cargo, nil)
+			T.equal(data.loadouts[starter].levels.BeamMk2, 3)
+			T.equal(data.loadouts[starter].levels.Nope, nil)
 		end)
+
+		T.test(
+			"v22: every owned ship keeps the equipment the player owned, at its level",
+			function()
+				local data = {
+					schemaVersion = 21,
+					ownedShips = { [starter] = true, RedFighter = true },
+					ownedEquipment = { BeamMk2 = true, CoolingMk2 = true },
+					equipmentLevels = { BeamMk2 = 3 },
+					loadouts = { [starter] = { equipment = { Beam = "BeamMk2" } } },
+				}
+				T.truthy(ProfileSchema.normalize(data))
+				for _, shipId in { starter, "RedFighter" } do
+					local loadout = data.loadouts[shipId]
+					T.equal(loadout.levels.BeamMk2, 3, shipId)
+					T.equal(loadout.levels.CoolingMk2, 1, shipId)
+					T.equal(loadout.equipment.Beam, "BeamMk2", shipId)
+					T.equal(loadout.equipment.Cooling, "CoolingMk2", shipId)
+				end
+				-- Once per ship, buying for one ship no longer changes another.
+				data.loadouts.RedFighter.levels.BeamMk2 = 4
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(data.loadouts[starter].levels.BeamMk2, 3)
+				T.equal(data.loadouts.RedFighter.levels.BeamMk2, 4)
+			end
+		)
 
 		T.test("v7: hangar upgrades start empty and keep only true flags", function()
 			local fresh = { schemaVersion = 6 }
@@ -122,7 +154,8 @@ return function(T, Loader)
 			}
 			T.truthy(ProfileSchema.normalize(data))
 			T.equal(data.galaxy.stars.a.level, 4, "Brown Dwarf max level is 4")
-			T.equal(data.galaxy.stars.b.level, 3, "levels within the max are kept")
+			-- v21 keeps the share of the way to max: 3 of the old 6 -> 2 of 4.
+			T.equal(data.galaxy.stars.b.level, 2, "levels keep their share of the way to max")
 		end)
 
 		T.test("keeps valid stars and drops corrupt ones", function()
@@ -349,15 +382,11 @@ return function(T, Loader)
 				T.equal(star.planets, nil)
 				T.equal(star.planetLevels, nil)
 			end
-			-- Every equipped planet earns at least what it did in that slot.
-			local equippedNow = 0
+			-- Every old planet keeps its fixed sale value (v21).
 			for _, planet in data.planets do
-				if planet.star then
-					equippedNow += StarMath.planetIncome(planet.typeId, planet.level)
-				end
+				local rarity = Config.Planets.BY_ID[planet.typeId].rarity
+				T.equal(planet.legacy, Config.Planets.LEGACY_SELL_VALUE[rarity])
 			end
-			local equippedBefore = math.floor(2 * 2 + 0.5) + 5 + math.floor(1100 * 3 + 0.5) + 480
-			T.truthy(equippedNow >= equippedBefore, `{equippedNow} >= {equippedBefore}`)
 			T.truthy(incomeBefore > 0)
 			-- Old progress still counts towards the new achievements.
 			T.equal(data.stats.planetsEquipped, 7)
@@ -468,15 +497,80 @@ return function(T, Loader)
 
 		T.test("v18: only built, switchable hangar upgrades can be switched off", function()
 			local data = ProfileSchema.default() :: any
-			data.schemaVersion = 17
-			data.hangar = { NeonRunway = true, StardustSilo = true }
-			data.hangarOff = { NeonRunway = true, StardustSilo = true, HoloGalaxy = true }
+			data.hangar = { StardustSilo = true }
+			data.hangarOff = { StardustSilo = true, HoloGalaxy = true }
 			T.truthy(ProfileSchema.normalize(data))
-			T.equal(data.hangarOff.NeonRunway, true)
 			T.equal(data.hangarOff.StardustSilo, nil, "not switchable")
 			T.equal(data.hangarOff.HoloGalaxy, nil, "not built")
-			T.equal(ProfileSchema.view(data).hangarOff.NeonRunway, true)
 		end)
+
+		T.test("v20: a built Neon Runway is removed and its price refunded, once", function()
+			local data = ProfileSchema.default() :: any
+			data.schemaVersion = 19
+			data.stardust = 100
+			data.hangar = { NeonRunway = true, StardustSilo = true }
+			data.hangarOff = { NeonRunway = true }
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.stardust, 5100)
+			T.equal(data.hangar.NeonRunway, nil)
+			T.equal(data.hangar.StardustSilo, true)
+			T.equal(data.hangarOff.NeonRunway, nil)
+			T.truthy(ProfileSchema.normalize(data))
+			T.equal(data.stardust, 5100, "never refunded twice")
+			local fresh = ProfileSchema.default() :: any
+			fresh.schemaVersion = 19
+			fresh.stardust = 100
+			T.truthy(ProfileSchema.normalize(fresh))
+			T.equal(fresh.stardust, 100, "nothing to refund")
+		end)
+
+		T.test(
+			"v19: older planets, eggs and hatches are tier 1; the Egg Lab starts at level 1",
+			function()
+				local data = ProfileSchema.default() :: any
+				data.schemaVersion = 18
+				data.eggLab = nil
+				data.planets = { p1 = { typeId = "Basalt", level = 3 } }
+				data.nextPlanetId = 2
+				data.eggs = { e1 = { outcome = "Aurora", guaranteed = false, boughtAt = 5 } }
+				data.hatches =
+					{ ["1"] = { eggId = "e2", outcome = "Basalt", startedAt = 1, endsAt = 11 } }
+				data.nextEggId = 3
+				data.eggsBought = 2
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(data.schemaVersion, ProfileSchema.VERSION)
+				T.equal(data.planets.p1.tier, 1)
+				T.equal(data.planets.p1.level, 3, "levels are kept")
+				T.equal(data.eggs.e1.tier, 1)
+				T.equal(data.hatches["1"].tier, 1)
+				T.equal(data.eggsBought, 2, "kept eggs carry over")
+				T.equal(data.eggLab.level, 1)
+				T.equal(data.eggLab.current, nil)
+				T.equal(data.eggLab.rolls, 0)
+			end
+		)
+
+		T.test(
+			"v19: tiers and the Egg Lab are clamped; an unknown pedestal egg is dropped",
+			function()
+				local data = ProfileSchema.default() :: any
+				data.planets = { p1 = { typeId = "Basalt", level = 1, tier = 99 } }
+				data.nextPlanetId = 2
+				data.eggLab =
+					{ level = 999, current = { outcome = "NoSuchPlanet", tier = 3 }, rolls = 4 }
+				T.truthy(ProfileSchema.normalize(data))
+				T.equal(data.planets.p1.tier, #Config.Planets.TIERS)
+				T.equal(data.eggLab.level, #Config.Eggs.LAB_LEVELS)
+				T.equal(data.eggLab.current, nil)
+				T.equal(data.eggLab.rolls, 4)
+				data.eggLab.current = { outcome = "Singularity", tier = 7 }
+				T.truthy(ProfileSchema.normalize(data))
+				local view = ProfileSchema.view(data)
+				T.equal(view.eggLab.current.rarity, "Interstellar")
+				T.equal(view.eggLab.current.tier, 7)
+				T.equal((view.eggLab.current :: any).outcome, nil, "the planet stays hidden")
+			end
+		)
 
 		T.test("v13: redeemed codes are kept as flags; the ILUVGHIASY code exists", function()
 			local data = ProfileSchema.default()
@@ -489,7 +583,7 @@ return function(T, Loader)
 			T.equal(data.redeemedCodes.ILUVGHIASY, true)
 			T.equal(data.redeemedCodes.BAD, nil)
 			local code = Config.Codes.BY_CODE.ILUVGHIASY
-			T.equal(code and code.stardust, 5000000, "the code gives 5,000,000 Stardust")
+			T.truthy(code and (code.minutes or 0) > 0, "the code gives minutes of production")
 			T.truthy(Config.Codes.BY_CODE.PLANETZPLZ.allPlanets, "PlanetzPlz: one of every planet")
 			T.truthy(Config.Codes.BY_CODE.STARZSHIPZ.allShips, "StarzShipz: every ship")
 			T.truthy(Config.Codes.BY_CODE.RESETMYGALAXY.reset, "ResetMyGalaxy: erases progress")

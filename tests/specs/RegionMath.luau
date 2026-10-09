@@ -62,7 +62,7 @@ return function(T, Loader)
 			end
 		end)
 
-		T.test("regions stay clear of the ISS and the Earth backdrop", function()
+		T.test("regions stay clear of the ISS and the nebula backdrop", function()
 			-- Asteroids need open space between the ISS and the stations.
 			local open = Config.Asteroids.ISS_CLEARANCE + Config.Asteroids.REGION_CLEARANCE + 300
 			for slot = 1, Config.World.MAX_PLAYERS do
@@ -72,8 +72,10 @@ return function(T, Loader)
 				T.truthy(stationRadius > open, `slot {slot} station leaves room for asteroids`)
 			end
 			local size = Config.Galaxy.EXPANSIONS[#Config.Galaxy.EXPANSIONS].size
-			local earthTop = Config.World.EARTH_CENTER.y + Config.World.EARTH_DIAMETER / 2
-			T.truthy(Config.World.REGION_RING_HEIGHT - size.y / 2 > earthTop, "regions above Earth")
+			T.truthy(
+				Config.World.REGION_RING_HEIGHT - size.y / 2 > Config.World.NEBULA.TOP,
+				"regions above the nebula"
+			)
 		end)
 
 		T.test("isInside respects the margin on every wall", function()

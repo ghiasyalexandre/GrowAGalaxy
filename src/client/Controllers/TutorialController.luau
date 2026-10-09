@@ -9,7 +9,7 @@
 --   Pointers   an arrow bounces next to the HUD button the step needs (and
 --              the button glows); a "Here!" marker with the distance floats
 --              over the place in the world the step needs (your Collect
---              console, the Egg Lab, your incubator, your star), visible
+--              console, your Egg Lab, your incubator, your star), visible
 --              through walls.
 --   Buttons    Next / Finish on steps the player confirms (the move and fly
 --              steps also complete by themselves once you move or fly),
@@ -29,6 +29,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
+local Layout = require(script.Parent.Parent.UI.Layout)
 local Input = require(script.Parent.Parent.Input)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
@@ -67,6 +68,9 @@ local nextUp: TextLabel
 local doneFlash: TextLabel
 local buttonRow: Frame
 local tab: TextButton
+local cardScale: UIScale
+local tabScale: UIScale
+local CARD_WIDTH = 620 -- pixels at the HUD's scale 1 (narrower when the gap is)
 local arrow: TextLabel
 local guide: ScreenGui
 local guideList: ScrollingFrame
@@ -120,15 +124,14 @@ end
 
 local function worldPart(kind: string): BasePart?
 	local found: Instance? = nil
-	if kind == "eggLab" then
-		local iss = Workspace:FindFirstChild("ISS")
-		found = if iss then iss:FindFirstChild("EggConsole", true) else nil
-	else
+	do
 		local region = myRegion()
 		if region == nil then
 			return nil
 		end
-		if kind == "collect" then
+		if kind == "eggLab" then
+			found = region:FindFirstChild("EggConsole", true)
+		elseif kind == "collect" then
 			found = region:FindFirstChild("CollectConsole", true)
 		elseif kind == "incubator" then
 			found = region:FindFirstChild("Chamber1", true)
@@ -407,14 +410,56 @@ refresh = function()
 	nextUp.Text = if upcoming then `Next: {upcoming.title}` else "Last step!"
 	nextUp.Visible = true
 	buildButtons(step, index)
-	-- When flying, the flight gauges sit at the top: move below them.
-	local flying = ClientState.mode == "ship"
-	card.Position = UDim2.new(0.5, 0, 0, if flying then 104 else 12)
+end
+
+-- Where the card (and its tab) sit, at the HUD's scale (UI/Layout). Run
+-- every frame: docks change size as the player flies, levels up or turns
+-- the screen.
+--   desktop        bottom left, just above the travel buttons (Hangar,
+--                  Station, Launch) and the on-foot gauges; if that would
+--                  reach the top-left column, beside the column instead
+--   phone, tablet  the free band between the top-left and top-right docks
+--                  (the bottom left is the thumbstick's, and the travel
+--                  buttons are in the top-left grid)
+local function placeCard()
+	local origin = gui.AbsolutePosition
+	local scale = Layout.scale()
+	cardScale.Scale = scale
+	tabScale.Scale = scale
+	if Layout.compact() then
+		local from, to, below = Layout.centerGap()
+		local width = math.min(CARD_WIDTH * scale, to - from - 16)
+		card.AnchorPoint = Vector2.new(0.5, 0)
+		tab.AnchorPoint = Vector2.new(0.5, 0)
+		card.Size = UDim2.fromOffset(width / scale, 0)
+		card.Position = UDim2.fromOffset((from + to) / 2 - origin.X, below - origin.Y + 8)
+		tab.Position = card.Position
+		return
+	end
+	local bottomLeft = Layout.dock("BottomLeft")
+	local topLeft = Layout.dock("TopLeft")
+	local screen = gui.AbsoluteSize
+	local left = bottomLeft.AbsolutePosition.X
+	local width = math.min(CARD_WIDTH * scale, screen.X * 0.42)
+	local bottom = bottomLeft.AbsolutePosition.Y - 8
+	-- Too tall for the space under the top-left column: move beside it.
+	local columnBottom = topLeft.AbsolutePosition.Y + topLeft.AbsoluteSize.Y
+	local height = if card.Visible then card.AbsoluteSize.Y else tab.AbsoluteSize.Y
+	if bottom - height < columnBottom + 8 then
+		left = topLeft.AbsolutePosition.X + topLeft.AbsoluteSize.X + 12
+	end
+	card.AnchorPoint = Vector2.new(0, 1)
+	tab.AnchorPoint = Vector2.new(0, 1)
+	card.Size = UDim2.fromOffset(width / scale, 0)
+	card.Position = UDim2.fromOffset(left - origin.X, bottom - origin.Y)
 	tab.Position = card.Position
 end
 
 -- Every frame: pointers follow their targets, auto steps watch movement.
 local function step()
+	if gui.Enabled then
+		placeCard()
+	end
 	local current = currentStep()
 	if current == nil or not gui.Enabled then
 		return
@@ -611,14 +656,13 @@ local function build()
 	card.Name = "Card"
 	card.AnchorPoint = Vector2.new(0.5, 0)
 	card.Position = UDim2.new(0.5, 0, 0, 12)
-	card.Size = UDim2.new(0.92, 0, 0, 0)
+	card.Size = UDim2.fromOffset(CARD_WIDTH, 0)
 	card.AutomaticSize = Enum.AutomaticSize.Y
 	card.BackgroundColor3 = CARD_COLOR
 	card.BackgroundTransparency = 0.08
 	card.Parent = gui
-	local limit = Instance.new("UISizeConstraint")
-	limit.MaxSize = Vector2.new(620, math.huge)
-	limit.Parent = card
+	cardScale = Instance.new("UIScale")
+	cardScale.Parent = card
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(0, 14)
 	round.Parent = card
@@ -737,6 +781,8 @@ local function build()
 	tab.TextColor3 = GOLD
 	tab.Visible = false
 	tab.Parent = gui
+	tabScale = Instance.new("UIScale")
+	tabScale.Parent = tab
 	local tabRound = Instance.new("UICorner")
 	tabRound.CornerRadius = UDim.new(1, 0)
 	tabRound.Parent = tab

@@ -4,27 +4,23 @@
 -- WheelRequest (RemoteFunction, client -> server):
 --   "spin" -> (ok, message, prizeIndex?)
 --
--- One spin every 24 hours from the last one, for Config.Wheel.SPIN_COST
--- Stardust (never Robux); nothing speeds the timer up. Stardust can be
--- bought, so like mystery eggs a spin is only sold where PolicyService
--- allows paid random items (EggSystem.policy; off while unknown). The server draws the prize with its own
--- Random, then DataSystem.spinWheel records the spin and adds the Stardust
+-- One free spin every 24 hours from the last one; nothing speeds the timer
+-- up. It costs nothing, so it isn't a paid random item. The server draws
+-- the prize with its own Random, then DataSystem.spinWheel records the spin
+-- and adds the Stardust (the prize's minutes of the player's reward rate R)
 -- in one step before answering, so the prize is granted even if the client
--- never plays the animation. Prizes are fixed amounts: no pass, boost or
--- trail multiplies them.
+-- never plays the animation. No pass, boost or trail multiplies it.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
-local EggSystem = require(script.Parent.EggSystem)
 local EggMath = require(ReplicatedStorage.Shared.Logic.EggMath)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Net = require(ReplicatedStorage.Shared.Net)
 local RateLimiter = require(script.Parent.Parent.Util.RateLimiter)
 local WheelMath = require(ReplicatedStorage.Shared.Logic.WheelMath)
 
-local W = Config.Wheel
 local CURRENCY = Config.Economy.CURRENCY_NAME
 
 local WheelSystem = {}
@@ -43,21 +39,13 @@ local function spin(player: Player): (boolean, string, number?)
 			`Your next spin is in {EggMath.durationText(WheelMath.wait(profile.wheel.nextSpin, now))}.`,
 			nil
 	end
-	if not EggMath.canBuyRandom(EggSystem.policy(player)) then
-		return false,
-			"The wheel isn't available for you: paid random prizes aren't allowed in your region, or we couldn't check yet.",
-			nil
-	end
-	if profile.stardust < W.SPIN_COST then
-		return false, `A spin costs {Format.commas(W.SPIN_COST)} {CURRENCY}.`, nil
-	end
 	local index = WheelMath.pick(rng:NextInteger(1, WheelMath.total()))
-	if not DataSystem.spinWheel(player, index, now) then
+	local won = DataSystem.spinWheel(player, index, now)
+	if won == nil then
 		return false, "The wheel couldn't spin. Try again.", nil
 	end
 	DataSystem.addStat(player, "wheelSpins", 1)
-	local prize = W.PRIZES[index]
-	return true, `You won {Format.commas(prize.stardust)} {CURRENCY}!`, index
+	return true, `You won {Format.commas(won)} {CURRENCY}!`, index
 end
 
 local function onRequest(player: Player, action: unknown): (boolean, string, number?)

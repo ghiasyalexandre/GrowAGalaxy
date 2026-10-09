@@ -69,6 +69,9 @@ local function show(text: string)
 	label.TextScaled = true
 	label.TextColor3 = Color3.new(1, 1, 1)
 	label.TextStrokeTransparency = 0.6
+	-- Rich text: messages may colour words (<font color="#hex">, e.g. an
+	-- egg's tier and rarity, EggSystem).
+	label.RichText = true
 	label.Text = text
 	label.Parent = toast
 	local padding = Instance.new("UIPadding")

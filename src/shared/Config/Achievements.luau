@@ -2,8 +2,13 @@
 -- Permanent achievements. Progress is read from the profile's stats table, so
 -- an achievement is just "stat reaches goal".
 
+-- Rewards are once per achievement: Stardust worth SIZES[size].minutes of
+-- the player's reward rate R (Logic/EconomyMath.reward), at least
+-- SIZES[size].minimum, plus any cosmetic or ship.
+export type Size = "minor" | "major" | "capstone"
+
 export type Reward = {
-	stardust: number,
+	size: Size,
 	cosmetic: string?,
 	ship: string?,
 }
@@ -41,7 +46,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "starsPlaced",
 		goal = 1,
-		reward = { stardust = 100, cosmetic = "StargazerTitle" },
+		reward = { size = "minor", cosmetic = "StargazerTitle" },
 	},
 	FirstMoon = {
 		id = "FirstMoon",
@@ -50,7 +55,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "moonsPlaced",
 		goal = 1,
-		reward = { stardust = 150 },
+		reward = { size = "minor" },
 	},
 	Miner100 = {
 		id = "Miner100",
@@ -59,7 +64,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "asteroidsMined",
 		goal = 100,
-		reward = { stardust = 1000, cosmetic = "GoldenBeam" },
+		reward = { size = "minor", cosmetic = "GoldenBeam" },
 	},
 	AdvancedWorld = {
 		id = "AdvancedWorld",
@@ -68,7 +73,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "advancedPlanets",
 		goal = 1,
-		reward = { stardust = 2000 },
+		reward = { size = "major" },
 	},
 	StarCluster = {
 		id = "StarCluster",
@@ -77,7 +82,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "starsPlaced",
 		goal = 3,
-		reward = { stardust = 5000 },
+		reward = { size = "major" },
 	},
 	Cartographer = {
 		id = "Cartographer",
@@ -86,7 +91,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = false,
 		stat = "zonesDiscovered",
 		goal = 4,
-		reward = { stardust = 10000 },
+		reward = { size = "major" },
 	},
 	CoolHead = {
 		id = "CoolHead",
@@ -95,7 +100,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "coolExtractions",
 		goal = 1,
-		reward = { stardust = 3000 },
+		reward = { size = "major" },
 	},
 	Planetfall = {
 		id = "Planetfall",
@@ -104,7 +109,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "planetsEquipped",
 		goal = 1,
-		reward = { stardust = 300 },
+		reward = { size = "minor" },
 	},
 	StellarEvolution = {
 		id = "StellarEvolution",
@@ -113,7 +118,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "starEvolutions",
 		goal = 1,
-		reward = { stardust = 1500 },
+		reward = { size = "minor" },
 	},
 	Terraformer = {
 		id = "Terraformer",
@@ -122,7 +127,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "planetLevels",
 		goal = 5,
-		reward = { stardust = 8000 },
+		reward = { size = "major" },
 	},
 	Worldbuilder = {
 		id = "Worldbuilder",
@@ -131,7 +136,7 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "planetsHatched",
 		goal = 10,
-		reward = { stardust = 20000 },
+		reward = { size = "major" },
 	},
 	EventHorizon = {
 		id = "EventHorizon",
@@ -140,11 +145,16 @@ local BY_ID: { [string]: AchievementDef } = {
 		enabled = true,
 		stat = "blackHoles",
 		goal = 1,
-		reward = { stardust = 250000 },
+		reward = { size = "capstone" },
 	},
 }
 
 return {
+	SIZES = {
+		minor = { minutes = 1, minimum = 60 },
+		major = { minutes = 3, minimum = 180 },
+		capstone = { minutes = 10, minimum = 600 },
+	} :: { [string]: { minutes: number, minimum: number } },
 	ORDER = ORDER,
 	BY_ID = BY_ID,
 }

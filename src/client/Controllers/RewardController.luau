@@ -41,6 +41,7 @@ local RewardController = {}
 
 local gui: ScreenGui
 local banner: Frame
+local bannerTop: () -> number -- defined below the banner code
 local bannerHeader: TextLabel
 local bannerTitle: TextLabel
 local bannerBody: TextLabel
@@ -151,7 +152,7 @@ local function orb(from: Vector2, delay: number)
 	end)
 end
 
--- "+1.2K" with a caption, bouncing in at `at` and floating up as it fades.
+-- "+1.2k" with a caption, bouncing in at `at` and floating up as it fades.
 local function popup(at: Vector2, amount: number, caption: string?)
 	local holder = Instance.new("Frame")
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -280,7 +281,8 @@ local function runBanners()
 			Sprites.tint(banner, Color3.new(1, 1, 1):Lerp(item.color, 0.25))
 			banner.Visible = true
 			banner.Position = UDim2.new(0.5, 0, 0, -120)
-			TweenService:Create(banner, POP, { Position = UDim2.new(0.5, 0, 0, 70) }):Play()
+			TweenService:Create(banner, POP, { Position = UDim2.new(0.5, 0, 0, bannerTop()) })
+				:Play()
 			Theme.popIn(banner)
 			task.delay(0.15, function()
 				confetti(banner.AbsolutePosition + banner.AbsoluteSize / 2, item.color)
@@ -389,6 +391,28 @@ local function findCollector()
 	end
 	collectLabel = billboard
 	collectText = text
+end
+
+-- Where the banner settles: 70 px from the top, or just under the tutorial
+-- card (or its folded tab) when that is showing, so the two never overlap.
+local BANNER_TOP = 70
+local BANNER_GAP = 10
+bannerTop = function(): number
+	local tutorial = Players.LocalPlayer.PlayerGui:FindFirstChild("Tutorial")
+	local top = BANNER_TOP
+	if tutorial and tutorial:IsA("ScreenGui") and tutorial.Enabled then
+		local origin = banner.Parent and (banner.Parent :: GuiBase2d).AbsolutePosition
+			or Vector2.zero
+		for _, name in { "Card", "Tab" } do
+			local item = tutorial:FindFirstChild(name)
+			-- Only a card at the top of the screen (phones, tablets) is in the way.
+			if item and item:IsA("GuiObject") and item.Visible and item.AnchorPoint.Y == 0 then
+				local bottom = item.AbsolutePosition.Y + item.AbsoluteSize.Y - origin.Y
+				top = math.max(top, bottom + BANNER_GAP)
+			end
+		end
+	end
+	return top
 end
 
 local function refreshCollector()

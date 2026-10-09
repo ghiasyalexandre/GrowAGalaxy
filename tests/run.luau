@@ -30,6 +30,7 @@ local SPECS = {
 	"RaidMath",
 	"DodgeballMath",
 	"OfflineMath",
+	"EconomyMath",
 }
 
 for _, name in SPECS do

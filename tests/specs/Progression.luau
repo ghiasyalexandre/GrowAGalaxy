@@ -44,6 +44,14 @@ return function(T, Loader)
 			do
 				T.truthy(ids[needed], `teaches {needed}`)
 			end
+			-- A star comes before mining, and the free egg before rolling one.
+			local at = {}
+			for index, step in steps do
+				at[step.id] = index
+			end
+			T.truthy(at.star < at.mine and at.star < at.launch, "place a star before mining")
+			T.truthy(at.collect < at.mine, "collect before mining")
+			T.truthy(at.incubate < at.egg, "hatch the free egg before rolling one")
 			-- Already-done steps are skipped: someone who mined first starts at the welcome.
 			T.equal(Progression.tutorialStep({ asteroidsMined = 3 }), 1)
 			T.equal(Progression.tutorialStep({ tutorialWelcome = 1, tutorialMoved = 1 }), 3)
@@ -102,6 +110,8 @@ return function(T, Loader)
 			local order = Config.Ships.ORDER
 			T.equal(order[1], "MicroRecon")
 			T.equal(order[11], "MeteorSlicer")
+			T.equal(order[12], "QuasarBoard")
+			T.truthy(Config.Ships.BY_ID.QuasarBoard.rider)
 			local owned = { [order[1]] = true }
 			T.truthy(Progression.shipUnlocked(order[2], owned))
 			T.equal(Progression.shipUnlocked(order[3], owned), false, "skips a step")
@@ -112,9 +122,22 @@ return function(T, Loader)
 			T.equal(Progression.previousShip(order[1]), nil)
 		end)
 
-		T.test("equipment has 5 levels: each costs more and gives more", function()
+		T.test("equipment has 4 levels: doubling prices, +15% steps to +60%", function()
 			local E = Config.Equipment
-			T.equal(E.MAX_LEVEL, 5)
+			T.equal(E.MAX_LEVEL, 4)
+			T.equal(Progression.equipmentCost("BeamMk2", 1), 500)
+			T.equal(Progression.equipmentCost("BeamMk2", 4), 4000)
+			T.equal(Progression.equipmentCost("ThrustersMk2", 4), 12000)
+			-- Per ship: a share of the ship's price, never under the item's cost.
+			T.equal(
+				Progression.equipmentCost("BeamMk2", 1, "MicroRecon"),
+				500,
+				"starter: the floor"
+			)
+			T.equal(Progression.equipmentCost("BeamMk2", 1, "RedFighter"), 500, "10% of 5,000")
+			T.equal(Progression.equipmentCost("BeamMk2", 1, "Warship"), 50000, "10% of 500,000")
+			T.equal(Progression.equipmentCost("ThrustersMk2", 2, "Warship"), 300000, "30%, then x2")
+			T.near(Progression.equipmentMultiplier(1.15, 4), 1.6)
 			for _, itemId in E.ORDER do
 				if Progression.equipmentCost(itemId) == nil then
 					continue

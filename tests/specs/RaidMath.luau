@@ -9,9 +9,9 @@ return function(T, Loader)
 			local lastStardust, lastHealth = 0, 0
 			for _, id in R.ORDER do
 				local def = R.BY_ID[id]
-				T.truthy(def.reward.stardust > lastStardust, id)
+				T.truthy(def.reward.minutes > lastStardust, id)
 				T.truthy(def.bossHealth > lastHealth, id)
-				lastStardust, lastHealth = def.reward.stardust, def.bossHealth
+				lastStardust, lastHealth = def.reward.minutes, def.bossHealth
 			end
 		end)
 

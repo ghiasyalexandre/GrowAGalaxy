@@ -1,8 +1,9 @@
 --!strict
 -- Heads-up display: Stardust and the player's galaxy sector (top left), the
 -- controls hint (bottom centre), the suit or flight readout and the Return to
--- Hangar and Station travel buttons (bottom left), the Settings and PvP buttons and the Star
--- Shop, Shipyard and Store buttons stacked under the wallet, and
+-- Hangar and Station travel buttons (bottom left), the Settings and PvP buttons and the
+-- Shipyard, Planets and Star Shop buttons stacked under the wallet (the Galaxy
+-- Store opens from PremiumController's shortcut), and
 -- while flying a reticle, the laser's heat gauge, the boost tank and, while
 -- the beam extracts an asteroid, the extraction bar.
 -- Display only; the server owns every value shown here.
@@ -14,6 +15,7 @@ local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
 
 local ClientState = require(script.Parent.Parent.ClientState)
+local Layout = require(script.Parent.Parent.UI.Layout)
 local StarController = require(script.Parent.StarController)
 local Sprites = require(script.Parent.Parent.UI.Sprites)
 local Theme = require(script.Parent.Parent.UI.Theme)
@@ -60,7 +62,6 @@ local hangarButton: TextButton
 local stationButton: TextButton
 local effectsButton: TextButton
 local shipyardButton: TextButton
-local storeButton: TextButton
 local planetsButton: TextButton
 local boostBar: Frame
 local boostsAt = 0 -- os.clock() when the boost times last arrived
@@ -96,6 +97,28 @@ local HULL_GOOD = Color3.fromRGB(110, 230, 150)
 local HULL_LOW = Color3.fromRGB(255, 80, 60)
 local PVP_ON = Color3.fromRGB(255, 110, 100)
 local PVP_OFF = Color3.fromRGB(180, 190, 220)
+-- Layout (UI/Layout): the containers the HUD's pieces go in, and each
+-- button's own look, to put back when the screen grows again.
+local COMPACT_BUTTON = 46 -- pixels (before the HUD's scale): icon-only buttons
+local menuFrame: Frame
+local settingsRow: Frame
+local travelRow: Frame
+local flightFrame: Frame
+local gaugeFrame: Frame
+local hiddenHolder: Frame
+local originals: {
+	[TextButton]: {
+		size: UDim2,
+		iconSize: UDim2?,
+		iconPosition: UDim2?,
+		iconAnchor: Vector2?,
+		textScaled: boolean?,
+	},
+} =
+	{}
+
+local placeFlight: (flying: boolean) -> ()
+local refreshReadout: () -> ()
 
 local function makeLabel(parent: Instance, props: { [string]: any }): TextLabel
 	local label = Instance.new("TextLabel")
@@ -120,8 +143,7 @@ end
 local function buildWallet(gui: ScreenGui)
 	local panel = Instance.new("Frame")
 	panel.Name = "Wallet"
-	panel.Position = UDim2.new(0, 16, 0, 16)
-	panel.Size = UDim2.new(0.22, 0, 0.11, 0)
+	panel.Size = UDim2.fromOffset(260, 80)
 	panel.BackgroundColor3 = Color3.new(1, 1, 1)
 	panel.BackgroundTransparency = 0.1
 	panel.Parent = gui
@@ -247,13 +269,16 @@ local function dressButton(
 	end
 	Sprites.skin(button, spriteName)
 	local height = button.Size.Y.Offset
-	local icon = if iconName then Sprites.icon(button, iconName, math.floor(height * 1.1)) else nil
+	local iconSize = math.floor(height * 1.1)
+	local icon = if iconName then Sprites.icon(button, iconName, iconSize) else nil
 	if icon then
 		icon.AnchorPoint = Vector2.new(0, 0.5)
 		icon.Position = UDim2.new(0, 2, 0.5, 0)
 		icon.ZIndex = 3
-		label.Position = UDim2.fromOffset(height, 0)
-		label.Size = UDim2.new(1, -height - 10, 1, 0)
+		-- The label starts past the icon's right edge (it is wider than the button is tall).
+		local textLeft = 2 + iconSize + 2
+		label.Position = UDim2.fromOffset(textLeft, 0)
+		label.Size = UDim2.new(1, -textLeft - 8, 1, 0)
 	end
 	button.Text = ""
 	return function(text: string)
@@ -310,15 +335,175 @@ local function makeGauge(
 	local cyan = style == "cyan"
 	Sprites.skin(track, if cyan then "TrackCyan" else "TrackHeat")
 	Sprites.skin(fill, if cyan then "FillCyan" else "FillHeat")
-	local icon = if iconName then Sprites.icon(panel, iconName, 30) else nil
+	local icon = if iconName then Sprites.icon(panel, iconName, 26) else nil
 	if icon then
-		-- The icon sits left of the gauge, which moves over to make room.
-		icon.AnchorPoint = Vector2.new(1, 0.5)
-		icon.Position = UDim2.new(0, -4, 0.5, 2)
-		panel.Position = UDim2.new(0, 50, 1, y)
-		panel.Size = UDim2.new(0, 186, 0, 30)
+		-- The icon sits inside the gauge's cell, on its left; the title and
+		-- bar move over to make room (the layout grid sizes the cell).
+		icon.AnchorPoint = Vector2.new(0, 0.5)
+		icon.Position = UDim2.new(0, 0, 0.5, 2)
+		label.Position = UDim2.fromOffset(30, 0)
+		label.Size = UDim2.new(1, -30, 0, 14)
+		track.Position = UDim2.fromOffset(30, 18)
+		track.Size = UDim2.new(1, -30, 0, Theme.barHeight(10))
 	end
 	return panel, fill, label
+end
+
+-- A container for the layout: no background, sized by what it holds.
+local function holder(name: string, parent: Instance?): Frame
+	local frame = Instance.new("Frame")
+	frame.Name = name
+	frame.BackgroundTransparency = 1
+	frame.Size = UDim2.fromOffset(0, 0)
+	frame.AutomaticSize = Enum.AutomaticSize.XY
+	frame.Parent = parent
+	return frame
+end
+
+local function listIn(frame: Frame, direction: Enum.FillDirection, padding: number)
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIGridStyleLayout") then
+			child:Destroy()
+		end
+	end
+	local list = Instance.new("UIListLayout")
+	list.FillDirection = direction
+	list.SortOrder = Enum.SortOrder.LayoutOrder
+	list.Padding = UDim.new(0, padding)
+	list.Parent = frame
+end
+
+local function gridIn(frame: Frame, cell: Vector2, columns: number)
+	for _, child in frame:GetChildren() do
+		if child:IsA("UIGridStyleLayout") then
+			child:Destroy()
+		end
+	end
+	local grid = Instance.new("UIGridLayout")
+	grid.CellSize = UDim2.fromOffset(cell.X, cell.Y)
+	grid.CellPadding = UDim2.fromOffset(6, 6)
+	grid.FillDirectionMaxCells = columns
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.Parent = frame
+end
+
+-- An icon-only square button (compact screens), or its own look back.
+local function setCompact(button: TextButton, on: boolean)
+	local label = button:FindFirstChild("Label") :: TextLabel?
+	local icon: ImageLabel? = nil
+	for _, child in button:GetChildren() do
+		if child:IsA("ImageLabel") and string.sub(child.Name, 1, 5) == "Icon_" then
+			icon = child
+		end
+	end
+	local original = originals[button]
+	if original == nil then
+		original = {
+			size = button.Size,
+			iconSize = icon and icon.Size,
+			iconPosition = icon and icon.Position,
+			iconAnchor = icon and icon.AnchorPoint,
+			textScaled = label and label.TextScaled,
+		}
+		originals[button] = original
+	end
+	if on then
+		button.Size = UDim2.fromOffset(COMPACT_BUTTON, COMPACT_BUTTON)
+		if icon then
+			icon.AnchorPoint = Vector2.new(0.5, 0.5)
+			icon.Position = UDim2.fromScale(0.5, 0.5)
+			icon.Size = UDim2.fromOffset(COMPACT_BUTTON - 6, COMPACT_BUTTON - 6)
+		end
+		if label then
+			label.Visible = icon == nil
+			label.TextScaled = true
+		end
+	else
+		button.Size = original.size
+		if icon then
+			icon.Size = original.iconSize or icon.Size
+			icon.Position = original.iconPosition or icon.Position
+			icon.AnchorPoint = original.iconAnchor or icon.AnchorPoint
+		end
+		if label then
+			label.Visible = true
+			label.TextScaled = original.textScaled == true
+		end
+	end
+end
+
+-- The readout and flight gauges (speed, hull ...): at the bottom centre when
+-- flying, under the controls hint, so neither covers the other; on foot, at
+-- the top centre on touch screens and bottom left on desktop.
+function placeFlight(flying: boolean)
+	if flying then
+		Layout.place(flightFrame, "BottomCenter", 2)
+	elseif Layout.compact() then
+		Layout.place(flightFrame, "TopCenter", 1)
+	else
+		Layout.place(flightFrame, "BottomLeft", 1)
+	end
+end
+
+-- Puts every HUD piece in its dock for this screen (Layout.form()):
+--   desktop  wallet, menu column, goal and boosts top left; travel buttons
+--            bottom left; Visit bottom right; controls hint bottom centre
+--   tablet   as a phone, but with the goal panel and controls hint
+--   phone    wallet, then the menu and travel buttons as an icon grid, top
+--            left (the bottom left is the thumbstick's); flight gauges top
+--            centre; Spin, Daily, Premium and Visit top right
+local function arrange()
+	local compact = Layout.compact()
+	local menuButtons = { effectsButton, pvpButton, shopButton, shipyardButton, planetsButton }
+	local travelButtons = { hangarButton, stationButton, launchButton }
+	for _, button in menuButtons do
+		setCompact(button, compact)
+	end
+	for _, button in travelButtons do
+		setCompact(button, compact)
+	end
+	if compact then
+		gridIn(menuFrame, Vector2.new(COMPACT_BUTTON, COMPACT_BUTTON), 4)
+		for index, button in menuButtons do
+			button.LayoutOrder = index
+			button.Parent = menuFrame
+		end
+		for index, button in travelButtons do
+			button.LayoutOrder = 10 + index
+			button.Parent = menuFrame
+		end
+		settingsRow.Parent = hiddenHolder
+		travelRow.Parent = hiddenHolder
+	else
+		listIn(menuFrame, Enum.FillDirection.Vertical, 6)
+		settingsRow.LayoutOrder = 0
+		settingsRow.Parent = menuFrame
+		effectsButton.LayoutOrder = 1
+		effectsButton.Parent = settingsRow
+		pvpButton.LayoutOrder = 2
+		pvpButton.Parent = settingsRow
+		for index, button in { shopButton, shipyardButton, planetsButton } do
+			button.LayoutOrder = index
+			button.Parent = menuFrame
+		end
+		for index, button in travelButtons do
+			button.LayoutOrder = index
+			button.Parent = travelRow
+		end
+		Layout.place(travelRow, "BottomLeft", 2)
+	end
+	Layout.place(walletPanel, "TopLeft", 1)
+	Layout.place(menuFrame, "TopLeft", 2)
+	-- Phones keep the left column short: the goal panel waits for a bigger screen.
+	if Layout.form() == "phone" then
+		goalButton.Parent = hiddenHolder
+	else
+		Layout.place(goalButton, "TopLeft", 3)
+	end
+	Layout.place(boostBar, "TopLeft", 4)
+	gridIn(gaugeFrame, Vector2.new(if Layout.form() == "phone" then 200 else 226, 30), 2)
+	Layout.place(hintLabel, "BottomCenter", 1)
+	refreshReadout()
 end
 
 local function build()
@@ -409,10 +594,15 @@ local function build()
 	setPvpText = dressButton(pvpButton, "ButtonDark", "Shield")
 	Theme.hover(pvpButton)
 
+	-- The left column under Settings, 46 px apart: Shipyard, Planets, then
+	-- the Star Shop right above the next-goal panel (which opens it too).
+	-- The Galaxy Store has no button here; the store carousel opens it
+	-- (PremiumController).
+
 	-- Opens the Star Shop from anywhere (also the B key).
 	shopButton = Instance.new("TextButton")
 	shopButton.Name = "StarShop"
-	shopButton.Position = UDim2.new(0, 16, 0, 152)
+	shopButton.Position = UDim2.new(0, 16, 0, 244)
 	shopButton.Size = UDim2.new(0, 180, 0, 40)
 	shopButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	shopButton.AutoButtonColor = false
@@ -434,7 +624,7 @@ local function build()
 	-- Opens the Shipyard (ships and upgrades) from anywhere.
 	shipyardButton = Instance.new("TextButton")
 	shipyardButton.Name = "Shipyard"
-	shipyardButton.Position = UDim2.new(0, 16, 0, 198)
+	shipyardButton.Position = UDim2.new(0, 16, 0, 152)
 	shipyardButton.Size = UDim2.new(0, 180, 0, 40)
 	shipyardButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	shipyardButton.AutoButtonColor = false
@@ -453,32 +643,10 @@ local function build()
 	dressButton(shipyardButton, "ButtonPurple", "Ship")
 	Theme.hover(shipyardButton)
 
-	-- Opens the optional Galaxy Store. Only ever opened by the player.
-	storeButton = Instance.new("TextButton")
-	storeButton.Name = "Store"
-	storeButton.Position = UDim2.new(0, 16, 0, 244)
-	storeButton.Size = UDim2.new(0, 180, 0, 40)
-	storeButton.BackgroundColor3 = Color3.new(1, 1, 1)
-	storeButton.AutoButtonColor = false
-	storeButton.Font = Enum.Font.GothamBlack
-	storeButton.TextSize = 15
-	storeButton.TextColor3 = Color3.new(1, 1, 1)
-	storeButton.TextStrokeTransparency = 0.6
-	storeButton.Text = "Store"
-	storeButton.Parent = gui
-	corner(storeButton, 8)
-	local storeGradient = Instance.new("UIGradient")
-	storeGradient.Color =
-		ColorSequence.new(Color3.fromRGB(95, 227, 255), Color3.fromRGB(150, 90, 255))
-	storeGradient.Rotation = 90
-	storeGradient.Parent = storeButton
-	dressButton(storeButton, "ButtonBlue", "Gift")
-	Theme.hover(storeButton)
-
 	-- Opens the Planets panel (owned planets, equip and level; also P).
 	planetsButton = Instance.new("TextButton")
 	planetsButton.Name = "Planets"
-	planetsButton.Position = UDim2.new(0, 16, 0, 290)
+	planetsButton.Position = UDim2.new(0, 16, 0, 198)
 	planetsButton.Size = UDim2.new(0, 180, 0, 40)
 	planetsButton.BackgroundColor3 = Color3.new(1, 1, 1)
 	planetsButton.AutoButtonColor = false
@@ -500,7 +668,7 @@ local function build()
 	-- Active boosts with their time left, under the goal panel.
 	boostBar = Instance.new("Frame")
 	boostBar.Name = "Boosts"
-	boostBar.Position = UDim2.new(0, 16, 0, 396)
+	boostBar.Position = UDim2.new(0, 16, 0, 350)
 	boostBar.Size = UDim2.new(0, 300, 0, 26)
 	boostBar.BackgroundTransparency = 1
 	boostBar.Parent = gui
@@ -561,7 +729,7 @@ local function build()
 	goalButton.Name = "NextGoal"
 	goalButton.Text = ""
 	goalButton.AutoButtonColor = false
-	goalButton.Position = UDim2.new(0, 16, 0, 338)
+	goalButton.Position = UDim2.new(0, 16, 0, 292)
 	goalButton.Size = UDim2.new(0, 220, 0, 52)
 	goalButton.BackgroundColor3 = Color3.fromRGB(16, 20, 36)
 	goalButton.BackgroundTransparency = 0.2
@@ -615,13 +783,10 @@ local function build()
 		makeGauge(gui, "Extraction", -176, "EXTRACTING", EXTRACT_ROCK, "cyan", "Mining")
 	hullPanel, hullFill, hullLabel =
 		makeGauge(gui, "Hull", -210, "HULL", HULL_GOOD, "orange", "Shield")
-	-- The flight gauges only show while flying, at the top of the screen in
-	-- a 2 x 2 block under the speed readout.
+	-- The flight gauges only show while flying, in a 2 x 2 block under the
+	-- speed readout (arrange() puts them there).
 	for index, panel in { heatPanel, boostPanel, hullPanel, extractPanel } do
-		local column = (index - 1) % 2
-		local row = (index - 1) // 2
-		panel.AnchorPoint = Vector2.new(0.5, 0)
-		panel.Position = UDim2.new(0.5, if column == 0 then -118 else 118, 0, 30 + row * 36)
+		panel.LayoutOrder = index
 	end
 
 	reticle = makeLabel(gui, {
@@ -635,6 +800,27 @@ local function build()
 		TextStrokeTransparency = 0.4,
 		Visible = false,
 	})
+
+	-- Layout containers (arrange() fills them).
+	hiddenHolder = holder("Hidden", gui)
+	hiddenHolder.Visible = false
+	menuFrame = holder("Menu")
+	settingsRow = holder("SettingsRow")
+	listIn(settingsRow, Enum.FillDirection.Horizontal, 6)
+	travelRow = holder("TravelRow")
+	listIn(travelRow, Enum.FillDirection.Horizontal, 6)
+	flightFrame = holder("Flight")
+	listIn(flightFrame, Enum.FillDirection.Vertical, 4)
+	local flightList = flightFrame:FindFirstChildOfClass("UIListLayout") :: UIListLayout
+	flightList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	readoutLabel.LayoutOrder = 1
+	readoutLabel.Parent = flightFrame
+	gaugeFrame = holder("Gauges", flightFrame)
+	gaugeFrame.LayoutOrder = 2
+	for _, panel in { heatPanel, boostPanel, hullPanel, extractPanel } do
+		panel.Parent = gaugeFrame
+	end
+	hintLabel.Size = UDim2.fromOffset(760, 22)
 
 	gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 end
@@ -660,9 +846,10 @@ local function refreshSector()
 	if slot == nil then
 		sectorLabel.Text = "Finding your galaxy..."
 	elseif profile and profile.incomeRate > 0 then
-		sectorLabel.Text = `Sector {slot} · +{profile.incomeRate}/s · {Format.abbreviate(
-			profile.uncollected
-		)} to collect`
+		sectorLabel.Text =
+			`Sector {slot} · +{Format.abbreviate(profile.incomeRate)}/s · {Format.abbreviate(
+				profile.uncollected
+			)} to collect`
 	else
 		sectorLabel.Text = `Your galaxy: Sector {slot}`
 	end
@@ -793,17 +980,18 @@ local function refreshBoost()
 		else `BOOST  [{if Input.device() == "gamepad" then "L3" else "Shift"}]`
 end
 
-local function refreshReadout()
+function refreshReadout()
 	local flying = ClientState.mode == "ship"
 	-- Flying, the readout sits above the gauges at the top of the screen.
-	readoutLabel.AnchorPoint = if flying then Vector2.new(0.5, 0) else Vector2.new(0, 1)
-	readoutLabel.Position = if flying then UDim2.new(0.5, 0, 0, 6) else UDim2.new(0, 16, 1, -76)
-	readoutLabel.TextXAlignment = if flying
+	readoutLabel.TextXAlignment = if flying or Layout.compact()
 		then Enum.TextXAlignment.Center
 		else Enum.TextXAlignment.Left
-	readoutLabel.Size = UDim2.new(0, if flying then 460 else 220, 0, 24)
+	readoutLabel.Size = UDim2.new(0, if flying then 460 else 260, 0, 24)
+	placeFlight(flying)
 	local settings = ClientState.profile and ClientState.profile.settings
-	hintLabel.Visible = settings == nil or settings.showControls ~= false
+	-- Phones have no room for the controls line (the touch buttons say it).
+	hintLabel.Visible = (settings == nil or settings.showControls ~= false)
+		and Layout.form() ~= "phone"
 	reticle.Visible = flying
 	launchButton.Visible = not flying
 	heatPanel.Visible = flying
@@ -857,6 +1045,9 @@ end
 
 function HudController.init()
 	build()
+	arrange()
+	-- A new screen size, or switching between touch and keyboard.
+	Layout.changed:Connect(arrange)
 	ClientState.profileChanged:Connect(function(field)
 		if field == "stardust" or field == "*" then
 			refreshStardust()
@@ -906,9 +1097,6 @@ function HudController.init()
 	end)
 	shipyardButton.Activated:Connect(function()
 		ClientState.openShipyard:Fire()
-	end)
-	storeButton.Activated:Connect(function()
-		ClientState.openStore:Fire(nil)
 	end)
 	planetsButton.Activated:Connect(function()
 		ClientState.openPlanets:Fire()

@@ -38,6 +38,7 @@ local Workspace = game:GetService("Workspace")
 local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
+local EconomyMath = require(ReplicatedStorage.Shared.Logic.EconomyMath)
 local Net = require(ReplicatedStorage.Shared.Net)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Notify = require(script.Parent.Parent.Util.Notify)
@@ -54,7 +55,7 @@ local S = Config.Stars
 local P = Config.Planets
 local CURRENCY = Config.Economy.CURRENCY_NAME
 -- The top of the star ladder; owning one counts for the "blackHoles" stat.
-local BLACK_HOLE = S.ORDER[#S.ORDER]
+local BLACK_HOLE = "BlackHole"
 
 local REJECTIONS: { [string]: string } = {
 	Invalid = "That isn't a valid spot.",
@@ -157,11 +158,12 @@ local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean
 	if not ok then
 		return false, rejectionText(rejection, short)
 	end
-	local cost = StarMath.placeCost(def.id, owned) :: number
-	if not DataSystem.spendStardust(player, cost) then
-		return false, `You need {cost} {CURRENCY} for this star.`
+	local cost = StarMath.placeCost(def.id, StarMath.nextBuild(galaxy)) :: number
+	if not DataSystem.spendStardust(player, cost, "star_buy") then
+		return false, `You need {Format.commas(cost)} {CURRENCY} for this star.`
 	end
-	local star: Types.StarRecord = { typeId = def.id, level = 1, pos = pos }
+	-- DataSystem.addStar gives it the next BuildIndex (the one priced above).
+	local star: Types.StarRecord = { typeId = def.id, level = 1, pos = pos, build = 0 }
 	local id = DataSystem.addStar(player, star)
 	if id == nil then
 		DataSystem.addStardust(player, cost)
@@ -178,7 +180,8 @@ local function place(player: Player, typeId: unknown, rawPos: unknown): (boolean
 	if def.id == BLACK_HOLE then
 		DataSystem.addStat(player, "blackHoles", 1)
 	end
-	return true, `{def.displayName} placed! It makes {StarMath.income(star)} {CURRENCY}/s.`
+	return true,
+		`{def.displayName} placed! It makes {Format.rate(StarMath.income(star))} {CURRENCY}/s.`
 end
 
 local function move(player: Player, starId: unknown, rawPos: unknown): (boolean, string)
@@ -237,21 +240,21 @@ local function upgrade(player: Player, starId: unknown): (boolean, string)
 	if star == nil or model == nil then
 		return false, REJECTIONS.Invalid
 	end
-	local cost = StarMath.upgradeCost(star.typeId, star.level)
+	local cost = StarMath.upgradeCost(star.typeId, star.level, star.build)
 	if cost == nil then
 		return false,
 			if StarMath.evolveTarget(star.typeId)
 				then "Max level! This star is ready to evolve."
 				else "This star is at its highest level."
 	end
-	if not DataSystem.spendStardust(player, cost) then
-		return false, `You need {cost} {CURRENCY} for this upgrade.`
+	if not DataSystem.spendStardust(player, cost, "star_level") then
+		return false, `You need {Format.commas(cost)} {CURRENCY} for this upgrade.`
 	end
 	local level = star.level + 1
 	DataSystem.updateStar(player, starId :: string, { level = level })
 	DataSystem.addStat(player, "starUpgrades", 1)
 	refresh(player, starId :: string)
-	local income = StarMath.income(star, equipped(player, starId :: string))
+	local income = Format.rate(StarMath.income(star, equipped(player, starId :: string)))
 	return true,
 		if level >= StarMath.maxLevel(star.typeId) and StarMath.evolveTarget(star.typeId)
 			then `Level {level}: max level! Now {income} {CURRENCY}/s. It can evolve.`
@@ -272,8 +275,10 @@ local function evolve(player: Player, starId: unknown): (boolean, string)
 	if star.level < top then
 		return false, `Level this star up to {top} before it can evolve.`
 	end
-	if not DataSystem.spendStardust(player, def.cost) then
-		return false, `You need {def.cost} {CURRENCY} to evolve into a {def.displayName}.`
+	local cost = StarMath.evolveCost(star.typeId, star.build) :: number
+	if not DataSystem.spendStardust(player, cost, "star_evolve") then
+		return false,
+			`You need {Format.commas(cost)} {CURRENCY} to evolve into a {def.displayName}.`
 	end
 	-- A new type starts again at level 1, keeping its planets in their slots
 	-- (orbits never decrease up the ladder). It grants no planets.
@@ -327,8 +332,12 @@ local function equipPlanet(
 		refresh(player, sid)
 	end
 	local def = P.BY_ID[planet.typeId]
+	local host = profile and profile.galaxy.stars[sid]
+	local own = if host then StarMath.starIncome(host.typeId, host.level) else 0
 	return true,
-		`{def.displayName} now orbits your star: +{StarMath.planetIncome(def.id, planet.level)} {CURRENCY}/s.`
+		`{def.displayName} now orbits your star: +{Format.rate(
+			StarMath.planetIncome(def.id, planet.level, planet.tier, own)
+		)} {CURRENCY}/s.`
 end
 
 local function unequipPlanet(player: Player, planetId: unknown): (boolean, string)
@@ -353,24 +362,35 @@ local function levelPlanet(player: Player, planetId: unknown): (boolean, string)
 	if planet == nil or def == nil then
 		return false, REJECTIONS.Invalid
 	end
-	local cost = StarMath.planetLevelCost(def.id, planet.level)
+	local cost =
+		StarMath.planetLevelCost(def.id, planet.level, EconomyMath.profileEggPrice(profile :: any))
 	if cost == nil then
 		return false, "That planet is at its top level."
 	end
-	if not DataSystem.spendStardust(player, cost) then
-		return false, `You need {cost} {CURRENCY} to level this planet.`
+	if not DataSystem.spendStardust(player, cost, "planet_level") then
+		return false, `You need {Format.commas(cost)} {CURRENCY} to level this planet.`
 	end
 	local level = planet.level + 1
-	DataSystem.setPlanetLevel(player, planetId :: string, level)
+	DataSystem.setPlanetLevel(player, planetId :: string, level, cost)
 	DataSystem.addStat(player, "planetLevels", 1)
 	refresh(player, planet.star)
+	local host = if planet.star then (profile :: any).galaxy.stars[planet.star] else nil
+	local share = math.floor(StarMath.planetFactor(def.id, level, planet.tier) * 1000 + 0.5) / 10
 	return true,
-		`{def.displayName} reached level {level}! It makes {StarMath.planetIncome(def.id, level)} {CURRENCY}/s{if planet.star
-			then ""
-			else " once it orbits a star"}.`
+		if host
+			then `{def.displayName} reached level {level}! It makes {Format.rate(
+				StarMath.planetIncome(
+					def.id,
+					level,
+					planet.tier,
+					StarMath.starIncome(host.typeId, host.level)
+				)
+			)} {CURRENCY}/s.`
+			else `{def.displayName} reached level {level}! In orbit it adds {share}% of its star's output.`
 end
 
--- Star and planet income per second (before passes, boosts and trails).
+-- Star and planet income per second (before passes, boosts, trail and
+-- Refinery).
 local function baseIncome(profile: Types.Profile): number
 	return StarMath.totalIncome(profile.galaxy.stars, profile.planets)
 end
@@ -426,7 +446,7 @@ local function equipBest(player: Player): (boolean, string)
 	end
 	local after = baseIncome(profile)
 	return true,
-		`Planets rearranged: {Format.commas(before)} -> {Format.commas(after)} {CURRENCY}/s before boosts.`
+		`Planets rearranged: {Format.rate(before)} -> {Format.rate(after)} {CURRENCY}/s before boosts.`
 end
 
 local function onRequest(

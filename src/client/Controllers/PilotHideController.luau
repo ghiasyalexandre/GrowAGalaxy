@@ -2,7 +2,8 @@
 -- While someone pilots a ship they become the ship: their character is
 -- hidden on this client (every part and decal fully transparent through
 -- LocalTransparencyModifier, which changes nothing for anyone else), and
--- shown again the moment they leave the pilot seat.
+-- shown again the moment they leave the pilot seat. A rider ship's pilot
+-- (the seat's Rider attribute, e.g. the hoverboard) stays in view.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -28,7 +29,9 @@ local function step()
 			continue
 		end
 		local seat = humanoid.SeatPart
-		local piloting = seat ~= nil and seat.Name == "PilotSeat"
+		local piloting = seat ~= nil
+			and seat.Name == "PilotSeat"
+			and seat:GetAttribute("Rider") ~= true
 		if piloting then
 			-- Every frame: the default camera may reset the local character's.
 			setHidden(character, true)

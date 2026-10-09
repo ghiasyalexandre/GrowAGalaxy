@@ -21,7 +21,10 @@ export type SizeDef = {
 	radius: number, -- studs, the main rock
 	weakPointRadius: number, -- studs, the glowing weak point on its surface
 	durability: number, -- extraction progress needed (a beamPower of 10 = 10 per second)
-	reward: number, -- Stardust for breaking it, before the precision bonus
+	-- Reference work seconds W: breaking it pays W seconds of the miner's
+	-- mining rate (production B x mining factor a, Logic/EconomyMath), before
+	-- the precision bonus, passes and boosts.
+	work: number,
 }
 
 local SIZE_ORDER: { string } = { "Small", "Medium", "Large" }
@@ -34,7 +37,7 @@ local SIZES: { [string]: SizeDef } = {
 		radius = 7,
 		weakPointRadius = 1.8,
 		durability = 15,
-		reward = 15,
+		work = 10,
 	},
 	Medium = {
 		id = "Medium",
@@ -43,7 +46,7 @@ local SIZES: { [string]: SizeDef } = {
 		radius = 12,
 		weakPointRadius = 2.4,
 		durability = 25,
-		reward = 40,
+		work = 20,
 	},
 	Large = {
 		id = "Large",
@@ -52,7 +55,7 @@ local SIZES: { [string]: SizeDef } = {
 		radius = 18,
 		weakPointRadius = 3,
 		durability = 50,
-		reward = 80,
+		work = 40,
 	},
 }
 
@@ -97,14 +100,18 @@ local Asteroids = {
 
 	-- Golden swarm: every SWARM_INTERVAL seconds a dense clump of golden
 	-- asteroids worth SWARM_REWARD x the usual (and SWARM_DURABILITY x as
-	-- tough to break) appears somewhere in the field,
+	-- tough to break) appears somewhere in the field. A player's swarm
+	-- bonus covers at most SWARM_BONUS_WORK seconds of work in any
+	-- SWARM_BONUS_WINDOW seconds; past that golden rocks pay normally.
 	-- announced to everyone with a marker; whatever is left crumbles after
 	-- SWARM_DURATION.
 	SWARM_INTERVAL = 7 * 60,
 	SWARM_DURATION = 150,
 	SWARM_COUNT = 14,
 	SWARM_SPREAD = 220, -- studs from the swarm's centre
-	SWARM_REWARD = 5,
+	SWARM_REWARD = 1.5,
+	SWARM_BONUS_WORK = 5 * 60,
+	SWARM_BONUS_WINDOW = 30 * 60,
 	SWARM_DURABILITY = 2,
 	SWARM_COLOR = "#FFC83D",
 

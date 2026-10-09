@@ -4,7 +4,7 @@
 -- stars the Manage panel: level up, evolve to the next star type, move, and
 -- for each open orbit equip one of your planets, level it or unequip it
 -- (back to the planet inventory). Planets are local, drawn from the star's
--- Planets and PlanetLevels attributes with Fx/PlanetLook; the server
+-- Planets, PlanetLevels and PlanetTiers attributes with Fx/PlanetLook; the server
 -- (StarSystem) checks every action.
 --
 -- Watching the attributes also drives the spectacle (Fx/StarFx) for every
@@ -25,6 +25,7 @@ local Input = require(script.Parent.Parent.Input)
 local PlacementController = require(script.Parent.PlacementController)
 local PlanetLook = require(script.Parent.Parent.Fx.PlanetLook)
 local StarFx = require(script.Parent.Parent.Fx.StarFx)
+local StarLook = require(script.Parent.Parent.Fx.StarLook)
 local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -52,6 +53,7 @@ type Planet = {
 	phase: number,
 	id: string,
 	level: number,
+	tier: number,
 	moons: { Part }, -- one per level past the first
 }
 
@@ -67,6 +69,7 @@ type Visual = {
 	level: number,
 	planetsText: string,
 	levelsText: string,
+	look: StarLook.Look?, -- the star's living surface (rebuilt when its type or size changes)
 }
 
 local StarController = {}
@@ -121,6 +124,8 @@ local function buildPlanets(v: Visual)
 	local levelsText = v.model:GetAttribute("PlanetLevels")
 	local levels =
 		StarMath.decodePlanetLevels(if type(levelsText) == "string" then levelsText else "")
+	local tiersText = v.model:GetAttribute("PlanetTiers")
+	local tiers = StarMath.decodePlanetLevels(if type(tiersText) == "string" then tiersText else "")
 	local typeId = v.model:GetAttribute("TypeId")
 	local starDefNow = if type(typeId) == "string" then S.BY_ID[typeId] else nil
 	local sunlight = if starDefNow then Color3.fromHex(starDefNow.light) else Color3.new(1, 1, 1)
@@ -135,7 +140,9 @@ local function buildPlanets(v: Visual)
 			end
 			local planetLevel = levels[slot] or 1
 			local radius = StarMath.planetRadius(def.id, planetLevel)
-			local part = PlanetLook.build(def, radius, ClientState.reducedEffects == true)
+			local planetTier = tiers[slot] or 1
+			local part =
+				PlanetLook.build(def, radius, ClientState.reducedEffects == true, planetTier)
 			part.Name = `GaG_Planet_{def.id}`
 			part.Parent = v.model
 			-- Far from the star its light doesn't reach, so each planet carries
@@ -192,6 +199,7 @@ local function buildPlanets(v: Visual)
 				phase = slot * 2.1,
 				id = def.id,
 				level = planetLevel,
+				tier = planetTier,
 				moons = moons,
 			})
 		end
@@ -317,6 +325,25 @@ end
 
 -- Choosing a planet for one orbit: inventory planets first, then planets on
 -- other stars (moved here in one step), best producers first.
+-- A star model's own rate (planets not included), from its attributes:
+-- planets in its orbits make a share of it.
+local function ownRate(model: Instance): number
+	local typeId = model:GetAttribute("TypeId")
+	local level = model:GetAttribute("Level")
+	if type(typeId) ~= "string" then
+		return 0
+	end
+	return StarMath.starIncome(typeId, if type(level) == "number" then level else 1)
+end
+
+-- The next egg roll's price as the server last told us (planet level
+-- prices are a share of it).
+local function eggPrice(): number
+	local profile = ClientState.profile
+	local economy = if profile then (profile :: any).economy else nil
+	return if economy then economy.eggPrice else Config.Eggs.PRICE_BASE
+end
+
 local function showPicker(model: Model, slot: number)
 	Theme.clear(list)
 	local starId = model:GetAttribute("StarId")
@@ -335,7 +362,12 @@ local function showPicker(model: Model, slot: number)
 			table.insert(choices, {
 				id = id,
 				planet = planet,
-				income = StarMath.planetIncome(planet.typeId, planet.level),
+				income = StarMath.planetIncome(
+					planet.typeId,
+					planet.level,
+					planet.tier,
+					ownRate(model)
+				),
 			})
 		end
 	end
@@ -423,7 +455,9 @@ refreshPanel = function()
 	-- Actions: level up, evolve, move.
 	Theme.clear(actions)
 	local buttons: { TextButton } = {}
-	local upgradeCost = StarMath.upgradeCost(typeId, level)
+	local buildIndex = model:GetAttribute("Build")
+	local upgradeCost =
+		StarMath.upgradeCost(typeId, level, if type(buildIndex) == "number" then buildIndex else 0)
 	if upgradeCost then
 		table.insert(
 			buttons,
@@ -445,7 +479,10 @@ refreshPanel = function()
 					then priceButton(
 						actions,
 						`Evolve: {targetDef.displayName}`,
-						targetDef.cost,
+						StarMath.evolveCost(
+							typeId,
+							if type(buildIndex) == "number" then buildIndex else 0
+						) or targetDef.cost,
 						function()
 							request("evolve", starId)
 						end,
@@ -499,13 +536,13 @@ refreshPanel = function()
 				row,
 				`{planetDef.displayName}  ·  Lv {planet.level}/{P.MAX_LEVEL}`,
 				`Orbit {slot}  ·  {rarityText(planetDef)}  ·  +{fmt(
-					StarMath.planetIncome(planetDef.id, planet.level)
+					StarMath.planetIncome(planetDef.id, planet.level, planet.tier, ownRate(model))
 				)}/s`,
 				48,
 				300,
 				Color3.fromHex(P.RARITIES[planetDef.rarity].color)
 			)
-			local levelCost = StarMath.planetLevelCost(planetDef.id, planet.level)
+			local levelCost = StarMath.planetLevelCost(planetDef.id, planet.level, eggPrice())
 			if levelCost then
 				local levelButton = priceButton(row, "Level", levelCost, function()
 					request("levelPlanet", planetId)
@@ -710,7 +747,7 @@ local function onPlanetLevelsChanged(v: Visual)
 				v,
 				"PLANET LEVEL UP",
 				`{def.displayName}  ·  level {now}/{P.MAX_LEVEL}`,
-				`+{fmt(StarMath.planetIncome(def.id, now))} {CURRENCY}/s  ·  a new moon joins it`,
+				`+{fmt(StarMath.planetIncome(def.id, now, planet.tier, ownRate(v.model)))} {CURRENCY}/s  ·  a new moon joins it`,
 				false
 			)
 		end
@@ -735,7 +772,7 @@ local function onPlanetsChanged(v: Visual)
 				"NEW WORLD",
 				def.displayName,
 				`Orbit {planet.slot}  ·  {rarityText(def)}  ·  +{fmt(
-					StarMath.planetIncome(def.id, planet.level)
+					StarMath.planetIncome(def.id, planet.level, planet.tier, ownRate(v.model))
 				)} {CURRENCY}/s`,
 				false
 			)
@@ -745,6 +782,7 @@ end
 
 local waitingForCore: { [Instance]: boolean } = {}
 local orbitWarned = false
+local lookWarned = false
 
 local function add(model: Instance)
 	if not model:IsA("Model") or model:GetAttribute("StarId") == nil or visuals[model] then
@@ -796,6 +834,7 @@ local function add(model: Instance)
 		levelsText = if type(model:GetAttribute("PlanetLevels")) == "string"
 			then model:GetAttribute("PlanetLevels") :: string
 			else "",
+		look = nil,
 	}
 	visuals[model] = v
 	buildPlanets(v)
@@ -824,6 +863,10 @@ local function add(model: Instance)
 		Level = onLevelChanged,
 		Planets = onPlanetsChanged,
 		PlanetLevels = onPlanetLevelsChanged,
+		PlanetTiers = function(visual: Visual)
+			buildPlanets(visual)
+			animate()
+		end,
 		Income = function() end,
 	}
 	for attribute, handler in handlers do
@@ -853,10 +896,45 @@ local function add(model: Instance)
 				for _, connection in v.connections do
 					connection:Disconnect()
 				end
+				if v.look then
+					v.look.destroy()
+				end
 				visuals[model] = nil
 			end
 		end)
 	)
+end
+
+-- A stable number from the star's id, so its flares and disk start the same
+-- way on every visit.
+local function seedOf(model: Model): number
+	local id = tostring(model:GetAttribute("StarId") or model.Name)
+	local seed = 0
+	for i = 1, #id do
+		seed = (seed * 31 + string.byte(id, i)) % 2147483647
+	end
+	return seed
+end
+
+-- Keeps each star's look (Fx/StarLook) built for its current type and size,
+-- and steps it.
+local function stepLook(v: Visual, now: number, dt: number, camera: Vector3)
+	local typeId = v.model:GetAttribute("TypeId")
+	if type(typeId) ~= "string" then
+		return
+	end
+	local look = v.look
+	if look and (look.typeId ~= typeId or math.abs(look.radius - v.core.Size.X / 2) > 0.01) then
+		look.destroy()
+		look = nil
+	end
+	if look == nil then
+		local made = StarLook.new(v.core, typeId, seedOf(v.model))
+		v.look = made
+		made.step(now, dt, camera, ClientState.reducedEffects == true)
+	else
+		look.step(now, dt, camera, ClientState.reducedEffects == true)
+	end
 end
 
 -- Orbit clock: simulated seconds. Normally it follows the server clock at
@@ -868,9 +946,18 @@ animate = function(dt: number?)
 	elseif dt and not clock.paused then
 		clock.time += dt * (clock.rate :: number)
 	end
+	local now = os.clock()
+	local camera = Workspace.CurrentCamera
+	local eye = if camera then camera.CFrame.Position else Vector3.zero
 	for _, v in visuals do
 		-- One broken system must not stop every other one from turning; the
 		-- first failure is reported once in Output.
+		-- The look is cosmetic: if it fails, planets must still turn.
+		local lookOk, lookProblem = pcall(stepLook, v, now, dt or 0, eye)
+		if not lookOk and not lookWarned then
+			lookWarned = true
+			warn(`[StarController] star look failed: {lookProblem}`)
+		end
 		local ok, problem = pcall(function()
 			local center = v.core.CFrame.Position
 			for _, planet in v.planets do
@@ -948,19 +1035,27 @@ function StarController.myStars(): { [string]: Model }
 	return mine
 end
 
--- My stars as save-like records (type only), for the tier rules in the shop
--- and the HUD's next goal.
+-- My stars as save-like records (type, level and BuildIndex from their
+-- attributes), for the tier rules in the shop and the HUD's next goal.
 function StarController.myRecords(): { [string]: Types.StarRecord }
 	local records: { [string]: Types.StarRecord } = {}
 	for id, model in StarController.myStars() do
 		local typeId = model:GetAttribute("TypeId")
+		local level = model:GetAttribute("Level")
+		local build = model:GetAttribute("Build")
 		records[id] = {
 			typeId = if type(typeId) == "string" then typeId else S.DEFAULT_TYPE,
-			level = 1,
+			level = if type(level) == "number" then level else 1,
 			pos = { x = 0, y = 0, z = 0 },
+			build = if type(build) == "number" then build else 0,
 		}
 	end
 	return records
+end
+
+-- The local player's best star tier (0 with no stars).
+function StarController.bestTier(): number
+	return StarMath.highestTier(StarController.myRecords())
 end
 
 function StarController.init()

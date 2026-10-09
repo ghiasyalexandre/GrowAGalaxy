@@ -7,20 +7,25 @@ return function(T, Loader)
 	T.describe("WheelMath", function()
 		T.test("the designed prizes and odds", function()
 			local expected = {
-				{ 2500, 40 },
-				{ 5000, 25 },
-				{ 10000, 15 },
-				{ 25000, 12 },
-				{ 50000, 6 },
-				{ 100000, 2 },
+				{ 1, 40 },
+				{ 2, 25 },
+				{ 3, 15 },
+				{ 5, 12 },
+				{ 8, 6 },
+				{ 12, 2 },
 			}
 			T.equal(#W.PRIZES, #expected)
 			for index, pair in expected do
-				T.equal(W.PRIZES[index].stardust, pair[1])
+				T.equal(W.PRIZES[index].minutes, pair[1])
 				T.equal(W.PRIZES[index].weight, pair[2])
 			end
 			T.equal(WheelMath.total(), 100)
-			T.equal(W.SPIN_COST, 1000, "a spin costs 1,000 Stardust")
+			T.equal(W.SPIN_COST, 0, "the spin is free")
+			local expectedMinutes = 0
+			for _, prize in W.PRIZES do
+				expectedMinutes += prize.minutes * prize.weight / 100
+			end
+			T.near(expectedMinutes, 2.67, 1e-9, "2.67 minutes of R on average")
 		end)
 
 		T.test("every roll lands on a prize, each prize on exactly its weight", function()

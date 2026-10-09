@@ -1,5 +1,5 @@
 --!strict
--- The premium shortcut on the right edge: a round, pulsing window with a
+-- The premium shortcut in the HUD's top-right row: a round, pulsing window with a
 -- spinning rainbow ring that shows, alternating every SWAP_SECONDS, a
 -- late-game ship (its imported model, turning) or a black hole with a
 -- swirling accretion disk. Clicking opens the Galaxy Store on that offer's
@@ -13,6 +13,7 @@ local TweenService = game:GetService("TweenService")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Prices = require(script.Parent.Parent.UI.Prices)
 local Theme = require(script.Parent.Parent.UI.Theme)
+local Layout = require(script.Parent.Parent.UI.Layout)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -205,12 +206,12 @@ local function build()
 	local button = Instance.new("TextButton")
 	button.Name = "PremiumShortcut"
 	button.AnchorPoint = Vector2.new(1, 0.5)
-	button.Position = UDim2.new(1, -14, 0.5, 10)
 	button.Size = UDim2.fromOffset(SIZE, SIZE)
 	button.BackgroundColor3 = Color3.fromRGB(12, 10, 34)
 	button.AutoButtonColor = false
 	button.Text = ""
-	button.Parent = gui
+	-- The HUD's top-right row (UI/Layout).
+	Layout.place(button, "TopRight", 4)
 	local round = Instance.new("UICorner")
 	round.CornerRadius = UDim.new(1, 0)
 	round.Parent = button

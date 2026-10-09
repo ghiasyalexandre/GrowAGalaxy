@@ -21,7 +21,8 @@
 -- WALK_FLOOR_RANGE below the feet, the character walks and jumps on it
 -- instead, pulled down by a force on its own root (the world stays zero-g,
 -- so ships and everything else are unaffected). Off a floor's edge, in open
--- space and in Zero G Dodgeball it floats as usual.
+-- space and in Zero G Dodgeball it floats as usual. Double jump (two quick
+-- presses of Up) switches the setting on or off without opening Settings.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -34,6 +35,7 @@ local FlightMath = require(
 	ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Logic"):WaitForChild("FlightMath")
 )
 local Input = require(script.Parent.Parent.Input)
+local Net = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Net"))
 
 local M = Config.Movement
 
@@ -70,6 +72,7 @@ type Suit = {
 
 local suit: Suit? = nil
 local active = false -- floating
+local lastUpPress = 0 -- os.clock() of the last Up press (double jump)
 local walking = false -- on a floor with floating switched off
 local lastPosition: Vector3? = nil
 local settleUntil = 0
@@ -415,6 +418,34 @@ function SuitController.init()
 		task.spawn(setup, player.Character)
 	end
 	RunService.PreSimulation:Connect(step)
+
+	Input.began:Connect(function(action)
+		if action ~= "Up" then
+			return
+		end
+		-- Double jump: two quick presses of Up switch floating on or off
+		-- (the same saved setting as in Settings). Not in Zero G
+		-- Dodgeball, where you always float.
+		local now = os.clock()
+		local double = now - lastUpPress <= M.DOUBLE_JUMP_WINDOW
+		lastUpPress = if double then 0 else now
+		local s = suit
+		if
+			double
+			and s
+			and s.humanoid.Health > 0
+			and s.humanoid.SeatPart == nil
+			and Players.LocalPlayer:GetAttribute("Dodgeball") ~= true
+		then
+			local float = floatingOff()
+			Net.SettingChanged:FireServer("floating", float)
+			local profile = ClientState.profile
+			if profile and profile.settings then
+				profile.settings.floating = float
+			end
+			ClientState.notify:Fire(if float then "Floating on" else "Floating off: walk on floors")
+		end
+	end)
 
 	Input.pressed:Connect(function(action)
 		if action == "Stabilize" then

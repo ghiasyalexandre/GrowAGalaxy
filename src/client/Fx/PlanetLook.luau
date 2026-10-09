@@ -495,9 +495,109 @@ local function rarityFlair(body: BasePart, def: PlanetTypeDef, r: number, reduce
 	end
 end
 
+-- Tier effects (Config.Planets.TIERS[tier].effects) on `body`, a ball of
+-- radius `r`, in the tier's colour; cooler each tier:
+--   glow      a light in the tier colour
+--   sparkles  twinkling sparks drifting off the surface
+--   halo      a thin tilted ring in the tier colour
+--   aura      a soft glowing shell
+--   motes     big star motes circling slowly, held to the body
+--   rainbow   a second ring and sparks cycling through the rainbow
+-- Particle effects are left out when `reduced`; the light, rings and shell
+-- stay, so the tier reads either way. The Egg Lab's egg uses this too.
+-- Everything it makes is named "GaG_Tier*".
+function PlanetLook.tierFx(body: BasePart, tier: number, r: number, reduced: boolean)
+	local def = PlanetsConfig.TIERS[tier]
+	if def == nil then
+		return
+	end
+	local tint = Color3.fromHex(def.color)
+	for _, effect in def.effects do
+		if effect == "glow" then
+			local light = Instance.new("PointLight")
+			light.Name = "GaG_TierGlow"
+			light.Color = tint
+			light.Range = r * (2 + tier * 0.5)
+			light.Brightness = 0.4 + tier * 0.15
+			light.Shadows = false
+			light.Parent = body
+		elseif effect == "sparkles" and not reduced then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Name = "GaG_TierSparkles"
+			emitter.Rate = 2 + tier * 1.5
+			emitter.Speed = NumberRange.new(r * 0.2, r * 0.5)
+			emitter.SpreadAngle = Vector2.new(180, 180)
+			emitter.Lifetime = NumberRange.new(0.6, 1.2)
+			emitter.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.3, r * 0.14),
+				NumberSequenceKeypoint.new(1, 0),
+			})
+			emitter.Color = ColorSequence.new(WHITE, tint)
+			emitter.LightEmission = 1
+			emitter.Shape = Enum.ParticleEmitterShape.Sphere
+			emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+			emitter.Parent = body
+		elseif effect == "halo" then
+			for _, item in PlanetLook.ring(body, r * 1.7, 22, tint, r * 0.12, 0.15) do
+				item.Name = "GaG_TierHalo"
+			end
+		elseif effect == "aura" then
+			local shell = piece(body, {
+				name = "GaG_TierAura",
+				shape = Enum.PartType.Ball,
+				size = Vector3.one * r * 2.5,
+				cframe = CFrame.identity,
+				color = tint,
+				material = Enum.Material.ForceField,
+				transparency = 0.15,
+			})
+			shell.CastShadow = false
+		elseif effect == "motes" and not reduced then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Name = "GaG_TierMotes"
+			emitter.Rate = 3
+			emitter.LockedToPart = true
+			emitter.Speed = NumberRange.new(0)
+			emitter.Shape = Enum.ParticleEmitterShape.Sphere
+			emitter.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
+			emitter.ShapeInOut = Enum.ParticleEmitterShapeInOut.Outward
+			emitter.ShapePartial = 1
+			emitter.Lifetime = NumberRange.new(2, 3)
+			emitter.Rotation = NumberRange.new(0, 360)
+			emitter.RotSpeed = NumberRange.new(-90, 90)
+			emitter.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0),
+				NumberSequenceKeypoint.new(0.5, r * 0.45),
+				NumberSequenceKeypoint.new(1, 0),
+			})
+			emitter.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+			emitter.Color = ColorSequence.new(tint, WHITE)
+			emitter.LightEmission = 1
+			emitter.Parent = body
+		elseif effect == "rainbow" then
+			local keys: { ColorSequenceKeypoint } = {}
+			for index, color in RAINBOW do
+				table.insert(keys, ColorSequenceKeypoint.new((index - 1) / (#RAINBOW - 1), color))
+			end
+			local rainbow = ColorSequence.new(keys)
+			for _, item in PlanetLook.ring(body, r * 2.1, -35, WHITE, r * 0.16, 0.1) do
+				item.Name = "GaG_TierRainbow"
+				if item:IsA("Beam") then
+					item.Color = rainbow
+				end
+			end
+			if not reduced then
+				particles(body, r * 1.4, rainbow, 10, 0.9)
+			end
+		end
+	end
+end
+
 -- A planet of `def` with body radius `radius`, at the origin, ready to be
 -- named, parented and moved (anchored; everything else is welded to it).
-function PlanetLook.build(def: PlanetTypeDef, radius: number, reduced: boolean): Part
+-- `tier` (1 when omitted) adds the tier's effects (tierFx).
+function PlanetLook.build(def: PlanetTypeDef, radius: number, reduced: boolean, tier: number?): Part
 	local body = Instance.new("Part")
 	body.Shape = Enum.PartType.Ball
 	body.Size = Vector3.one * radius * 2
@@ -516,6 +616,7 @@ function PlanetLook.build(def: PlanetTypeDef, radius: number, reduced: boolean):
 		end
 	end
 	rarityFlair(body, def, radius, reduced)
+	PlanetLook.tierFx(body, tier or 1, radius, reduced)
 	return body
 end
 

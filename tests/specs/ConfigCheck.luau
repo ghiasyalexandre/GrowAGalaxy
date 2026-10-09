@@ -85,7 +85,8 @@ return function(T, Loader)
 		T.test("the connected products carry their Creator Hub ids; the rest are off", function()
 			local P = Config.Products
 			T.equal(P.BY_KEY.MeteorSlicerShip.id, 2005413560)
-			T.equal(P.BY_KEY.StarMultiplier.id, 2006121509)
+			T.equal(P.BY_KEY.MiningMultiplier.id, 2006121509)
+			T.equal(P.BY_KEY.QuasarBoardShip.id, 2005851533)
 			T.equal(P.BY_KEY.AutoCollect.id, 2005767573)
 			T.equal(P.BY_KEY.MiningBoost.id, 3716697618)
 			T.equal(P.BY_KEY.StardustSmall.id, 3716697789)
@@ -138,10 +139,10 @@ return function(T, Loader)
 			T.truthy(hasProblem(ConfigCheck.run(broken), "FLIGHT_BOUNDS_RADIUS"))
 		end)
 
-		T.test("catches a flight area that reaches the Earth", function()
+		T.test("catches a flight area that reaches the nebula", function()
 			local broken = T.deepCopy(Config)
-			broken.Movement.FLIGHT_BOUNDS_HEIGHT = 2500
-			T.truthy(hasProblem(ConfigCheck.run(broken), "Earth backdrop"))
+			broken.Movement.FLIGHT_BOUNDS_HEIGHT = 2200
+			T.truthy(hasProblem(ConfigCheck.run(broken), "nebula backdrop"))
 		end)
 
 		T.test("catches a paid ship with no earnable path", function()

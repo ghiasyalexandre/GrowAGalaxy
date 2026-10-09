@@ -2,6 +2,7 @@ return function(T, Loader)
 	local Config = Loader.require("src/shared/Config")
 	local RewardMath = Loader.require("src/shared/Logic/RewardMath")
 	local ReceiptFlow = Loader.require("src/shared/Logic/ReceiptFlow")
+	local ProfileSchema = Loader.require("src/shared/Logic/ProfileSchema")
 
 	local P = Config.Products
 
@@ -12,10 +13,10 @@ return function(T, Loader)
 	T.describe("RewardMath", function()
 		T.test("stars: 1x, pass 2x, boost 2x, both 4x", function()
 			T.equal(RewardMath.multiplier("star", entitlements()), 1)
-			T.equal(RewardMath.multiplier("star", entitlements({ StarMultiplier = true })), 2)
 			T.equal(RewardMath.multiplier("star", entitlements({}, 0, 60)), 2)
+			T.equal(RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true })), 2)
 			T.equal(
-				RewardMath.multiplier("star", entitlements({ StarMultiplier = true }, 0, 60)),
+				RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true }, 60)),
 				4
 			)
 			T.equal(RewardMath.multiplier("mining", entitlements({}, 60)), 2)
@@ -23,8 +24,8 @@ return function(T, Loader)
 		end)
 
 		T.test("a pass that isn't set up (no id) grants nothing", function()
-			T.equal(P.BY_KEY.MiningMultiplier.enabled, false)
-			T.equal(RewardMath.multiplier("mining", entitlements({ MiningMultiplier = true })), 1)
+			T.equal(P.BY_KEY.StarMultiplier.enabled, false)
+			T.equal(RewardMath.multiplier("star", entitlements({ StarMultiplier = true })), 1)
 			T.equal(RewardMath.beamPower({ EnhancedBeam = true }), 1)
 		end)
 
@@ -56,8 +57,8 @@ return function(T, Loader)
 			T.near(RewardMath.starIncome(5, 10, 4, {}), 70)
 			T.near(RewardMath.starIncome(5, 10, 0, {}), 50)
 			T.near(RewardMath.starIncome(5, 10, 100, {}), 100)
-			-- Pass and boost together: 4x for the boosted part.
-			T.near(RewardMath.starIncome(5, 10, 10, { StarMultiplier = true }), 200)
+			-- The star pass has no id yet, so it adds nothing to the boost.
+			T.near(RewardMath.starIncome(5, 10, 10, { StarMultiplier = true }), 100)
 			T.equal(RewardMath.starIncome(0, 10, 10, {}), 0)
 		end)
 
@@ -87,7 +88,7 @@ return function(T, Loader)
 
 		T.test("a pack adds its exact amount once per PurchaseId", function()
 			local data = profile()
-			local grants = P.BY_KEY.StardustSmall.grants
+			local grants = P.BY_KEY.StardustMedium.grants
 			T.equal(ReceiptFlow.applyTo(data, "p1", grants), "granted")
 			T.equal(data.stardust, 100 + grants.stardust, "not multiplied")
 			T.equal(ReceiptFlow.applyTo(data, "p1", grants), "duplicate")
@@ -97,8 +98,23 @@ return function(T, Loader)
 			T.equal(data.stardust, 100 + grants.stardust * 2, "buy as often as you like")
 		end)
 
-		T.test("the Small Stardust Pack adds 25,000", function()
-			T.equal(P.BY_KEY.StardustSmall.grants.stardust, 25000)
+		T.test("the Stardust Pack adds 12 hours of current production, once per receipt", function()
+			local pack = P.BY_KEY.StardustSmall
+			T.equal(pack.grants.productionHours, 12)
+			T.truthy(pack.onSale, "still for sale")
+			T.falsy(P.BY_KEY.StardustMedium.onSale, "fixed packs are no longer sold")
+			T.falsy(P.BY_KEY.MiningBoost.onSale, "boosts are no longer sold")
+			T.truthy(P.BY_KEY.StarMultiplier.onSale, "the 2x passes are")
+			T.truthy(P.BY_KEY.MiningMultiplier.onSale)
+			local data = ProfileSchema.default() :: any
+			data.galaxy.stars = {
+				s1 = { typeId = "YellowDwarf", level = 1, pos = { x = 0, y = 0, z = 0 }, build = 0 },
+			}
+			local before = data.stardust
+			T.equal(ReceiptFlow.applyTo(data, "h1", pack.grants), "granted")
+			T.equal(data.stardust, before + 9 * Config.Stars.INCOME_BOOST * 3600 * 12)
+			T.equal(ReceiptFlow.applyTo(data, "h1", pack.grants), "duplicate")
+			T.equal(data.stardust, before + 9 * Config.Stars.INCOME_BOOST * 3600 * 12)
 		end)
 
 		T.test("boost receipts add time", function()
@@ -112,7 +128,7 @@ return function(T, Loader)
 		T.test("old receipt ids are trimmed to the limit", function()
 			local data = profile()
 			for i = 1, P.MAX_RECEIPTS + 5 do
-				ReceiptFlow.applyTo(data, `r{i}`, P.BY_KEY.StardustSmall.grants)
+				ReceiptFlow.applyTo(data, `r{i}`, P.BY_KEY.StardustMedium.grants)
 			end
 			T.equal(#data.receipts, P.MAX_RECEIPTS)
 			T.equal(data.receipts[1], "r6")
@@ -123,7 +139,7 @@ return function(T, Loader)
 			local state = { data = profile(), saved = nil, logs = {}, saveWorks = true }
 			local deps = {
 				productFor = function(id)
-					return if id == 7 then P.BY_KEY.StardustSmall else nil
+					return if id == 7 then P.BY_KEY.StardustMedium else nil
 				end,
 				playerFor = function(userId)
 					return if userId == 1 then "player" else nil
@@ -157,7 +173,7 @@ return function(T, Loader)
 			local receipt = { PurchaseId = "x1", ProductId = 7, PlayerId = 1 }
 			T.equal(ReceiptFlow.process(receipt, deps, {}), "granted")
 			T.equal(ReceiptFlow.process(receipt, deps, {}), "granted")
-			T.equal(state.data.stardust, 100 + P.BY_KEY.StardustSmall.grants.stardust)
+			T.equal(state.data.stardust, 100 + P.BY_KEY.StardustMedium.grants.stardust)
 		end)
 
 		T.test("a failed save is never acknowledged", function()
@@ -214,7 +230,7 @@ return function(T, Loader)
 			local receipt = { PurchaseId = "x3", ProductId = 7, PlayerId = 1 }
 			T.equal(ReceiptFlow.process(receipt, deps, inFlight), "granted")
 			T.equal(ReceiptFlow.process(receipt, deps, inFlight), "granted")
-			T.equal(state.data.stardust, 100 + P.BY_KEY.StardustSmall.grants.stardust)
+			T.equal(state.data.stardust, 100 + P.BY_KEY.StardustMedium.grants.stardust)
 		end)
 
 		T.test("an equipped trail multiplies mining and star income", function()
@@ -226,11 +242,11 @@ return function(T, Loader)
 			T.near(RewardMath.starIncome(10, 1, 0, {}), 10)
 		end)
 
-		T.test("trail multipliers rise in steps of 0.5", function()
+		T.test("trail multipliers and prices rise trail by trail", function()
 			local last, lastCost = 1, 0
 			for _, id in Config.Trails.ORDER do
 				local def = Config.Trails.BY_ID[id]
-				T.near(def.multiplier - last, 0.5, 1e-9, id)
+				T.truthy(def.multiplier > last, id)
 				T.truthy(def.cost > lastCost, id)
 				last, lastCost = def.multiplier, def.cost
 			end

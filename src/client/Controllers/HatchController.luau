@@ -35,15 +35,17 @@ local EggMath = require(Shared:WaitForChild("Logic"):WaitForChild("EggMath"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
 local StarMath = require(Shared:WaitForChild("Logic"):WaitForChild("StarMath"))
+local Types = require(Shared:WaitForChild("Types"))
 
 local P = Config.Planets
 local E = Config.Eggs
 local C = Theme.COLORS
-local CURRENCY = Config.Economy.CURRENCY_NAME
 local TAG = "GaG_Incubator"
 local EGG_COLOR = Color3.fromRGB(255, 110, 200)
 local REVEAL_SECONDS = 5
 local DOME_CENTER = Vector3.new(0, 2.8, 0) -- above the chamber base's centre
+local EGG_MAX = 2.4 -- studs across when ready to hatch (taller by the mesh)
+local EGG_MIN_SHARE = 0.3 -- its size when it starts, as a share of EGG_MAX
 
 local HatchController = {}
 
@@ -54,6 +56,7 @@ type Chamber = {
 	status: TextLabel,
 	fill: Frame,
 	forming: Part?,
+	formingKey: string, -- the rarity and tier the forming egg was made for
 	reveal: Part?,
 	revealUntil: number,
 	connections: { RBXScriptConnection },
@@ -115,7 +118,7 @@ local function makeLabel(part: BasePart): (BillboardGui, TextLabel, TextLabel, F
 	billboard.StudsOffsetWorldSpace = Vector3.new(0, 8.5, 0)
 	billboard.AlwaysOnTop = true
 	billboard.LightInfluence = 0
-	billboard.MaxDistance = 70
+	billboard.MaxDistance = 10
 	billboard.Adornee = part
 	billboard.Parent = part
 	local back = Instance.new("Frame")
@@ -160,51 +163,78 @@ local function makeLabel(part: BasePart): (BillboardGui, TextLabel, TextLabel, F
 	return billboard, title, status, fill
 end
 
+-- The chamber's glowing ring and cap light, in `color` (or back to pink).
+local function tint(chamber: Chamber, color: Color3?)
+	for _, name in { "ChamberRing", "CapLight" } do
+		local item = chamber.part:FindFirstChild(name)
+		if item and item:IsA("BasePart") then
+			item.Color = color or EGG_COLOR
+		end
+	end
+end
+
 local function clearForming(chamber: Chamber)
 	if chamber.forming then
 		chamber.forming:Destroy()
 		chamber.forming = nil
+		chamber.formingKey = ""
+		tint(chamber, nil)
 	end
 end
 
--- The planet taking shape inside the dome: a glowing ball in the rarity's
--- colour with a swirl of sparks.
-local function formingPart(chamber: Chamber, color: Color3): Part
-	local ball = chamber.forming
-	if ball then
-		return ball
+-- The egg inside the dome: an egg-shaped shell in the rarity's colour,
+-- dressed with its tier's effects (PlanetLook.tierFx: glow, sparkles,
+-- halo, aura, motes, rainbow), a warm light and a swirl of sparks. Made
+-- again if the rarity or tier changes.
+local function formingPart(chamber: Chamber, color: Color3, tier: number): Part
+	local key = `{color:ToHex()}#{tier}`
+	local egg = chamber.forming
+	if egg and chamber.formingKey == key then
+		return egg
 	end
+	clearForming(chamber)
+	local reduced = ClientState.reducedEffects == true
 	local made = Instance.new("Part")
 	made.Name = "GaG_Forming"
 	made.Shape = Enum.PartType.Ball
-	made.Material = Enum.Material.Neon
+	made.Material = Enum.Material.SmoothPlastic
+	made.Reflectance = 0.15
 	made.Anchored = true
 	made.CanCollide = false
 	made.CanQuery = false
 	made.CanTouch = false
 	made.CastShadow = false
 	made.Color = color
-	made.Size = Vector3.one * 0.6
+	made.Size = Vector3.one * EGG_MAX
 	made.CFrame = CFrame.new(chamber.part.Position)
-	made.Parent = chamber.part
-	if not ClientState.reducedEffects then
+	local mesh = Instance.new("SpecialMesh")
+	mesh.Name = "Shape"
+	mesh.MeshType = Enum.MeshType.Sphere
+	mesh.Scale = Vector3.new(1, 1.35, 1) * EGG_MIN_SHARE
+	mesh.Parent = made
+	PlanetLook.tierFx(made, tier, EGG_MAX / 2, reduced)
+	if not reduced then
 		local swirl = Instance.new("ParticleEmitter")
-		swirl.Rate = 8
+		swirl.Rate = 6
 		swirl.Lifetime = NumberRange.new(0.6, 1.1)
 		swirl.Speed = NumberRange.new(0.5, 1.5)
 		swirl.SpreadAngle = Vector2.new(180, 180)
-		swirl.Size = NumberSequence.new(0.25, 0)
+		swirl.Size = NumberSequence.new(0.2, 0)
 		swirl.Color = ColorSequence.new(color:Lerp(Color3.new(1, 1, 1), 0.5), color)
 		swirl.LightEmission = 1
 		swirl.LockedToPart = true
 		swirl.Parent = made
 	end
 	local light = Instance.new("PointLight")
+	light.Name = "Warmth"
 	light.Color = color
 	light.Range = 8
 	light.Brightness = 1
 	light.Parent = made
+	made.Parent = chamber.part
 	chamber.forming = made
+	chamber.formingKey = key
+	tint(chamber, color)
 	return made
 end
 
@@ -221,22 +251,55 @@ local function refreshChamber(chamber: Chamber, t: number)
 	if rarity then
 		local color = rarityColor(rarity)
 		local rarityName = P.RARITIES[rarity] and P.RARITIES[rarity].displayName or rarity
+		local tierAttr = part:GetAttribute("Tier")
+		local tierName = if type(tierAttr) == "number"
+				and tierAttr > 1
+				and P.TIERS[tierAttr]
+			then `{P.TIERS[tierAttr].name} `
+			else ""
 		chamber.title.TextColor3 = color:Lerp(Color3.new(1, 1, 1), 0.3)
 		chamber.status.Text = if left > 0
-			then `{rarityName} egg  ·  {math.floor(progress * 100)}%  ·  {clockText(left)}`
+			then `{tierName}{rarityName} egg  ·  {math.floor(progress * 100)}%  ·  {clockText(
+				left
+			)}`
 			else "Hatching..."
 		chamber.fill.BackgroundColor3 = color
 		chamber.fill.Size = UDim2.fromScale(progress, 1)
-		local ball = formingPart(chamber, color)
-		local size = 0.6 + progress * 2.4
-		local bob = if ClientState.reducedEffects then 0 else math.sin(t * 2) * 0.15
-		ball.Size = Vector3.one * size
-		ball.Transparency = 0.5 - progress * 0.4
-		ball.CFrame = CFrame.new(domeCenter(part) + Vector3.new(0, bob, 0))
+		local rawTier = part:GetAttribute("Tier")
+		local tier = if type(rawTier) == "number" and P.TIERS[rawTier] then rawTier else 1
+		local egg = formingPart(chamber, color, tier)
+		local calm = ClientState.reducedEffects == true
+		-- Grows from a small seed to full size, shell clearing as it ripens.
+		local share = EGG_MIN_SHARE + (1 - EGG_MIN_SHARE) * progress
+		local mesh = egg:FindFirstChild("Shape")
+		if mesh and mesh:IsA("SpecialMesh") then
+			mesh.Scale = Vector3.new(1, 1.35, 1) * share
+		end
+		egg.Transparency = 0.35 - progress * 0.35
+		-- Glows brighter with its tier, and pulses like a heartbeat.
+		local warmth = egg:FindFirstChild("Warmth")
+		if warmth and warmth:IsA("PointLight") then
+			local beat = 0.5 + 0.5 * math.sin(t * (2 + progress * 4))
+			warmth.Brightness = (0.4 + tier * 0.25) * (0.6 + 0.4 * beat) * (0.4 + progress)
+			warmth.Range = 5 + tier * 1.2
+		end
+		-- Sits on its cradle (1.5 below the dome centre) and rocks: gently at first, then in sudden
+		-- jolts and little hops as hatching nears.
+		local bottom = domeCenter(part) - Vector3.new(0, 1.5 - EGG_MAX * 1.35 * share / 2, 0)
+		local wobble, hop = 0, 0
+		if not calm then
+			wobble = math.sin(t * 3) * 0.05 + progress ^ 3 * math.sin(t * 23) * 0.22
+			if progress > 0.8 and math.sin(t * 5) > 0.6 then
+				wobble += math.sin(t * 40) * 0.25
+				hop = (math.sin(t * 5) - 0.6) * 0.4
+			end
+		end
+		egg.CFrame = CFrame.new(bottom + Vector3.new(0, hop, 0))
+			* CFrame.Angles(wobble, t * 0.3, wobble * 0.6)
 	else
 		clearForming(chamber)
 		chamber.title.TextColor3 = C.text
-		chamber.status.Text = if isMine(part) then "Empty: incubate an egg here" else "Empty"
+		chamber.status.Text = "Empty"
 		chamber.fill.Size = UDim2.fromScale(0, 1)
 	end
 	if chamber.reveal then
@@ -255,6 +318,8 @@ end
 local function onHatched(chamber: Chamber)
 	local typeId = chamber.part:GetAttribute("HatchedType")
 	local at = chamber.part:GetAttribute("HatchedAt")
+	local rawTier = chamber.part:GetAttribute("HatchedTier")
+	local tier = if type(rawTier) == "number" and P.TIERS[rawTier] then rawTier else 1
 	local def = if type(typeId) == "string" then P.BY_ID[typeId] else nil
 	if def == nil or type(at) ~= "number" or now() - at > REVEAL_SECONDS then
 		return
@@ -263,7 +328,7 @@ local function onHatched(chamber: Chamber)
 		chamber.reveal:Destroy()
 	end
 	clearForming(chamber)
-	local body = PlanetLook.build(def, 1.6, ClientState.reducedEffects == true)
+	local body = PlanetLook.build(def, 1.6, ClientState.reducedEffects == true, tier)
 	body.Name = "GaG_Hatched"
 	body.Parent = chamber.part
 	chamber.reveal = body
@@ -275,12 +340,15 @@ local function onHatched(chamber: Chamber)
 	StarFx.materialize(body, Color3.fromHex(def.color))
 	if isMine(chamber.part) then
 		local rarity = P.RARITIES[def.rarity]
+		local tierDef = P.TIERS[tier]
 		ClientState.celebrate:Fire(
 			"PLANET HATCHED",
-			def.displayName,
-			`{rarity.displayName}  ·  +{Format.abbreviate(StarMath.planetIncome(def.id, 1))} {CURRENCY}/s  ·  equip it from Planets (P)`,
+			`{tierDef.name} {def.displayName}`,
+			`{rarity.displayName}  ·  tier {tier} x{tierDef.multiplier}  ·  +{Format.rate(
+				StarMath.planetFactor(def.id, 1, tier) * 100
+			)}% of its star's output  ·  equip it from Planets (P)`,
 			color,
-			rarity.index >= 3
+			rarity.index >= 3 or tier >= E.ANNOUNCE_TIER
 		)
 	end
 end
@@ -298,6 +366,7 @@ local function addChamber(instance: Instance)
 		status = status,
 		fill = fill,
 		forming = nil,
+		formingKey = "",
 		reveal = nil,
 		revealUntil = 0,
 		connections = {},
@@ -410,12 +479,8 @@ refresh = function()
 		return
 	end
 	local profile = ClientState.profile
-	local eggs: { [string]: { guaranteed: boolean, outcome: string? } } = if profile
-			and profile.eggs
-		then profile.eggs
-		else {}
-	local hatches: { [string]: { rarity: string, startedAt: number, endsAt: number } } = if profile
-			and profile.hatches
+	local eggs: { [string]: Types.EggView } = if profile and profile.eggs then profile.eggs else {}
+	local hatches: { [string]: Types.HatchView } = if profile and profile.hatches
 		then profile.hatches
 		else {}
 	local waiting = 0
@@ -502,7 +567,7 @@ refresh = function()
 		Theme.label(row, {
 			Position = UDim2.fromOffset(12, 0),
 			Size = UDim2.new(1, -24, 1, 0),
-			Text = "No eggs waiting. Buy them at the ISS Planet Egg Lab.",
+			Text = "No eggs waiting. Roll and keep them at your Planet Egg Lab, beside the Stardust Collector.",
 			Font = Enum.Font.Gotham,
 			TextSize = 14,
 			TextColor3 = C.subtle,
@@ -515,32 +580,30 @@ refresh = function()
 		order += 1
 		local egg = eggs[id]
 		local def = if egg.outcome then P.BY_ID[egg.outcome] else nil
+		local rarity = P.RARITIES[egg.rarity] or P.RARITIES[P.RARITY_ORDER[1]]
+		local tierDef = P.TIERS[egg.tier] or P.TIERS[1]
 		local row = Theme.row(list, 52, order)
 		local dot = Theme.planetIcon(
 			row,
-			if def then Color3.fromHex(def.color) else EGG_COLOR,
+			if def then Color3.fromHex(def.color) else Color3.fromHex(rarity.color),
 			32,
-			if def then nil else Color3.fromRGB(255, 230, 140)
+			if egg.tier > 1 then Color3.fromHex(tierDef.color) else nil
 		)
 		dot.Position = UDim2.fromOffset(10, 10)
-		local minSeconds = P.RARITIES[P.RARITY_ORDER[1]].hatchSeconds
-		local maxSeconds = P.RARITIES[P.RARITY_ORDER[#P.RARITY_ORDER]].hatchSeconds
 		Theme.label(row, {
 			Position = UDim2.fromOffset(52, 6),
 			Size = UDim2.new(1, -240, 0, 20),
-			Text = if def then `{def.displayName} egg` else "Mystery egg",
-			TextColor3 = if def then Color3.fromHex(P.RARITIES[def.rarity].color) else EGG_COLOR,
+			Text = if def
+				then `{tierDef.name} {def.displayName} egg`
+				else `{tierDef.name} {rarity.displayName} egg`,
+			TextColor3 = Color3.fromHex(rarity.color),
 		})
 		Theme.label(row, {
 			Position = UDim2.fromOffset(52, 27),
 			Size = UDim2.new(1, -240, 0, 18),
-			Text = if def
-				then `{P.RARITIES[def.rarity].displayName}  ·  hatches in {EggMath.durationText(
-					P.RARITIES[def.rarity].hatchSeconds
-				)}`
-				else `Hatches in {EggMath.durationText(minSeconds)} to {EggMath.durationText(
-					maxSeconds
-				)}, by its rarity`,
+			Text = `Tier {egg.tier} x{tierDef.multiplier}  ·  hatches in {EggMath.durationText(
+				rarity.hatchSeconds
+			)}`,
 			Font = Enum.Font.Gotham,
 			TextSize = 13,
 			TextColor3 = C.subtle,

@@ -4,10 +4,12 @@
 -- drives it (network ownership) and FlightGuard checks the result.
 --
 --   Launch  The HUD's Launch Ship button (ShipRequest "launch") spawns the
---           active ship at the player's own station berth and seats them in
---           it (a station hangar console, prompt tagged "LaunchPrompt", does
---           the same without seating). Raids use spawnAndBoard. The ISS has
---           no berths. Launching again brings the ship back.
+--           active ship at the player (or the nearest clear spot just
+--           around them) and seats them in it. Inside the ISS safe zone or
+--           the Zero G Dodgeball arena, or when every spot is blocked, it
+--           uses their station berth instead (and still seats them). A station hangar console (prompt tagged "LaunchPrompt")
+--           spawns it at the berth without seating. Raids use spawnAndBoard.
+--           Launching again brings the ship back.
 --   Board   The ship's BoardPrompt seats its owner. Nobody else can board
 --           (clients also hide other players' prompts, and their own while
 --           flying).
@@ -34,6 +36,7 @@ local Workspace = game:GetService("Workspace")
 local Build = require(script.Parent.Parent.World.Build)
 local Config = require(ReplicatedStorage.Shared.Config)
 local DataSystem = require(script.Parent.DataSystem)
+local DodgeballMath = require(ReplicatedStorage.Shared.Logic.DodgeballMath)
 local FlightGuard = require(script.Parent.FlightGuard)
 local FlightMath = require(ReplicatedStorage.Shared.Logic.FlightMath)
 local Net = require(ReplicatedStorage.Shared.Net)
@@ -47,6 +50,9 @@ local Teleport = require(script.Parent.Parent.Util.Teleport)
 local Types = require(ReplicatedStorage.Shared.Types)
 
 local M = Config.Movement
+
+-- The ISS's no-PvP box (IssBuilder): no launching where you are inside it.
+local SAFE_ZONE_TAG = "SafeZone"
 
 -- Room a floating player needs when leaving a ship.
 local EXIT_BOX = Vector3.new(4, 6, 4)
@@ -152,6 +158,67 @@ local function berthStatus(berth: CFrame, ignore: Ship?): (boolean, Ship?)
 		end
 	end
 	return parked == nil, parked
+end
+
+-- Spots tried around the player, in order: where they are, then above,
+-- below, to the sides and behind (studs, in the player's own frame).
+local LAUNCH_OFFSETS: { Vector3 } = {
+	Vector3.zero,
+	Vector3.new(0, 10, 0),
+	Vector3.new(0, -10, 0),
+	Vector3.new(14, 0, 0),
+	Vector3.new(-14, 0, 0),
+	Vector3.new(0, 0, 16),
+	Vector3.new(0, 20, 0),
+}
+
+-- Where the Launch Ship button can put the ship around a floating player:
+-- the first of LAUNCH_OFFSETS (facing their way) outside the ISS safe zone
+-- and the dodgeball arena with nothing solid (but them and their own ship)
+-- in the ship's box. Nil means none is clear: use the station berth.
+local function launchSpotFor(player: Player, ignore: Ship?): CFrame?
+	local root = Teleport.rootOf(player)
+	if root == nil then
+		return nil
+	end
+	local half = ShipBuilder.BERTH_BOX.Magnitude / 2
+	local exclude: { Instance } = {}
+	if player.Character then
+		table.insert(exclude, player.Character)
+	end
+	if ignore then
+		table.insert(exclude, ignore.model)
+	end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Exclude
+	params.FilterDescendantsInstances = exclude
+	local function clear(spot: CFrame): boolean
+		local p = spot.Position
+		if DodgeballMath.inside({ x = p.X, y = p.Y, z = p.Z }, -half) then
+			return false
+		end
+		for _, zone in CollectionService:GetTagged(SAFE_ZONE_TAG) do
+			if zone:IsA("BasePart") and FlightMath.insideBox(zone.CFrame, zone.Size, p) then
+				return false
+			end
+		end
+		for _, part in Workspace:GetPartBoundsInBox(spot, ShipBuilder.BERTH_BOX, params) do
+			local model = part:FindFirstAncestorOfClass("Model")
+			local character = model and Players:GetPlayerFromCharacter(model)
+			-- Solid parts, other players and other ships block; zones don't.
+			if part.CanCollide or character or (model and byModel[model]) then
+				return false
+			end
+		end
+		return true
+	end
+	for _, offset in LAUNCH_OFFSETS do
+		local spot = root.CFrame * CFrame.new(offset)
+		if clear(spot) then
+			return spot
+		end
+	end
+	return nil
 end
 
 local despawn: (ship: Ship) -> ()
@@ -368,8 +435,9 @@ local function spawnShip(player: Player, info: Types.ShipInfo, berth: CFrame): S
 end
 
 -- Spawns (or brings back) the player's active ship at a free berth of the
--- given hangar. Reach and ownership of the console are checked by the caller.
-function ShipSystem.launch(player: Player, hangar: string)
+-- given hangar, or at `spot` (already checked by launchSpotFor). Reach and
+-- ownership of the console are checked by the caller.
+function ShipSystem.launch(player: Player, hangar: string, spot: CFrame?)
 	local profile = DataSystem.getProfile(player)
 	if profile == nil or humanoidOf(player) == nil then
 		return
@@ -399,7 +467,7 @@ function ShipSystem.launch(player: Player, hangar: string)
 			berths = { station.berth }
 		end
 	end
-	local berth = pickBerth(berths, existing)
+	local berth = spot or pickBerth(berths, existing)
 	if berth == nil then
 		Notify.send(
 			player,
@@ -417,8 +485,9 @@ function ShipSystem.launch(player: Player, hangar: string)
 	DataSystem.addStat(player, "shipsLaunched", 1)
 	Notify.send(
 		player,
-		if existing
-			then `Your {ship.info.displayName} is back at a dock.`
+		if spot
+			then `Your {ship.info.displayName} is ready.`
+			elseif existing then `Your {ship.info.displayName} is back at a dock.`
 			else `Your {ship.info.displayName} is ready at the dock. Float over and board it.`
 	)
 end
@@ -557,11 +626,12 @@ function ShipSystem.getPiloted(player: Player): (Model?, Types.ShipInfo?)
 	return nil, nil
 end
 
--- The HUD's Launch Ship button: spawns the active ship at the player's own
--- station berth, moves them beside it and seats them, wherever they were.
+-- The HUD's Launch Ship button: spawns the active ship where the player is
+-- (or, where it can't go, at their own station berth), moves them into it
+-- and seats them.
 launchAndBoard = function(player: Player)
 	local before = ships[player]
-	ShipSystem.launch(player, "Station")
+	ShipSystem.launch(player, "Station", launchSpotFor(player, before))
 	local ship = ships[player]
 	if ship == nil or ship == before or ship.piloting then
 		return

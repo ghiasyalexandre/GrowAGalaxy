@@ -143,6 +143,11 @@ local function grantNotice(player: Player, def: ProductDef)
 	local grants = def.grants
 	if grants.stardust then
 		Notify.send(player, `+{grants.stardust} Stardust added. Thank you!`)
+	elseif grants.productionHours then
+		Notify.send(
+			player,
+			`{grants.productionHours} hours of your production added to your Stardust. Thank you!`
+		)
 	elseif grants.boost then
 		local profile = DataSystem.getProfile(player)
 		local left = if profile then profile.boosts[grants.boost.source] else 0

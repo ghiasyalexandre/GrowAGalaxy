@@ -1,9 +1,10 @@
 --!strict
 -- Trail effects, bought with Stardust in the Shipyard's Trails tab. The one
 -- you equip streams behind you, both floating in your suit and flying your
--- ship, and multiplies every Stardust you earn (mining and star income) by
--- its multiplier, on top of passes and boosts (Logic/RewardMath).
--- Multipliers rise in steps of 0.5; prices rise steeply.
+-- ship, and multiplies your production rate B (stars and planets, and so
+-- mining, which pays a share of B: Logic/EconomyMath) by its multiplier.
+-- It never touches rewards, sales or purchases. Only one applies.
+-- Multipliers rise in steps of 0.1; prices rise steeply.
 
 export type TrailDef = {
 	id: string,
@@ -22,8 +23,8 @@ local BY_ID: { [string]: TrailDef } = {
 	CometDust = {
 		id = "CometDust",
 		displayName = "Comet Dust",
-		multiplier = 1.5,
-		cost = 25000,
+		multiplier = 1.1,
+		cost = 2500,
 		colors = { "#E8F6FF", "#7FC8FF" },
 		width = 1.2,
 		lifetime = 0.6,
@@ -31,8 +32,8 @@ local BY_ID: { [string]: TrailDef } = {
 	NebulaRibbon = {
 		id = "NebulaRibbon",
 		displayName = "Nebula Ribbon",
-		multiplier = 2,
-		cost = 150000,
+		multiplier = 1.25,
+		cost = 100000,
 		colors = { "#FF6EC8", "#7A5CFF" },
 		width = 1.6,
 		lifetime = 0.8,
@@ -40,8 +41,8 @@ local BY_ID: { [string]: TrailDef } = {
 	SolarFlare = {
 		id = "SolarFlare",
 		displayName = "Solar Flare",
-		multiplier = 2.5,
-		cost = 750000,
+		multiplier = 1.5,
+		cost = 10000000,
 		colors = { "#FFF4C2", "#FFB020", "#FF4A1F" },
 		width = 2,
 		lifetime = 0.9,
@@ -49,8 +50,8 @@ local BY_ID: { [string]: TrailDef } = {
 	AuroraVeil = {
 		id = "AuroraVeil",
 		displayName = "Aurora Veil",
-		multiplier = 3,
-		cost = 3000000,
+		multiplier = 1.75,
+		cost = 1000000000,
 		colors = { "#5CFF6B", "#3FD2FF", "#C04DFF" },
 		width = 2.4,
 		lifetime = 1.1,
@@ -58,8 +59,8 @@ local BY_ID: { [string]: TrailDef } = {
 	QuasarStream = {
 		id = "QuasarStream",
 		displayName = "Quasar Stream",
-		multiplier = 3.5,
-		cost = 12000000,
+		multiplier = 2.0,
+		cost = 80000000000,
 		colors = { "#FFFFFF", "#3FFFD0", "#7A5CFF", "#FF3B3B" },
 		width = 2.8,
 		lifetime = 1.3,

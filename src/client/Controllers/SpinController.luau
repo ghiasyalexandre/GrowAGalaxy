@@ -3,7 +3,8 @@
 -- doesn't replicate every frame:
 --
 --   GaG_Spin   Parts or models with a SpinSpeed attribute (radians per
---              second) turn about the world's up axis through their centre
+--              second) turn about the world's up axis (or the world axis in
+--              a SpinAxis attribute, "X" or "Z") through their centre
 --              (a model's bounding-box centre, not its pivot, which an
 --              imported model may have far off to one side): the ISS
 --              hologram, showroom ships, the raid beacon's rings.
@@ -26,7 +27,7 @@ local SpinController = {}
 -- Speed in radians per second, and where the model's centre sits relative to
 -- its pivot (measured again whenever its part count changes, e.g. as parts
 -- stream in), so it turns on the spot without drifting.
-type Spinner = { speed: number, offset: Vector3?, parts: number }
+type Spinner = { speed: number, axis: string, offset: Vector3?, parts: number }
 
 local spinners: { [Instance]: Spinner } = {}
 local pulsers: { [BasePart]: true } = {}
@@ -34,7 +35,13 @@ local pulsers: { [BasePart]: true } = {}
 local function addSpinner(instance: Instance)
 	local speed = instance:GetAttribute("SpinSpeed")
 	if instance:IsA("PVInstance") and type(speed) == "number" then
-		spinners[instance] = { speed = speed, offset = nil, parts = -1 }
+		local axis = instance:GetAttribute("SpinAxis")
+		spinners[instance] = {
+			speed = speed,
+			axis = if type(axis) == "string" then axis else "Y",
+			offset = nil,
+			parts = -1,
+		}
 	end
 end
 
@@ -76,7 +83,11 @@ local function step(dt: number)
 		local center = if instance.Parent then centerOf(instance, spinner) else nil
 		if center then
 			local pivot = CFrame.new(center)
-			local turn = CFrame.Angles(0, spinner.speed * dt, 0);
+			local angle = spinner.speed * dt
+			local turn = if spinner.axis == "X"
+				then CFrame.Angles(angle, 0, 0)
+				elseif spinner.axis == "Z" then CFrame.Angles(0, 0, angle)
+				else CFrame.Angles(0, angle, 0);
 			(instance :: PVInstance):PivotTo(
 				pivot * turn * pivot:Inverse() * (instance :: PVInstance):GetPivot()
 			)

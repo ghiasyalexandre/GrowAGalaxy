@@ -1,16 +1,21 @@
 --!strict
--- The Planet Egg Lab panel, opened from the ISS Egg Lab console (TycoonAction
--- "Eggs"). Everything a player needs before buying is on screen:
+-- The Egg Lab panel, opened from the Egg Lab in your station's Incubator
+-- Bay (TycoonAction "Eggs"). One page, top to bottom:
 --
---   Mystery egg     the price, your balance, the Buy button, and every planet
---                   type's exact chance grouped by rarity with each rarity's
---                   hatch time; that hatching starts at your hangar; and,
---                   when random eggs are off for you, why.
---   Details         how the roll, prices, hatching and restrictions work.
+--   the pedestal egg  rarity and tier (the planet stays a mystery), its
+--                     income range, Keep; rolling is the lab's own ROLL
+--                     button, so the card shows the roll price instead
+--   the lab           level, Upgrade (price, star tier needed)
+--   odds              every rarity (base range, hatch time) and tier, now
+--                     and at the next lab level
+--   folded away       every planet type's odds (and your Planet Index), and
+--                     how it all works
+--
+-- When random eggs are off for the player, a line under the egg says why.
 --
 -- The server (EggSystem) decides everything: the policy check, the price
--- (the shown price is sent along; if it changed, nothing is bought) and the
--- mystery egg's planet, which the client only learns when it hatches.
+-- (the shown price is sent along; if it changed, nothing happens) and the
+-- egg's planet, which the client only learns when it hatches.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -21,6 +26,7 @@ local UserInputService = game:GetService("UserInputService")
 local ClientState = require(script.Parent.Parent.ClientState)
 local Input = require(script.Parent.Parent.Input)
 local Theme = require(script.Parent.Parent.UI.Theme)
+local StarController = require(script.Parent.StarController)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
@@ -35,16 +41,15 @@ local C = Theme.COLORS
 local CURRENCY = Config.Economy.CURRENCY_NAME
 local EGG_COLOR = Color3.fromRGB(255, 110, 200)
 
-type Tab = "mystery" | "details"
-
 local EggShopController = {}
 
 local gui: ScreenGui
 local panel: Frame
 local header: TextLabel
-local tabs: Frame
 local list: ScrollingFrame
-local tab: Tab = "mystery"
+-- Folded sections opened this session.
+local showPlanets = false
+local showHelp = false
 local policy: EggMath.Policy = "unknown"
 local policyMessage = ""
 local busy = false
@@ -55,6 +60,13 @@ end
 
 local function whole(n: number): string
 	return Format.commas(n)
+end
+
+-- The next roll's price, as the server last told us (economy.eggPrice).
+local function eggPrice(): number
+	local profile = ClientState.profile
+	local economy = if profile then (profile :: any).economy else nil
+	return if economy then economy.eggPrice else E.PRICE_BASE
 end
 
 local function profileNumbers(): (number, number, number)
@@ -96,7 +108,7 @@ local function textRow(order: number, text: string, height: number, color: Color
 	return row, label
 end
 
-local function buy(action: string, ...: any)
+local function send(action: string, ...: any)
 	if busy then
 		return
 	end
@@ -139,9 +151,7 @@ local function planetRow(
 	Theme.label(row, {
 		Position = UDim2.fromOffset(52, 4),
 		Size = UDim2.new(1, -170, 0, 20),
-		Text = if discovered(def.id)
-			then `{def.displayName}  ✓`
-			else `{def.displayName}  ·  not in your Planet Index yet`,
+		Text = if discovered(def.id) then `{def.displayName}  ✓` else `{def.displayName}  ·  ?`,
 		TextSize = 15,
 		-- The rarity's colour; dimmer for types not found yet.
 		TextColor3 = if discovered(def.id)
@@ -151,7 +161,7 @@ local function planetRow(
 	Theme.label(row, {
 		Position = UDim2.fromOffset(52, 24),
 		Size = UDim2.new(1, -170, 0, 16),
-		Text = `+{fmt(def.income)} {CURRENCY}/s at level 1  ·  {def.description}`,
+		Text = `+{fmt(def.income)}% of its star at level 1  ·  {def.description}`,
 		Font = Enum.Font.Gotham,
 		TextSize = 12,
 		TextColor3 = C.subtle,
@@ -169,44 +179,110 @@ local function planetRow(
 	return row
 end
 
-local function rarityHeader(order: number, rarityId: string)
-	local rarity = P.RARITIES[rarityId]
+local function labLevel(): number
+	local profile = ClientState.profile
+	local lab = if profile then profile.eggLab else nil
+	return if lab then lab.level else 1
+end
+
+local function current(): { rarity: string, tier: number }?
+	local profile = ClientState.profile
+	local lab = if profile then profile.eggLab else nil
+	return if lab then lab.current else nil
+end
+
+local function sectionTitle(order: number, text: string)
 	local row = Theme.row(list, 30, order)
 	row.BackgroundTransparency = 1
 	Theme.label(row, {
-		Position = UDim2.fromOffset(6, 0),
-		Size = UDim2.new(1, -12, 1, 0),
-		Text = `{string.upper(rarity.displayName)}  ·  {EggMath.percentText(
-			rarity.weight / P.WEIGHT_TOTAL * 100
-		)} in total  ·  hatches in {EggMath.durationText(rarity.hatchSeconds)}`,
-		TextSize = 14,
+		Position = UDim2.fromOffset(6, 4),
+		Size = UDim2.new(1, -12, 1, -4),
+		Text = text,
+		TextSize = 16,
 		Font = Enum.Font.GothamBlack,
-		TextColor3 = Color3.fromHex(rarity.color),
+		TextColor3 = C.gold,
 	})
 end
 
-local function showMystery()
-	local stardust, bought, held = profileNumbers()
-	local price = EggMath.price(bought)
-	local allowed = EggMath.canBuyRandom(policy)
+-- A small right-aligned label in a row.
+local function rightLabel(row: Frame, text: string, width: number, color: Color3?)
+	Theme.label(row, {
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -12, 0, 0),
+		Size = UDim2.new(0, width, 1, 0),
+		Text = text,
+		TextXAlignment = Enum.TextXAlignment.Right,
+		TextSize = 14,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = color or C.gold,
+	})
+end
 
-	local card = Theme.row(list, 84, 1)
-	local icon = Theme.planetIcon(card, EGG_COLOR, 52, Color3.fromRGB(255, 230, 140))
-	icon.Position = UDim2.fromOffset(12, 16)
+-- "12.8%" or "12.8% → 14.1%" when the next lab level would change it.
+local function chanceText(now: number, after: number?): string
+	local text = EggMath.percentText(now)
+	if after and EggMath.percentText(after) ~= text then
+		text ..= ` → {EggMath.percentText(after)}`
+	end
+	return text
+end
+
+-- A folding section header: tap to open or close.
+local function foldRow(order: number, text: string, open: boolean, toggle: () -> ())
+	local row = Theme.row(list, 36, order)
+	local button = Theme.button(row, `{if open then "▾" else "▸"}  {text}`, "primary", toggle)
+	button.Size = UDim2.fromScale(1, 1)
+	button.TextXAlignment = Enum.TextXAlignment.Left
+	button.TextSize = 14
+	return row
+end
+
+-- The pedestal egg and Keep.
+local function eggCard(
+	order: number,
+	price: number,
+	held: number,
+	allowed: boolean,
+	stardust: number
+)
+	local egg = current()
+	local card = Theme.row(list, 92, order)
+	local rarity = if egg then P.RARITIES[egg.rarity] else nil
+	local tierDef = if egg then P.TIERS[egg.tier] else nil
+	local tint = if rarity then Color3.fromHex(rarity.color) else EGG_COLOR
+	local icon = Theme.planetIcon(
+		card,
+		tint,
+		56,
+		if tierDef and egg and egg.tier > 1 then Color3.fromHex(tierDef.color) else nil
+	)
+	icon.Position = UDim2.fromOffset(12, 18)
 	Theme.label(card, {
-		Position = UDim2.fromOffset(78, 8),
-		Size = UDim2.new(1, -90 - #E.MULTI_BUY * 112, 0, 24),
-		Text = "Mystery Planet Egg",
+		Position = UDim2.fromOffset(80, 8),
+		Size = UDim2.new(1, -210, 0, 26),
+		Text = if rarity and tierDef
+			then `{tierDef.name} {rarity.displayName} egg`
+			else "No egg on the pedestal",
 		TextSize = 20,
 		Font = Enum.Font.GothamBlack,
-		TextColor3 = EGG_COLOR,
+		TextColor3 = tint,
 	})
+	local low, high = 0, 0
+	if egg then
+		low, high = EggMath.rarityRange(egg.rarity)
+	end
+	local rollLine = if not allowed
+		then "Rolling is off for you (see below)."
+		elseif stardust < price then `A roll costs {whole(price)}: you need {whole(
+			price - stardust
+		)} more.`
+		else `Press ROLL on the lab: {whole(price)} {CURRENCY} a roll.`
 	Theme.label(card, {
-		Position = UDim2.fromOffset(78, 34),
-		Size = UDim2.new(1, -90 - #E.MULTI_BUY * 112, 0, 40),
-		Text = `{whole(price)} {CURRENCY}  ·  each, one random planet, duplicates possible  ·  you have {whole(
-			stardust
-		)}`,
+		Position = UDim2.fromOffset(80, 36),
+		Size = UDim2.new(1, -210, 0, 50),
+		Text = if egg and tierDef
+			then `+{fmt(low * tierDef.multiplier)}-{fmt(high * tierDef.multiplier)}% of its star's output (x{tierDef.multiplier}). Keep it, or roll again to replace it. {rollLine}`
+			else rollLine,
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.None,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -214,152 +290,221 @@ local function showMystery()
 		TextSize = 13,
 		TextColor3 = C.subtle,
 	})
-	-- Buy 1, 5 or 10 at once (Config.Eggs.MULTI_BUY), each egg at its own price.
-	local first: TextButton? = nil
-	for index = #E.MULTI_BUY, 1, -1 do
-		local count = E.MULTI_BUY[index]
-		local _, total = EggMath.batch(bought, count)
-		local room = held + count <= E.MAX_UNHATCHED
-		local label = if not allowed
-			then "Unavailable"
-			elseif not room then "No room"
-			elseif stardust < total then `x{count} · need {fmt(total)}`
-			else `x{count} · {fmt(total)}`
-		local ok = allowed and room and stardust >= total
-		local button = Theme.button(
-			card,
-			label,
-			if ok then "buy" else "disabled",
-			if ok
-				then function()
-					buy("buyMystery", total, count)
-				end
-				else nil
-		)
-		button.AnchorPoint = Vector2.new(1, 0.5)
-		button.Position = UDim2.new(1, -10 - (#E.MULTI_BUY - index) * 112, 0.5, 0)
-		button.Size = UDim2.fromOffset(106, 38)
-		button.TextSize = 13
-		if count == 1 then
-			first = button
-		end
-	end
-	if Input.device() == "gamepad" and allowed and first then
-		GuiService.SelectedObject = first
-	end
+	local room = held < E.MAX_UNHATCHED
+	local canKeep = egg ~= nil and room
+	local keepButton = Theme.button(
+		card,
+		if egg and not room then "No room" else "Keep",
+		if canKeep then "primary" else "disabled",
+		if canKeep
+			then function()
+				send("keep")
+			end
+			else nil
+	)
+	keepButton.AnchorPoint = Vector2.new(1, 0.5)
+	keepButton.Position = UDim2.new(1, -10, 0.5, 0)
+	keepButton.Size = UDim2.fromOffset(110, 44)
+	return keepButton, canKeep
+end
 
-	local order = 2
+-- The lab's level and Upgrade.
+local function labCard(order: number, stardust: number): (TextButton, boolean)
+	local level = labLevel()
+	local cost = EggMath.upgradeCost(level)
+	local needTier = EggMath.upgradeTier(level)
+	local tierOk = needTier == nil or StarController.bestTier() >= needTier
+	local card = Theme.row(list, 64, order)
+	Theme.label(card, {
+		Position = UDim2.fromOffset(14, 6),
+		Size = UDim2.new(1, -190, 0, 24),
+		Text = `Egg Lab level {level}/{#E.LAB_LEVELS}`,
+		TextSize = 18,
+		Font = Enum.Font.GothamBlack,
+		TextColor3 = EGG_COLOR,
+	})
+	Theme.label(card, {
+		Position = UDim2.fromOffset(14, 32),
+		Size = UDim2.new(1, -190, 0, 26),
+		Text = if cost
+			then `Better odds for rarer planets and higher tiers.{if needTier and not tierOk
+				then ` Needs a tier {needTier} star.`
+				else ""}`
+			else "Best level: the odds can't get better.",
+		TextWrapped = true,
+		Font = Enum.Font.Gotham,
+		TextSize = 13,
+		TextColor3 = C.subtle,
+	})
+	local canBuy = cost ~= nil and stardust >= cost and tierOk
+	local button = Theme.button(
+		card,
+		if cost == nil
+			then "Max level"
+			elseif not tierOk then `Star tier {needTier}`
+			elseif canBuy then `Upgrade · {fmt(cost)}`
+			else `Need {fmt(cost)}`,
+		if canBuy then "buy" else "disabled",
+		if canBuy
+			then function()
+				send("upgrade", cost)
+			end
+			else nil
+	)
+	button.AnchorPoint = Vector2.new(1, 0.5)
+	button.Position = UDim2.new(1, -10, 0.5, 0)
+	button.Size = UDim2.fromOffset(160, 44)
+	button.TextSize = 13
+	return button, canBuy
+end
+
+-- Rarities and tiers: chance now (→ at the next lab level).
+local function oddsRows(order: number, level: number, compare: number?): number
+	sectionTitle(
+		order,
+		if compare then `Odds now → at lab level {compare}` else `Odds at lab level {level}`
+	)
+	order += 1
+	for _, rarityId in P.RARITY_ORDER do
+		local rarity = P.RARITIES[rarityId]
+		local low, high = EggMath.rarityRange(rarityId)
+		local row = Theme.row(list, 32, order)
+		Theme.label(row, {
+			Position = UDim2.fromOffset(12, 0),
+			Size = UDim2.new(1, -190, 1, 0),
+			Text = `{rarity.displayName}  ·  {fmt(low)}-{fmt(high)}%  ·  hatches in {EggMath.durationText(
+				rarity.hatchSeconds
+			)}`,
+			TextSize = 14,
+			TextColor3 = Color3.fromHex(rarity.color),
+		})
+		rightLabel(
+			row,
+			chanceText(
+				EggMath.rarityPercent(rarityId, level),
+				if compare then EggMath.rarityPercent(rarityId, compare) else nil
+			),
+			170
+		)
+		order += 1
+	end
+	for tier, def in P.TIERS do
+		local row = Theme.row(list, 32, order)
+		local swatch = Theme.planetIcon(row, Color3.fromHex(def.color), 20, nil)
+		swatch.Position = UDim2.fromOffset(12, 6)
+		Theme.label(row, {
+			Position = UDim2.fromOffset(40, 0),
+			Size = UDim2.new(1, -220, 1, 0),
+			Text = `Tier {tier} {def.name}  ·  x{def.multiplier}`,
+			TextSize = 14,
+			TextColor3 = Color3.fromHex(def.color),
+		})
+		rightLabel(
+			row,
+			chanceText(
+				EggMath.tierPercent(tier, level),
+				if compare then EggMath.tierPercent(tier, compare) else nil
+			),
+			170
+		)
+		order += 1
+	end
+	return order
+end
+
+local HELP = {
+	"Each roll costs about a minute of your best production (at least "
+		.. tostring(E.PRICE_BASE)
+		.. " "
+		.. CURRENCY
+		.. "). The server picks the planet and tier; you see the rarity and tier, the planet stays a mystery until it hatches. Rolling again replaces the egg on the pedestal.",
+	"Rarity sets how big a share of its star's output a planet adds; the tier multiplies it. Planets earn more on stronger stars.",
+	`Kept eggs hatch in your {E.HATCH_SLOTS} incubator chambers, even while you're offline. You can hold {E.MAX_UNHATCHED} unhatched eggs, and eggs count towards your {P.MAX_PLANETS} planet storage.`,
+	"Upgrading the lab changes the odds of future rolls only. Where Roblox restricts paid random items, or until we can confirm they're allowed, rolling is off. Nothing here is sold for Robux.",
+}
+
+local function showLab()
+	local stardust, _, held = profileNumbers()
+	local price = eggPrice()
+	local allowed = EggMath.canBuyRandom(policy)
+	local level = labLevel()
+	local order = 1
+
+	local keepButton, canKeep = eggCard(order, price, held, allowed, stardust)
+	order += 1
 	if not allowed then
 		textRow(
 			order,
 			if policyMessage ~= ""
 				then policyMessage
-				else "Checking whether mystery eggs are available for you...",
-			48,
+				else "Checking whether planet eggs are available for you...",
+			44,
 			Color3.fromRGB(255, 180, 120),
 			true
 		)
 		order += 1
 	end
-	textRow(
+	local upgradeButton, canBuy = labCard(order, stardust)
+	order += 1
+	if Input.device() == "gamepad" then
+		GuiService.SelectedObject = if canKeep
+			then keepButton
+			elseif canBuy then upgradeButton
+			else keepButton
+	end
+
+	local compare = if EggMath.upgradeCost(level) then level + 1 else nil
+	order = oddsRows(order, level, compare)
+
+	foldRow(
 		order,
-		`Hatching starts when you put the egg in one of your hangar's {E.HATCH_SLOTS} incubator chambers, not when you buy it. Eggs waiting: {held}/{E.MAX_UNHATCHED}.`,
-		56
+		`Every planet's odds  ·  Planet Index {indexCount()}/{#P.ORDER}`,
+		showPlanets,
+		function()
+			showPlanets = not showPlanets
+			refresh()
+		end
 	)
 	order += 1
-	local odds = Theme.row(list, 30, order)
-	odds.BackgroundTransparency = 1
-	Theme.label(odds, {
-		Position = UDim2.fromOffset(6, 4),
-		Size = UDim2.new(1, -12, 1, -4),
-		Text = `Odds for every planet in a mystery egg  ·  Planet Index {indexCount()}/{#P.ORDER}`,
-		TextSize = 16,
-		Font = Enum.Font.GothamBlack,
-		TextColor3 = C.gold,
-	})
+	if showPlanets then
+		for _, rarityId in P.RARITY_ORDER do
+			for _, id in P.BY_RARITY[rarityId] do
+				planetRow(order, P.BY_ID[id], EggMath.percentText(EggMath.typePercent(id, level)))
+				order += 1
+			end
+		end
+	end
+
+	foldRow(order, "How the Egg Lab works", showHelp, function()
+		showHelp = not showHelp
+		refresh()
+	end)
 	order += 1
-	for _, rarityId in P.RARITY_ORDER do
-		rarityHeader(order, rarityId)
-		order += 1
-		for _, id in P.BY_RARITY[rarityId] do
-			local def = P.BY_ID[id]
-			planetRow(order, def, EggMath.percentText(EggMath.percent(id)))
+	if showHelp then
+		for _, text in HELP do
+			local row, label = textRow(order, text, 40)
+			-- Grow each paragraph to fit its text once it has a width.
+			task.defer(function()
+				if label.Parent then
+					row.Size = UDim2.new(1, 0, 0, label.TextBounds.Y + 16)
+				end
+			end)
 			order += 1
 		end
 	end
 end
-
-local function showDetails()
-	local _, bought = profileNumbers()
-	local hatchTimes: { string } = {}
-	local shares: { string } = {}
-	for _, rarityId in P.RARITY_ORDER do
-		local rarity = P.RARITIES[rarityId]
-		table.insert(hatchTimes, `{rarity.displayName} {EggMath.durationText(rarity.hatchSeconds)}`)
-		table.insert(
-			shares,
-			`{rarity.displayName} {EggMath.percentText(rarity.weight / P.WEIGHT_TOTAL * 100)} ({#P.BY_RARITY[rarityId]} types, {EggMath.percentText(
-				rarity.weight / #P.BY_RARITY[rarityId] / P.WEIGHT_TOTAL * 100
-			)} each)`
-		)
-	end
-	local paragraphs = {
-		{
-			"How a mystery egg works",
-			"The server picks the planet the moment you buy the egg, using the odds below, and saves it with the egg. It never changes, and nothing you do afterwards affects it. You see it when the egg hatches.",
-		},
-		{
-			"Odds",
-			`Every planet type has a fixed weight out of {whole(P.WEIGHT_TOTAL)}; its chance is its weight divided by that total. By rarity: {table.concat(
-				shares,
-				"; "
-			)}. Duplicates are possible.`,
-		},
-		{
-			"Price",
-			`Every mystery egg costs {whole(EggMath.price(bought))} {CURRENCY}. Only {CURRENCY} is used.`,
-		},
-		{
-			"Hatching",
-			`Put eggs in your hangar's incubator ({E.HATCH_SLOTS} chambers) to start them. Hatch times: {table.concat(
-				hatchTimes,
-				", "
-			)}. Eggs keep hatching while you're offline. You can hold {E.MAX_UNHATCHED} unhatched eggs.`,
-		},
-		{
-			"Restrictions",
-			"Where Roblox restricts paid random items, or while we can't confirm that they're allowed for you, eggs are switched off. Planets can only come from eggs: they can't be bought directly. There is no paid luck, no rerolls, no paid hatch speed-ups and no trading.",
-		},
-	}
-	for index, paragraph in paragraphs do
-		textRow(index * 2 - 1, paragraph[1], 28, C.gold, true).BackgroundTransparency = 1
-		local row, label = textRow(index * 2, paragraph[2], 40)
-		-- Grow each paragraph to fit its text once it has a width.
-		task.defer(function()
-			if label.Parent then
-				row.Size = UDim2.new(1, 0, 0, label.TextBounds.Y + 16)
-			end
-		end)
-	end
-end
-
-local tabButtons: { [Tab]: TextButton } = {}
 
 refresh = function()
 	if not gui.Enabled then
 		return
 	end
 	local stardust, _, held = profileNumbers()
-	header.Text = `You have {whole(stardust)} {CURRENCY}  ·  eggs waiting {held}/{E.MAX_UNHATCHED}`
-	for id, button in tabButtons do
-		button.BackgroundTransparency = if id == tab then 0 else 0.45
-	end
+	header.Text =
+		`{whole(stardust)} {CURRENCY}  ·  eggs waiting {held}/{E.MAX_UNHATCHED}  ·  next roll {whole(
+			eggPrice()
+		)}`
 	Theme.clear(list)
-	if tab == "mystery" then
-		showMystery()
-	else
-		showDetails()
-	end
+	showLab()
 end
 
 local function fetchPolicy()
@@ -423,35 +568,14 @@ function EggShopController.init()
 	})
 	Theme.closeButton(panel, close)
 
-	tabs = Instance.new("Frame")
-	tabs.Name = "Tabs"
-	tabs.BackgroundTransparency = 1
-	tabs.Position = UDim2.fromOffset(13, 64)
-	tabs.Size = UDim2.new(1, -26, 0, 36)
-	tabs.Parent = panel
-	local tabDefs: { { id: Tab, text: string, style: Theme.ButtonStyle } } = {
-		{ id = "mystery", text = "Mystery egg", style = "buy" },
-		{ id = "details", text = "Details", style = "special" },
-	}
-	for index, def in tabDefs do
-		local button = Theme.button(tabs, def.text, def.style, function()
-			tab = def.id
-			refresh()
-		end)
-		button.Size = UDim2.new(1 / #tabDefs, -6, 1, 0)
-		button.Position = UDim2.new((index - 1) / #tabDefs, 3, 0, 0)
-		tabButtons[def.id] = button
-	end
-
 	list = Theme.list(panel, 6)
-	list.Position = UDim2.fromOffset(14, 110)
-	list.Size = UDim2.new(1, -28, 1, -122)
+	list.Position = UDim2.fromOffset(14, 66)
+	list.Size = UDim2.new(1, -28, 1, -78)
 end
 
 function EggShopController.start()
 	ProximityPromptService.PromptTriggered:Connect(function(prompt)
 		if prompt:GetAttribute("TycoonAction") == "Eggs" then
-			tab = "mystery"
 			open()
 		end
 	end)
@@ -460,6 +584,8 @@ function EggShopController.start()
 			field == "stardust"
 			or field == "eggs"
 			or field == "eggsBought"
+			or field == "economy"
+			or field == "eggLab"
 			or field == "hatches"
 			or field == "discovered"
 			or field == "*"

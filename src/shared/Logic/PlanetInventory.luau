@@ -154,19 +154,22 @@ function PlanetInventory.releaseStar(planets: { [string]: PlanetRecord }, starId
 	return moved
 end
 
--- What selling a planet pays: its rarity's SELL_VALUE plus SELL_LEVEL_REFUND
--- of the Stardust its levels cost (Config.Planets), whole.
+-- What selling a planet pays (Config.Planets): SELL_FRACTION[rarity] of
+-- what its egg roll actually cost plus SELL_LEVEL_REFUND of the Stardust
+-- actually spent levelling it, whole; a planet from before economy v2 pays
+-- its fixed legacy value instead. Tier never adds anything.
 function PlanetInventory.sellValue(planet: PlanetRecord): number
 	local def = Config.Planets.BY_ID[planet.typeId]
 	if def == nil then
 		return 0
 	end
-	local spent = 0
-	for level = 1, planet.level - 1 do
-		spent += StarMath.planetLevelCost(def.id, level) or 0
+	if planet.legacy then
+		return math.floor(planet.legacy)
 	end
-	return (Config.Planets.SELL_VALUE[def.rarity] or 0)
-		+ math.floor(spent * Config.Planets.SELL_LEVEL_REFUND)
+	local fraction = Config.Planets.SELL_FRACTION[def.rarity] or 0
+	return math.floor(
+		(planet.paid or 0) * fraction + (planet.spent or 0) * Config.Planets.SELL_LEVEL_REFUND
+	)
 end
 
 -- Whether a planet may be sold: owned, a known type, in the inventory (not
@@ -201,23 +204,29 @@ local function idNumber(id: string): number
 	return tonumber(string.match(id, "%d+")) or 0
 end
 
--- The most productive arrangement: every open orbit of every star filled
--- with the best-earning planets (income is the same whichever star a planet
--- orbits). Planets already in orbit that make the cut stay where they are;
--- the rest of the chosen fill free slots in star then slot order. Returns
--- planet id -> { star, slot } for every planet that should be in orbit;
--- any planet missing from it should be in the inventory.
+-- The most productive arrangement. A planet earns a share (its factor,
+-- StarMath.planetFactor) of its host star's own rate, so the best layout
+-- puts the highest factors on the strongest stars: stars are taken
+-- strongest first and each gets the next best planets for its orbits.
+-- Planets already on the star they're chosen for keep their slots; the
+-- rest fill its free slots in order. Returns planet id -> { star, slot } for
+-- every planet that should be in orbit; any planet missing from it should
+-- be in the inventory.
 function PlanetInventory.best(
 	planets: { [string]: PlanetRecord },
 	stars: { [string]: StarRecord }
 ): { [string]: { star: string, slot: number } }
 	local starIds: { string } = {}
-	local open = 0
-	for id, star in stars do
+	for id in stars do
 		table.insert(starIds, id)
-		open += StarMath.slots(star.typeId)
 	end
 	table.sort(starIds, function(a, b)
+		local sa, sb = stars[a], stars[b]
+		local ra = StarMath.starIncome(sa.typeId, sa.level)
+		local rb = StarMath.starIncome(sb.typeId, sb.level)
+		if ra ~= rb then
+			return ra > rb
+		end
 		return idNumber(a) < idNumber(b)
 	end)
 	local candidates: { string } = {}
@@ -228,10 +237,10 @@ function PlanetInventory.best(
 	end
 	table.sort(candidates, function(a, b)
 		local pa, pb = planets[a], planets[b]
-		local ia = StarMath.planetIncome(pa.typeId, pa.level)
-		local ib = StarMath.planetIncome(pb.typeId, pb.level)
-		if ia ~= ib then
-			return ia > ib
+		local fa = StarMath.planetFactor(pa.typeId, pa.level, pa.tier)
+		local fb = StarMath.planetFactor(pb.typeId, pb.level, pb.tier)
+		if fa ~= fb then
+			return fa > fb
 		end
 		-- Equal earners: keep the ones already in orbit, so nothing moves.
 		local ea, eb =
@@ -242,29 +251,40 @@ function PlanetInventory.best(
 		return idNumber(a) < idNumber(b)
 	end)
 	local result: { [string]: { star: string, slot: number } } = {}
-	local taken: { [string]: boolean } = {}
-	local chosen: { string } = {}
-	for index = 1, math.min(open, #candidates) do
-		local id = candidates[index]
-		local planet = planets[id]
-		local star = if planet.star then stars[planet.star] else nil
-		if star and planet.slot and planet.slot <= StarMath.slots(star.typeId) then
-			result[id] = { star = planet.star :: string, slot = planet.slot }
-			taken[`{planet.star}#{planet.slot}`] = true
-		else
-			table.insert(chosen, id)
-		end
-	end
 	local next = 1
 	for _, starId in starIds do
-		for slot = 1, StarMath.slots(stars[starId].typeId) do
-			if next > #chosen then
-				return result
+		local open = StarMath.slots(stars[starId].typeId)
+		local group: { string } = {}
+		while #group < open and next <= #candidates do
+			table.insert(group, candidates[next])
+			next += 1
+		end
+		local taken: { [number]: boolean } = {}
+		local moving: { string } = {}
+		for _, id in group do
+			local planet = planets[id]
+			if
+				planet.star == starId
+				and planet.slot
+				and planet.slot <= open
+				and not taken[planet.slot]
+			then
+				result[id] = { star = starId, slot = planet.slot }
+				taken[planet.slot] = true
+			else
+				table.insert(moving, id)
 			end
-			if not taken[`{starId}#{slot}`] then
-				result[chosen[next]] = { star = starId, slot = slot }
-				next += 1
+		end
+		local slot = 1
+		for _, id in moving do
+			while taken[slot] do
+				slot += 1
 			end
+			result[id] = { star = starId, slot = slot }
+			taken[slot] = true
+		end
+		if next > #candidates then
+			break
 		end
 	end
 	return result

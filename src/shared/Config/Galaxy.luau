@@ -16,7 +16,7 @@ export type ExpansionDef = {
 }
 
 local Galaxy = {
-	STAR_MAX_RADIUS = 30,
+	STAR_MAX_RADIUS = 36, -- the biggest star at its top level (Stars: radius x MAX_RADIUS_SCALE)
 	PLANET_MAX_RADIUS = 6, -- Config.Planets body radius at level 1
 
 	-- Legacy geometry of the unused Config.Celestials (planets with moon
@@ -25,7 +25,7 @@ local Galaxy = {
 	CELESTIAL_PLANET_MAX_RADIUS = 7,
 	CELESTIAL_SYSTEM_RADIUS = 222,
 	MOON_MAX_RADIUS = 2,
-	PLANET_ORBIT_RADII = { 52, 96, 140, 184 } :: { number },
+	PLANET_ORBIT_RADII = { 56, 100, 144, 188 } :: { number },
 	MOON_ORBIT_RADII = { 11, 16 } :: { number },
 
 	-- A system's reserved footprint: a flat disc around its star that its
@@ -44,23 +44,23 @@ local Galaxy = {
 	EXPANSIONS = {
 		{
 			size = { x = 1024, y = 640, z = 1024 },
-			maxSystems = 3,
+			maxSystems = 6,
 			cost = nil,
 		},
 		{
 			size = { x = 1536, y = 896, z = 1536 },
-			maxSystems = 5,
-			cost = { stardust = 500000, materials = {} },
+			maxSystems = 10,
+			cost = { stardust = 2000000, materials = {} },
 		},
 		{
 			size = { x = 1800, y = 1000, z = 1800 },
-			maxSystems = 7,
-			cost = { stardust = 2500000, materials = {} },
+			maxSystems = 14,
+			cost = { stardust = 300000000, materials = {} },
 		},
 		{
 			size = { x = 2048, y = 1152, z = 2048 },
-			maxSystems = 10,
-			cost = { stardust = 12000000, materials = {} },
+			maxSystems = 20,
+			cost = { stardust = 40000000000, materials = {} },
 		},
 	} :: { ExpansionDef },
 }

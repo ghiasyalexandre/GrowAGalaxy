@@ -1,6 +1,7 @@
 --!strict
--- The Daily Wheel: a button on the right edge (next to Daily) with the time
--- to the next spin and a badge when it's ready, and the wheel panel:
+-- The Daily Wheel panel, opened from the Daily Prizes panel's wheel button
+-- (DailyController, whose HUD button also lights up when a spin is ready)
+-- or the ISS Star Lounge's kiosk:
 -- six equal segments with their Stardust prizes, the exact odds beside the
 -- wheel, the countdown and the Spin button.
 --
@@ -9,9 +10,9 @@
 --
 -- Spin asks the server (WheelSystem), which picks and grants the prize first;
 -- the wheel then turns to land on it. With Reduced effects the wheel turns
--- less than once in a second and the rim lights and badge stay still. There
--- are no Robux spins: each costs Config.Wheel.SPIN_COST Stardust, and only
--- where paid random items are allowed (EggRequest "status").
+-- less than once in a second and the rim lights and badge stay still. The
+-- spin is free (no Robux or Stardust); prizes are minutes of the player's
+-- reward rate R (their recent production), so they're shown in minutes.
 
 local GuiService = game:GetService("GuiService")
 local Players = game:GetService("Players")
@@ -28,6 +29,7 @@ local Theme = require(script.Parent.Parent.UI.Theme)
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Config = require(Shared:WaitForChild("Config"))
+local EconomyMath = require(Shared:WaitForChild("Logic"):WaitForChild("EconomyMath"))
 local EggMath = require(Shared:WaitForChild("Logic"):WaitForChild("EggMath"))
 local Format = require(Shared:WaitForChild("Util"):WaitForChild("Format"))
 local Net = require(Shared:WaitForChild("Net"))
@@ -51,11 +53,7 @@ local status: TextLabel
 local spinButton: TextButton? = nil
 local spinReady: string? = nil -- what the Spin button currently shows
 local spin: () -> ()
-local railLabel: TextLabel
-local badge: Frame
 local spinning = false
--- Paid random prizes allowed for this player (EggRequest "status").
-local policy = "unknown"
 
 local function nextSpin(): number
 	local profile = ClientState.profile
@@ -66,20 +64,11 @@ local function ready(): boolean
 	return WheelMath.ready(nextSpin(), Workspace:GetServerTimeNow())
 end
 
-local function affordable(): boolean
+-- Today's reward rate R (prizes are minutes of it).
+local function rewardRate(): number
 	local profile = ClientState.profile
-	return profile ~= nil and profile.stardust >= W.SPIN_COST
-end
-
-local function fetchPolicy()
-	task.spawn(function()
-		local ok, okFlag, _, answer = pcall(function()
-			return Net.EggRequest:InvokeServer("status")
-		end)
-		if ok and okFlag and type(answer) == "string" then
-			policy = answer
-		end
-	end)
+	local economy = if profile then (profile :: any).economy else nil
+	return if economy then economy.reward else 1
 end
 
 local function clockText(seconds: number): string
@@ -100,34 +89,22 @@ end
 local function refresh()
 	local isReady = ready()
 	local left = WheelMath.wait(nextSpin(), Workspace:GetServerTimeNow())
-	railLabel.Text = if isReady then "SPIN!" else clockText(left)
-	railLabel.TextColor3 = if isReady then GOLD else C.subtle
-	badge.Visible = isReady
 	if gui.Enabled and not spinning then
 		status.Text = if isReady
-			then (if policy ~= "allowed"
-				then "The wheel isn't available for you (paid random prizes)."
-				else `Your spin is ready: {Format.commas(W.SPIN_COST)} {CURRENCY}`)
+			then `Your free spin is ready! 1 minute of production = {Format.commas(
+				EconomyMath.reward(1, rewardRate())
+			)} {CURRENCY}`
 			else `Next spin in {clockText(left)}`
-		local state = if not isReady
-			then "wait"
-			elseif policy ~= "allowed" then "blocked"
-			elseif not affordable() then "poor"
-			else "ready"
+		local state = if not isReady then "wait" else "ready"
 		if spinReady ~= state or spinButton == nil then
 			-- Rebuilt rather than restyled: a button's look is set when made.
 			spinReady = state
 			if spinButton then
 				spinButton:Destroy()
 			end
-			local cost = Format.commas(W.SPIN_COST)
 			local button = Theme.button(
 				panel,
-				if state == "ready"
-					then `SPIN · {cost}`
-					elseif state == "poor" then `Need {cost} {CURRENCY}`
-					elseif state == "blocked" then "Unavailable"
-					else "Come back tomorrow",
+				if state == "ready" then "SPIN · FREE" else "Come back tomorrow",
 				if state == "ready" then "buy" else "disabled",
 				if state == "ready" then spin else nil
 			)
@@ -150,7 +127,7 @@ local function highlight(index: number)
 end
 
 spin = function()
-	if spinning or not ready() or not affordable() or policy ~= "allowed" then
+	if spinning or not ready() then
 		return
 	end
 	spinning = true
@@ -186,7 +163,7 @@ spin = function()
 	local prize = W.PRIZES[index]
 	ClientState.celebrate:Fire(
 		"DAILY WHEEL",
-		`+{Format.commas(prize.stardust)} {CURRENCY}`,
+		`+{Format.commas(EconomyMath.reward(prize.minutes, rewardRate()))} {CURRENCY}`,
 		`{EggMath.percentText(prize.weight / WheelMath.total() * 100)} chance  ·  next spin in 24 h`,
 		Color3.fromHex(prize.color),
 		prize.weight <= 6
@@ -197,7 +174,6 @@ end
 
 local function open()
 	gui.Enabled = true
-	fetchPolicy()
 	refresh()
 	Theme.popIn(panel)
 	if Input.device() == "gamepad" and spinButton then
@@ -264,7 +240,7 @@ local function buildWheel(parent: Frame)
 		edge.Parent = chip
 		Theme.label(chip, {
 			Size = UDim2.fromScale(1, 1),
-			Text = Format.abbreviate(prize.stardust),
+			Text = `{prize.minutes}m`,
 			TextScaled = true,
 			Font = Enum.Font.GothamBlack,
 			TextColor3 = Color3.fromRGB(20, 16, 40),
@@ -341,7 +317,7 @@ local function buildOdds(parent: Frame)
 		Theme.label(row, {
 			Position = UDim2.fromOffset(38, 0),
 			Size = UDim2.new(1, -110, 1, 0),
-			Text = `{Format.commas(prize.stardust)} {CURRENCY}`,
+			Text = `{prize.minutes} min of production`,
 			TextSize = 15,
 		})
 		Theme.label(row, {
@@ -357,7 +333,7 @@ local function buildOdds(parent: Frame)
 	Theme.label(list, {
 		LayoutOrder = 99,
 		Size = UDim2.new(1, 0, 0, 52),
-		Text = `One spin every 24 hours for {Format.commas(W.SPIN_COST)} {CURRENCY} (no Robux). Prizes are fixed: no boost or pass changes them.`,
+		Text = "One free spin every 24 hours. Prizes are minutes of your recent production, so they grow with your galaxy. No boost or pass changes them.",
 		TextWrapped = true,
 		TextTruncate = Enum.TextTruncate.None,
 		TextYAlignment = Enum.TextYAlignment.Top,
@@ -408,99 +384,18 @@ local function buildPanel()
 	buildOdds(right)
 end
 
-local function buildRail()
-	local rail = Instance.new("ScreenGui")
-	rail.Name = "WheelButton"
-	rail.ResetOnSpawn = false
-	rail.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-	rail.DisplayOrder = -1
-	local button = Instance.new("TextButton")
-	button.Name = "DailyWheel"
-	button.AnchorPoint = Vector2.new(1, 0.5)
-	-- Beside the Daily button (DailyController), one slot to its left.
-	button.Position = UDim2.new(1, -108, 0.5, -130)
-	button.Size = UDim2.fromOffset(76, 76)
-	button.BackgroundColor3 = Color3.fromRGB(26, 18, 54)
-	button.AutoButtonColor = false
-	button.Text = ""
-	button.Parent = rail
-	local round = Instance.new("UICorner")
-	round.CornerRadius = UDim.new(1, 0)
-	round.Parent = button
-	local ring = Instance.new("UIStroke")
-	ring.Color = GOLD
-	ring.Thickness = 3
-	ring.Parent = button
-	-- A tiny wheel as the icon.
-	local mini = Instance.new("Frame")
-	mini.AnchorPoint = Vector2.new(0.5, 0.5)
-	mini.Position = UDim2.fromScale(0.5, 0.48)
-	mini.Size = UDim2.fromScale(0.7, 0.7)
-	mini.BackgroundTransparency = 1
-	mini.Parent = button
-	for index, prize in W.PRIZES do
-		local rad = math.rad(WheelMath.segmentAngle(index))
-		local dot = Instance.new("Frame")
-		dot.AnchorPoint = Vector2.new(0.5, 0.5)
-		dot.Position = UDim2.fromScale(0.5 + math.sin(rad) * 0.32, 0.5 - math.cos(rad) * 0.32)
-		dot.Size = UDim2.fromScale(0.34, 0.34)
-		dot.BackgroundColor3 = Color3.fromHex(prize.color)
-		dot.Parent = mini
-		local dotRound = Instance.new("UICorner")
-		dotRound.CornerRadius = UDim.new(1, 0)
-		dotRound.Parent = dot
-	end
-	railLabel = Theme.label(button, {
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 1, 2),
-		Size = UDim2.fromOffset(90, 18),
-		Text = "WHEEL",
-		Font = Enum.Font.GothamBlack,
-		TextSize = 14,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		TextColor3 = GOLD,
-		TextStrokeTransparency = 0.3,
-	})
-	badge = Instance.new("Frame")
-	badge.Name = "Badge"
-	badge.AnchorPoint = Vector2.new(0.5, 0.5)
-	badge.Position = UDim2.fromScale(0.85, 0.15)
-	badge.Size = UDim2.fromOffset(22, 22)
-	badge.BackgroundColor3 = RED
-	badge.ZIndex = 3
-	badge.Visible = false
-	badge.Parent = button
-	local badgeRound = Instance.new("UICorner")
-	badgeRound.CornerRadius = UDim.new(1, 0)
-	badgeRound.Parent = badge
-	Theme.label(badge, {
-		Size = UDim2.fromScale(1, 1),
-		Text = "!",
-		Font = Enum.Font.GothamBlack,
-		TextSize = 16,
-		TextXAlignment = Enum.TextXAlignment.Center,
-		ZIndex = 4,
-	})
-	local badgeScale = Instance.new("UIScale")
-	badgeScale.Parent = badge
-	Theme.animate(badgeScale, function(t)
-		badgeScale.Scale = if ClientState.reducedEffects
-			then 1
-			else 1 + 0.2 * math.abs(math.sin(t * 4))
-	end)
-	Theme.hover(button, function()
-		if gui.Enabled then
-			close()
-		else
-			open()
-		end
-	end)
-	rail.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
-end
-
 function WheelController.init()
 	buildPanel()
-	buildRail()
+end
+
+-- Opens the wheel panel (the Daily Prizes panel's wheel button).
+function WheelController.open()
+	open()
+end
+
+-- Whether today's free spin is waiting.
+function WheelController.isReady(): boolean
+	return ready()
 end
 
 function WheelController.start()
@@ -528,7 +423,7 @@ function WheelController.start()
 		end
 	end)
 	ClientState.profileChanged:Connect(function(field)
-		if field == "wheel" or field == "*" then
+		if field == "wheel" or field == "economy" or field == "*" then
 			refresh()
 		end
 	end)

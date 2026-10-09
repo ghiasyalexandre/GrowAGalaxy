@@ -8,14 +8,24 @@
 --   structure(def, floor)  the finished building, with a small name plate
 --                          (none for one built at its `site`, off its pad).
 -- Both return a Model; the caller parents it.
+--
+-- A building's look, best first:
+--   1. its Blender mesh model (tools/hangar_meshes), imported into Studio and
+--      saved under ServerStorage/Assets/Hangar (assets/roblox/Hangar). Parts
+--      are named Role__RRGGBB__Material and carry markers; see meshBuilding.
+--      Roles starting "Accent" take the station's highlight colour (Settings).
+--   2. its voxel design (HangarVoxels, tools/hangar_voxels), until the mesh
+--      has been imported.
+-- Either way it's then dressed with lights, smoke, sparks and spinning parts.
 
-local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Config = require(ReplicatedStorage.Shared.Config)
 local Format = require(ReplicatedStorage.Shared.Util.Format)
 local Build = require(script.Parent.Build)
 local HangarConfig = require(ReplicatedStorage.Shared.Config.Hangar)
+local HangarVoxels = require(script.Parent.HangarVoxels)
+local MeshAsset = require(script.Parent.MeshAsset)
 
 local COLORS = Config.World.COLORS
 local H = Config.Hangar
@@ -23,6 +33,13 @@ local H = Config.Hangar
 type HangarDef = HangarConfig.HangarDef
 
 local HangarBuilder = {}
+
+local light = MeshAsset.light
+local spin = MeshAsset.spin
+local pulse = MeshAsset.pulse
+local emit = MeshAsset.emit
+local skyBeam = MeshAsset.skyBeam
+local SMOKE, STEAM, SPARKS = MeshAsset.SMOKE, MeshAsset.STEAM, MeshAsset.SPARKS
 
 local function flat(
 	name: string,
@@ -83,33 +100,6 @@ local function box(
 	})
 end
 
-local function glow(
-	name: string,
-	size: Vector3,
-	where: CFrame,
-	color: string,
-	parent: Instance
-): Part
-	return Build.part({
-		name = name,
-		size = size,
-		cframe = where,
-		color = color,
-		material = Enum.Material.Neon,
-		collide = false,
-		parent = parent,
-	})
-end
-
-local function light(part: BasePart, color: string, range: number)
-	local point = Instance.new("PointLight")
-	point.Color = Color3.fromHex(color)
-	point.Range = range
-	point.Brightness = 1.5
-	point.Shadows = false
-	point.Parent = part
-end
-
 local function textLine(
 	parent: Instance,
 	text: string,
@@ -146,6 +136,11 @@ function HangarBuilder.pad(def: HangarDef, floor: CFrame): Model
 	inner.Material = Enum.Material.SmoothPlastic
 	flat("Dot", 0.9, 0.35, floor, "#FFB0A0", model)
 	light(circle, H.PAD_COLOR, 12)
+	local padLight = circle:FindFirstChildOfClass("PointLight")
+	if padLight then
+		padLight.Brightness *= H.PAD_LIGHT_SCALE
+		padLight.Range *= math.sqrt(H.PAD_LIGHT_SCALE)
+	end
 
 	-- The sign: name, what it does, price.
 	local anchor = Build.marker("SignAnchor", floor * CFrame.new(0, 6, 0), model)
@@ -177,9 +172,13 @@ function HangarBuilder.pad(def: HangarDef, floor: CFrame): Model
 		Enum.Font.GothamBlack
 	)
 	textLine(panel, def.effect, 32, 32, 14, Color3.fromRGB(235, 240, 255), Enum.Font.GothamBold)
+	-- Vanity is priced in minutes of the owner's production (HangarMath.price).
+	local price = if def.minutes
+		then `{def.minutes} min of production (at least {Format.abbreviate(def.cost)})`
+		else `{Format.abbreviate(def.cost)} {Config.Economy.CURRENCY_NAME}`
 	textLine(
 		panel,
-		`{Format.abbreviate(def.cost)} {Config.Economy.CURRENCY_NAME}  ·  step on to build`,
+		`{price}  ·  step on to build`,
 		68,
 		22,
 		14,
@@ -190,7 +189,9 @@ function HangarBuilder.pad(def: HangarDef, floor: CFrame): Model
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "BuildPrompt"
-	prompt.ActionText = `Build ({Format.abbreviate(def.cost)})`
+	prompt.ActionText = if def.minutes
+		then `Build ({def.minutes} min)`
+		else `Build ({Format.abbreviate(def.cost)})`
 	prompt.ObjectText = def.displayName
 	prompt.HoldDuration = 0.3
 	prompt.MaxActivationDistance = 12
@@ -203,439 +204,203 @@ function HangarBuilder.pad(def: HangarDef, floor: CFrame): Model
 	return model
 end
 
-local builders: { [string]: (Model, CFrame) -> () } = {}
-
--- Two tall silos with gold bands and domes, joined by a pipe.
-builders.StardustSilo = function(model, floor)
-	for _, x in { -2.6, 2.6 } do
-		local base = floor * CFrame.new(x, 0, 0)
-		column("Silo", 4.4, 11, base, COLORS.hull, nil, model)
-		for _, y in { 3, 7 } do
-			column(
-				"Band",
-				4.6,
-				0.5,
-				base * CFrame.new(0, y, 0),
-				"#FFD36B",
-				Enum.Material.Neon,
-				model
-			).CanCollide =
-				false
+-- Builds a voxel design's boxes on `floor`. Parts of a palette entry with a
+-- group go into a child Model of that name (pivoted on its centre, so it can
+-- spin). Returns the groups by name.
+local function voxels(
+	model: Model,
+	floor: CFrame,
+	design: HangarVoxels.VoxelModel
+): { [string]: Model }
+	local groups: { [string]: Model } = {}
+	-- Each group's extent in floor space, for its pivot.
+	local lows: { [string]: Vector3 } = {}
+	local highs: { [string]: Vector3 } = {}
+	for _, cell in design.boxes do
+		local entry = design.palette[cell[7]]
+		local corner = Vector3.new(cell[1], cell[2], cell[3])
+		local size = Vector3.new(cell[4], cell[5], cell[6])
+		local parent: Instance = model
+		local groupName = entry.group
+		if groupName then
+			local group = groups[groupName]
+			if not group then
+				local made = Instance.new("Model")
+				made.Name = groupName
+				made.Parent = model
+				groups[groupName] = made
+				lows[groupName] = corner
+				highs[groupName] = corner + size
+				group = made
+			end
+			lows[groupName] = lows[groupName]:Min(corner)
+			highs[groupName] = highs[groupName]:Max(corner + size)
+			parent = group :: Model
 		end
-		Build.part({
-			name = "Dome",
-			shape = Enum.PartType.Ball,
-			size = Vector3.one * 4.4,
-			cframe = base * CFrame.new(0, 11, 0),
-			color = COLORS.hullAlt,
-			parent = model,
+		local part = Build.part({
+			name = entry.name,
+			size = size,
+			cframe = floor * CFrame.new(corner + size / 2),
+			color = entry.color,
+			material = (Enum.Material :: any)[entry.material],
+			transparency = entry.transparency,
+			collide = entry.collide,
+			parent = parent,
 		})
-	end
-	box("Pipe", Vector3.new(3, 0.8, 0.8), floor * CFrame.new(0, 8.5, 0), COLORS.truss, nil, model)
-	local core =
-		glow("Core", Vector3.new(1.2, 6, 1.2), floor * CFrame.new(0, 3, -2.6), "#FFD36B", model)
-	light(core, "#FFD36B", 14)
-end
-
--- Three horizontal fuel tanks on cradles with hazard bands.
-builders.FuelDepot = function(model, floor)
-	for i, z in { -3.4, 0, 3.4 } do
-		local y = if i == 2 then 4.6 else 2
-		Build.part({
-			name = "Tank",
-			shape = Enum.PartType.Cylinder,
-			size = Vector3.new(9, 3, 3),
-			cframe = floor * CFrame.new(0, y, z),
-			color = "#D9DDE3",
-			material = Enum.Material.Metal,
-			parent = model,
-		})
-		for _, x in { -3, 3 } do
-			Build.part({
-				name = "Hazard",
-				shape = Enum.PartType.Cylinder,
-				size = Vector3.new(0.6, 3.15, 3.15),
-				cframe = floor * CFrame.new(x, y, z),
-				color = "#F2C230",
-				material = Enum.Material.SmoothPlastic,
-				collide = false,
-				parent = model,
-			})
+		if entry.pulse then
+			pulse(part, entry.pulse[1], entry.pulse[2])
 		end
 	end
-	for _, x in { -3, 3 } do
-		box(
-			"Cradle",
-			Vector3.new(1, 1, 10),
-			floor * CFrame.new(x, 0.5, 0),
-			COLORS.truss,
-			nil,
-			model
-		)
+	for name, group in groups do
+		group.WorldPivot = floor * CFrame.new((lows[name] + highs[name]) / 2)
 	end
-	local valve = glow(
-		"Valve",
-		Vector3.new(0.8, 0.8, 0.8),
-		floor * CFrame.new(-4.8, 4.6, 0),
-		"#7FD4FF",
-		model
-	)
-	light(valve, "#7FD4FF", 10)
+	return groups
 end
 
--- A refinery block with a chimney, glowing gold pipes and a window.
-builders.Refinery = function(model, floor)
-	box("Building", Vector3.new(9, 6, 8), floor * CFrame.new(0, 3, 0), COLORS.hullAlt, nil, model)
-	box("Roof", Vector3.new(9.6, 0.6, 8.6), floor * CFrame.new(0, 6.3, 0), COLORS.truss, nil, model)
-	column("Chimney", 1.8, 6, floor * CFrame.new(2.6, 6.6, 2), COLORS.hull, nil, model)
-	glow(
-		"ChimneyGlow",
-		Vector3.new(1.9, 0.4, 1.9),
-		floor * CFrame.new(2.6, 12.4, 2),
-		"#FFB347",
-		model
-	)
-	Build.part({
-		name = "Window",
-		size = Vector3.new(5, 2, 0.2),
-		cframe = floor * CFrame.new(0, 3.6, -4.05),
-		color = COLORS.glass,
-		material = Enum.Material.Glass,
-		transparency = 0.3,
-		parent = model,
-	})
-	for _, y in { 1.4, 2.4 } do
-		glow("Pipe", Vector3.new(0.5, 0.5, 8.4), floor * CFrame.new(-4.8, y, 0), "#FFD36B", model)
-	end
-	local smoke = Instance.new("ParticleEmitter")
-	smoke.Rate = 3
-	smoke.Speed = NumberRange.new(2, 4)
-	smoke.Lifetime = NumberRange.new(2, 3)
-	smoke.Size = NumberSequence.new(1, 3)
-	smoke.Transparency = NumberSequence.new(0.5, 1)
-	smoke.Color = ColorSequence.new(Color3.fromRGB(200, 190, 170))
-	smoke.EmissionDirection = Enum.NormalId.Top
-	local top = model:FindFirstChild("ChimneyGlow") :: BasePart
-	smoke.Parent = top
-	light(top, "#FFB347", 12)
+-- The first part named `name` anywhere in the model.
+local function find(model: Model, name: string): BasePart?
+	local part = model:FindFirstChild(name, true)
+	return if part and part:IsA("BasePart") then part else nil
 end
 
--- A cooling tower narrowing then flaring, with cyan vents and steam.
-builders.CoolingTower = function(model, floor)
-	local diameters = { 7, 6.2, 5.4, 5, 5.2, 5.8 }
-	for i, d in diameters do
-		column(
-			"Shell",
-			d,
-			2,
-			floor * CFrame.new(0, (i - 1) * 2, 0),
-			"#C9CED6",
-			Enum.Material.Concrete,
-			model
-		)
+local showcaseExtras: (model: Model, floor: CFrame) -> ()
+
+-- Dressing for the voxel designs: what voxels can't hold (lights, smoke,
+-- steam, sparks, spinning groups, the spire's sky beam, the dock's cradles).
+-- Parts are found by their palette names (tools/hangar_voxels/models).
+local dressers: { [string]: (Model, { [string]: Model }, CFrame) -> () } = {}
+
+-- A white silo with a Stardust gauge, a chute and hopper, a control booth
+-- and a turning gold star on top.
+dressers.StardustSilo = function(model, groups)
+	local core = find(model, "Core")
+	if core then
+		light(core, "#FFD36B", 14)
 	end
-	local rim =
-		column("Vent", 6, 0.4, floor * CFrame.new(0, 12, 0), "#5FE3FF", Enum.Material.Neon, model)
-	rim.CanCollide = false
-	for _, angle in { 0, 120, 240 } do
-		local dir = CFrame.Angles(0, math.rad(angle), 0)
-		glow(
-			"VentSlit",
-			Vector3.new(1.4, 0.4, 0.2),
-			floor * dir * CFrame.new(0, 1.5, -3.55),
-			"#5FE3FF",
-			model
-		)
+	if groups.TopStar then
+		spin(groups.TopStar, 0.8)
 	end
-	local steam = Instance.new("ParticleEmitter")
-	steam.Rate = 8
-	steam.Speed = NumberRange.new(3, 6)
-	steam.Lifetime = NumberRange.new(2, 3.5)
-	steam.Size = NumberSequence.new(2, 5)
-	steam.Transparency = NumberSequence.new(0.4, 1)
-	steam.Color = ColorSequence.new(Color3.fromRGB(235, 248, 255))
-	steam.EmissionDirection = Enum.NormalId.Top
-	steam.Parent = rim
-	light(rim, "#5FE3FF", 14)
 end
 
--- A glass dome lab with a laser antenna.
-builders.MiningLab = function(model, floor)
-	column("Base", 9, 1, floor, COLORS.hullAlt, nil, model)
-	Build.part({
-		name = "Dome",
-		shape = Enum.PartType.Ball,
-		size = Vector3.one * 8,
-		cframe = floor * CFrame.new(0, 1, 0),
-		color = COLORS.glass,
-		material = Enum.Material.Glass,
-		transparency = 0.4,
-		parent = model,
-	})
-	column("Crystal", 1.6, 3, floor * CFrame.new(0, 1, 0), "#B06BFF", Enum.Material.Neon, model).CanCollide =
-		false
-	column("Mast", 0.6, 6, floor * CFrame.new(2.8, 4, 2.8), COLORS.truss, nil, model)
-	local tip =
-		glow("LaserTip", Vector3.new(1, 1, 1), floor * CFrame.new(2.8, 10.4, 2.8), "#FF6A3D", model)
-	light(tip, "#FF6A3D", 10)
-	light(model:FindFirstChild("Crystal") :: BasePart, "#B06BFF", 14)
+-- Stacked fuel tanks, a pump and jerry cans, under a pulsing boost arrow.
+dressers.FuelDepot = function(model)
+	local screen = find(model, "Valve")
+	if screen then
+		light(screen, "#7FD4FF", 10)
+	end
+	local arrow = find(model, "BoostArrow")
+	if arrow then
+		light(arrow, "#5FE3FF", 16)
+	end
 end
 
--- An open workshop frame with an armour rack and a welding arm throwing sparks.
-builders.ArmorWorkshop = function(model, floor)
-	for _, x in { -4.5, 4.5 } do
-		for _, z in { -4, 4 } do
-			box(
-				"Post",
-				Vector3.new(0.8, 7, 0.8),
-				floor * CFrame.new(x, 3.5, z),
-				COLORS.truss,
-				nil,
-				model
-			)
-		end
+-- A factory hall: smoking chimney, roof fan, glowing furnace and output.
+dressers.Refinery = function(model, groups)
+	local chimney = find(model, "ChimneyGlow")
+	if chimney then
+		emit(chimney, SMOKE)
+		light(chimney, "#FFB347", 12)
 	end
-	box("Roof", Vector3.new(10, 0.6, 9), floor * CFrame.new(0, 7.3, 0), COLORS.hullAlt, nil, model)
-	glow("RoofStrip", Vector3.new(8, 0.2, 0.4), floor * CFrame.new(0, 6.9, 0), "#FFB347", model)
-	for i = -1, 1 do
-		box(
-			"Plate",
-			Vector3.new(2.2, 3.2, 0.3),
-			floor * CFrame.new(i * 2.6, 2, 3.4),
-			"#8A93A3",
-			nil,
-			model
-		)
+	local furnace = find(model, "Furnace")
+	if furnace then
+		light(furnace, "#FF9A2E", 12)
 	end
-	box(
-		"ArmBase",
-		Vector3.new(1.6, 1.4, 1.6),
-		floor * CFrame.new(-2, 0.7, -1.5),
-		"#F2C230",
-		nil,
-		model
-	)
-	box(
-		"Arm",
-		Vector3.new(0.7, 4, 0.7),
-		floor * CFrame.new(-2, 3, -1.5) * CFrame.Angles(0, 0, math.rad(-25)),
-		"#F2C230",
-		nil,
-		model
-	)
-	local torch = glow(
-		"Torch",
-		Vector3.new(0.6, 0.6, 0.6),
-		floor * CFrame.new(-1.1, 4.9, -1.5),
-		"#FFF4D6",
-		model
-	)
-	local sparks = Instance.new("ParticleEmitter")
-	sparks.Rate = 25
-	sparks.Speed = NumberRange.new(4, 10)
-	sparks.SpreadAngle = Vector2.new(60, 60)
-	sparks.Lifetime = NumberRange.new(0.2, 0.5)
-	sparks.Size = NumberSequence.new(0.25, 0)
-	sparks.Color = ColorSequence.new(Color3.fromRGB(255, 220, 140))
-	sparks.LightEmission = 1
-	sparks.Acceleration = Vector3.new(0, -20, 0)
-	sparks.Parent = torch
-	light(torch, "#FFC870", 10)
+	local output = find(model, "Output")
+	if output then
+		light(output, "#FFC94A", 8)
+	end
+	if groups.Fan then
+		spin(groups.Fan, 1.6)
+	end
+end
+
+-- A cooling tower: steam off its coolant pool, a fan turning over it.
+dressers.CoolingTower = function(model, groups)
+	local pool = find(model, "Vent")
+	if pool then
+		emit(pool, STEAM)
+		light(pool, "#5FE3FF", 14)
+	end
+	if groups.Fan then
+		spin(groups.Fan, 2)
+	end
+end
+
+-- A lab and a mining laser beaming into a turning asteroid.
+dressers.MiningLab = function(model, groups)
+	local tip = find(model, "LaserTip")
+	if tip then
+		light(tip, "#FF6A3D", 12)
+	end
+	local crystal = find(model, "Crystal")
+	if crystal then
+		light(crystal, "#B06BFF", 12)
+	end
+	if groups.Asteroid then
+		spin(groups.Asteroid, 0.25)
+	end
+end
+
+-- An open garage: a robot arm welding armour onto a hull (sparks fly).
+dressers.ArmorWorkshop = function(model)
+	local torch = find(model, "Torch")
+	if torch then
+		emit(torch, SPARKS)
+		light(torch, "#FFC870", 10)
+	end
+	local strip = find(model, "RoofStrip")
+	if strip then
+		light(strip, "#FFB347", 12)
+	end
+	local shield = find(model, "Shield")
+	if shield then
+		light(shield, "#3FB6FF", 14)
+	end
 end
 
 -- Vanity -------------------------------------------------------------------
 
-local SPIN_TAG = "GaG_Spin"
-local PULSE_TAG = "GaG_Pulse"
-
-local function spin(instance: Instance, speed: number)
-	instance:SetAttribute("SpinSpeed", speed)
-	CollectionService:AddTag(instance, SPIN_TAG)
+-- A voxel galaxy turning over the deck, beamed up from a projector.
+dressers.HoloGalaxy = function(model, groups)
+	local core = find(model, "Core")
+	if core then
+		light(core, "#B06BFF", 24)
+	end
+	if groups.Hologram then
+		spin(groups.Hologram, 0.35)
+	end
 end
 
-local function pulse(part: BasePart, from: number, to: number)
-	part:SetAttribute("PulseFrom", from)
-	part:SetAttribute("PulseTo", to)
-	CollectionService:AddTag(part, PULSE_TAG)
-end
-
--- Floating chevrons leading in to the berth (which is towards +Z from here),
--- flanked by two rows of edge lights.
-builders.NeonRunway = function(model, floor)
-	for i = 0, 7 do
-		local z = -i * 12
-		local fade = i / 8
-		for _, side in { -1, 1 } do
-			local arm = glow(
-				"Chevron",
-				Vector3.new(6, 0.4, 1.2),
-				floor * CFrame.new(side * 2.6, 0, z) * CFrame.Angles(0, side * math.rad(-35), 0),
-				"#5FE3FF",
-				model
-			)
-			arm.Transparency = 0.1 + fade * 0.5
-			pulse(arm, 0.05 + fade * 0.4, 0.6 + fade * 0.3)
-			local edge = glow(
-				"EdgeLight",
-				Vector3.one * 1.2,
-				floor * CFrame.new(side * 14, 0, z),
-				"#FFD36B",
-				model
-			)
-			edge.Shape = Enum.PartType.Ball
+-- A stepped tower with turning rings and a trophy holding the beacon, which
+-- shoots a beam of light into the sky.
+dressers.VictorySpire = function(model, groups)
+	for index, speed in { 0.4, -0.5, 0.4 } do
+		local ring = groups[`Ring{index}`]
+		if ring then
+			spin(ring, speed)
 		end
 	end
-	light(model:FindFirstChild("Chevron") :: BasePart, "#5FE3FF", 30)
+	local beacon = find(model, "Beacon")
+	if beacon then
+		light(beacon, "#FFD36B", 60)
+		skyBeam(beacon)
+	end
 end
 
--- A spinning galaxy hologram: a glowing core, two tilted spiral arms of stars
--- and a faint disc, over a projector ring on the deck below.
-builders.HoloGalaxy = function(model, floor)
-	local holo = Instance.new("Model")
-	holo.Name = "Hologram"
-	holo.Parent = model
-	local core = Build.part({
-		name = "Core",
-		shape = Enum.PartType.Ball,
-		size = Vector3.one * 3,
-		cframe = floor,
-		color = "#FFE6A3",
-		material = Enum.Material.Neon,
-		collide = false,
-		parent = holo,
-	})
-	light(core, "#B06BFF", 24)
-	local disc = Build.part({
-		name = "Disc",
-		shape = Enum.PartType.Cylinder,
-		size = Vector3.new(0.2, 22, 22),
-		cframe = floor * CFrame.Angles(0, 0, math.pi / 2),
-		color = "#8C6BFF",
-		material = Enum.Material.ForceField,
-		transparency = 0.2,
-		collide = false,
-		parent = holo,
-	})
-	disc.CastShadow = false
-	local colors = { "#5FE3FF", "#B06BFF", "#FF6EC8", "#FFE6A3" }
-	for arm = 0, 1 do
-		for step = 1, 14 do
-			local angle = arm * math.pi + step * 0.42
-			local radius = 1.6 + step * 0.65
-			local star = Build.part({
-				name = "Star",
-				shape = Enum.PartType.Ball,
-				size = Vector3.one * (0.9 - step * 0.035),
-				cframe = floor * CFrame.new(math.cos(angle) * radius, 0, math.sin(angle) * radius),
-				color = colors[(step + arm) % #colors + 1],
-				material = Enum.Material.Neon,
-				collide = false,
-				parent = holo,
-			})
-			star.CastShadow = false
-		end
+-- A platform off the deck's side and its cradles (showcaseExtras).
+dressers.ShowcaseDock = function(model, _groups, floor)
+	showcaseExtras(model, floor)
+	local lamp = find(model, "TowerLamp")
+	if lamp then
+		light(lamp, "#FFF4D6", 30)
 	end
-	holo.PrimaryPart = core
-	spin(holo, 0.35)
-	-- The projector on the deck below, beaming up.
-	local site = model:GetAttribute("SiteHeight")
-	local down = if type(site) == "number" then site else 16
-	local projector = glow(
-		"Projector",
-		Vector3.new(0.4, 6, 6),
-		floor * CFrame.new(0, -down + 0.2, 0) * CFrame.Angles(0, 0, math.pi / 2),
-		"#B06BFF",
-		model
-	)
-	projector.Shape = Enum.PartType.Cylinder
-	local beam = glow(
-		"Beam",
-		Vector3.new(down - 2, 3, 3),
-		floor * CFrame.new(0, -down / 2, 0) * CFrame.Angles(0, 0, math.pi / 2),
-		"#B06BFF",
-		model
-	)
-	beam.Shape = Enum.PartType.Cylinder
-	beam.Transparency = 0.85
-	pulse(beam, 0.75, 0.92)
 end
 
--- A tall spire with rings turning around it and a beacon on top.
-builders.VictorySpire = function(model, floor)
-	box("Base", Vector3.new(12, 2, 12), floor * CFrame.new(0, 1, 0), COLORS.hullAlt, nil, model)
-	for i, d in { 6, 5, 4, 3, 2.2 } do
-		column("Spire", d, 9, floor * CFrame.new(0, 2 + (i - 1) * 9, 0), COLORS.hull, nil, model)
-	end
-	for i, y in { 12, 24, 36 } do
-		local ring = Instance.new("Model")
-		ring.Name = `Ring{i}`
-		ring.Parent = model
-		for s = 0, 7 do
-			local angle = s / 8 * 2 * math.pi
-			glow(
-				"Segment",
-				Vector3.new(2.6, 0.4, 0.6),
-				floor
-					* CFrame.new(0, y, 0)
-					* CFrame.Angles(0, angle, 0)
-					* CFrame.new(0, 0, -(4 + i)),
-				if i % 2 == 0 then "#FFD36B" else "#5FE3FF",
-				ring
-			)
-		end
-		ring.WorldPivot = floor * CFrame.new(0, y, 0)
-		spin(ring, if i % 2 == 0 then -0.5 else 0.4)
-	end
-	local beacon = glow("Beacon", Vector3.one * 4, floor * CFrame.new(0, 49, 0), "#FFD36B", model)
-	beacon.Shape = Enum.PartType.Ball
-	pulse(beacon, 0, 0.5)
-	light(beacon, "#FFD36B", 60)
-	local sky = Instance.new("Attachment")
-	sky.Position = Vector3.new(0, 400, 0)
-	sky.Parent = beacon
-	local base = Instance.new("Attachment")
-	base.Parent = beacon
-	local ray = Instance.new("Beam")
-	ray.Attachment0 = base
-	ray.Attachment1 = sky
-	ray.Width0 = 3
-	ray.Width1 = 0.5
-	ray.FaceCamera = true
-	ray.LightEmission = 1
-	ray.Color = ColorSequence.new(Color3.fromHex("#FFD36B"))
-	ray.Transparency = NumberSequence.new(0.3, 1)
-	ray.Parent = beacon
-end
-
--- An open platform off the deck's side with three lit cradles; HangarSystem
--- puts the player's chosen ships on them (parts named "Cradle1".."Cradle3",
--- their tops are where a ship's bottom sits).
-builders.ShowcaseDock = function(model, floor)
-	box(
-		"Platform",
-		Vector3.new(30, 1.4, 66),
-		floor * CFrame.new(0, -0.7, 0),
-		COLORS.deck,
-		Enum.Material.DiamondPlate,
-		model
-	)
-	box(
-		"Bridge",
-		Vector3.new(12, 1, 8),
-		floor * CFrame.new(-21, -0.5, 0),
-		COLORS.deck,
-		Enum.Material.DiamondPlate,
-		model
-	)
-	for _, side in { -1, 1 } do
-		glow(
-			"EdgeStrip",
-			Vector3.new(0.5, 0.2, 64),
-			floor * CFrame.new(side * 14.5, 0.1, 0),
-			"#FFD36B",
-			model
-		)
-	end
+-- The dock's three cradles. The cradles stay round parts built
+-- here (not mesh or voxels): HangarSystem puts the player's chosen ships on
+-- them ("Cradle1".."Cradle3"; their tops are where a ship's bottom sits) and
+-- relies on their shape and orientation.
+showcaseExtras = function(model: Model, floor: CFrame)
 	for index, z in { -21, 0, 21 } do
 		local cradle = column(
 			`Cradle{index}`,
@@ -651,16 +416,6 @@ builders.ShowcaseDock = function(model, floor)
 		pulse(rim, 0.1, 0.6)
 		light(rim, "#FFFFFF", 22)
 	end
-	local sign = Build.sign({
-		name = "DockSign",
-		text = "SHOWCASE",
-		size = Vector3.new(16, 3, 0.4),
-		cframe = floor * CFrame.new(-14.6, 6, 0) * CFrame.Angles(0, math.pi / 2, 0),
-		faces = { Enum.NormalId.Front, Enum.NormalId.Back },
-		parent = model,
-		textColor = "#FFD36B",
-	})
-	sign.CanCollide = false
 end
 
 function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
@@ -670,9 +425,19 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 	if site and site.y then
 		model:SetAttribute("SiteHeight", site.y)
 	end
-	local build = builders[def.id]
-	if build then
-		build(model, floor)
+	local source = MeshAsset.source(def.id)
+	local design = HangarVoxels[def.id]
+	if source and MeshAsset.place(source, floor, model) then
+		if def.id == "ShowcaseDock" then
+			showcaseExtras(model, floor)
+		end
+		model:SetAttribute("Mesh", true)
+	elseif design then
+		local groups = voxels(model, floor, design)
+		local dress = dressers[def.id]
+		if dress then
+			dress(model, groups, floor)
+		end
 	else
 		box(
 			"Building",
@@ -685,9 +450,20 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 	end
 	model:SetAttribute("State", "built")
 	model:SetAttribute("UpgradeId", def.id)
+	if model:GetAttribute("Mesh") then
+		-- Softer lights on mesh buildings (Config.Hangar.MESH_LIGHT_SCALE).
+		for _, item in model:GetDescendants() do
+			if item:IsA("PointLight") or item:IsA("SpotLight") then
+				item.Brightness *= H.MESH_LIGHT_SCALE
+				item.Range *= math.sqrt(H.MESH_LIGHT_SCALE)
+			end
+		end
+	end
+	-- Mesh buildings glow less: their accents are meant to be subtle.
+	local dim = if model:GetAttribute("Mesh") then H.MESH_GLOW_DIM else Config.World.EMISSIVE_DIM
 	if site then
 		-- Built away from its pad: no name plate on the deck.
-		Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
+		Build.dimEmissive(model, dim)
 		return model
 	end
 	-- Name plate at the front edge, facing the deck's centre line.
@@ -701,9 +477,7 @@ function HangarBuilder.structure(def: HangarDef, floor: CFrame): Model
 		textColor = "#FFD36B",
 	})
 	plate.CanCollide = false
-	model:SetAttribute("State", "built")
-	model:SetAttribute("UpgradeId", def.id)
-	Build.dimEmissive(model, Config.World.EMISSIVE_DIM)
+	Build.dimEmissive(model, dim)
 	return model
 end
 

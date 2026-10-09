@@ -31,7 +31,7 @@ function SettingsSystem.start()
 		elseif name == "cloak" then
 			CloakSystem.request(player, value)
 		elseif name == "hangarToggle" then
-			-- (id, on): a built upgrade like the Neon Runway shown or hidden.
+			-- (id, on): a built `toggle` hangar upgrade shown or hidden.
 			if type(extra) == "boolean" and DataSystem.setHangarOff(player, value, not extra) then
 				HangarSystem.refresh(player)
 			end

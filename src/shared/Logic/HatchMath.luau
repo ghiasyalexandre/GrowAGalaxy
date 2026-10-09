@@ -8,7 +8,7 @@
 --           ending after the planet's rarity's hatch time (unix seconds, so
 --           it runs on while the player is offline)
 --   due     the chambers whose time is up, in order
---   finish  removes a due hatch and returns its planet type, once: a second
+--   finish  removes a due hatch and returns its planet type and tier, once: a second
 --           call finds nothing. A type this server doesn't know is left to
 --           hatch on a server that does.
 --   advance finishes everything due at `now`, oldest first; with
@@ -52,8 +52,10 @@ function HatchMath.begin(
 	local hatch: Types.HatchRecord = {
 		eggId = eggId,
 		outcome = egg.outcome,
+		tier = egg.tier,
 		startedAt = now,
 		endsAt = now + HatchMath.seconds(egg.outcome),
+		paid = egg.paid,
 	}
 	eggs[eggId] = nil
 	hatches[key] = hatch
@@ -75,18 +77,19 @@ function HatchMath.due(hatches: { [string]: Types.HatchRecord }, now: number): {
 end
 
 -- Takes a finished hatch out of its chamber and returns its planet type,
--- or nil if there's nothing finished there.
+-- tier and what its roll cost (nil from before economy v2), or nil if
+-- there's nothing finished there.
 function HatchMath.finish(
 	hatches: { [string]: Types.HatchRecord },
 	chamber: string,
 	now: number
-): string?
+): (string?, number, number?)
 	local hatch = hatches[chamber]
 	if hatch == nil or hatch.endsAt > now or P.BY_ID[hatch.outcome] == nil then
-		return nil
+		return nil, 1, nil
 	end
 	hatches[chamber] = nil
-	return hatch.outcome
+	return hatch.outcome, hatch.tier, hatch.paid
 end
 
 local function eggNumber(id: string): number
@@ -104,7 +107,7 @@ function HatchMath.oldestEgg(eggs: { [string]: Types.EggRecord }): string?
 	return best
 end
 
-export type Hatched = { typeId: string, chamber: string, at: number }
+export type Hatched = { typeId: string, tier: number, chamber: string, at: number, paid: number? }
 
 -- Finishes every hatch due at `now` in the order they ended (and, with
 -- autoStart, any eggs that started and finished in a freed chamber since).
@@ -133,11 +136,14 @@ function HatchMath.advance(
 			return results
 		end
 		local key = chamber :: string
-		local typeId = HatchMath.finish(hatches, key, now)
+		local typeId, tier, paid = HatchMath.finish(hatches, key, now)
 		if typeId == nil then
 			stuck[key] = true
 		else
-			table.insert(results, { typeId = typeId, chamber = key, at = ended })
+			table.insert(
+				results,
+				{ typeId = typeId, tier = tier, chamber = key, at = ended, paid = paid }
+			)
 			local eggId = if autoStart then HatchMath.oldestEgg(eggs) else nil
 			if eggId then
 				HatchMath.begin(eggs, hatches, eggId, tonumber(key) or 0, ended)

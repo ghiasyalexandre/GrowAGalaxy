@@ -176,11 +176,11 @@ end
 local swarmElapsed = 0
 local swarm: { centre: Vector3, endsAt: number, ids: { number } }? = nil
 
--- A golden copy of a size: worth SWARM_REWARD x, SWARM_DURABILITY x as
--- tough, named for the banner.
+-- A golden copy of a size: SWARM_DURABILITY x as tough, named for the
+-- banner. Its payout bonus (SWARM_REWARD) is applied by MiningSystem, which
+-- knows each player's swarm allowance.
 local function golden(size: AsteroidConfig.SizeDef): AsteroidConfig.SizeDef
 	local copy = table.clone(size)
-	copy.reward = math.floor(size.reward * A.SWARM_REWARD + 0.5)
 	copy.durability = math.floor(size.durability * A.SWARM_DURABILITY + 0.5)
 	copy.displayName = `Golden {string.lower(size.displayName)}`
 	return copy

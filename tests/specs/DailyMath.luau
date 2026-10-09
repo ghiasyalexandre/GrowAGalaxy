@@ -37,12 +37,14 @@ return function(T, Loader)
 		end)
 
 		T.test("prizes read clearly", function()
-			T.equal(DailyMath.describe({ stardust = 10000 }), "10,000 Stardust")
-			T.equal(DailyMath.describe({ stardust = 250 }), "250 Stardust")
-			T.equal(
-				DailyMath.describe({ boost = { source = "mining", seconds = 600 } }),
-				"2x Mining 10 min"
-			)
+			T.equal(DailyMath.describe(10000), "10,000 Stardust")
+			T.equal(DailyMath.describe(250), "250 Stardust")
+		end)
+
+		T.test("prizes are minutes of the reward rate; a new player's first is 120", function()
+			T.equal(DailyMath.amount(1, 1), 120)
+			T.equal(DailyMath.amount(14, 1000), 15 * 60 * 1000)
+			T.equal(DailyMath.amount(1, 0.5), 120, "R is at least 1")
 		end)
 	end)
 end
